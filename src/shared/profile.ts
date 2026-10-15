@@ -291,17 +291,6 @@ export function serializeProfile(profile: Profile): Uint8Array {
 
 const FUN = PACKET.Name
 
-/** Wire byte → RC-filter level (−10…+10). Mirrors GameSir's `wn`/`Di`. */
-function rcLevel(wire: number): number {
-  const effective = wire === 0 ? 11 : wire
-  return Math.max(-10, Math.min(10, effective - 11))
-}
-
-/** RC-filter level → wire byte (1…21). Mirrors GameSir's `Fn`/`Li`. */
-function rcWire(level: number): number {
-  return Math.max(1, Math.min(21, Math.round(level) + 11))
-}
-
 export const fun = {
   motor: {
     left: (p: Packet): number => p.u8(FUN + 0),
@@ -355,26 +344,7 @@ export const fun = {
     setStickResolutionBits: (p: Packet, bits: number): void => {
       const clamped = Math.max(8, Math.min(12, Math.round(bits)))
       p.setU8(FUN + 16, 12 - clamped)
-    },
-
-    /**
-     * Anti-jitter ("RC filter") on a −10…+10 scale, 0 = off.
-     *
-     * The wire byte is `level + 11` (1…21); GameSir also treats a wire byte of 0
-     * as level 0, and their writer clamps to 1…21 so 0 is only ever a never-written
-     * default. Exposing the raw 0…21 byte in the UI hid the sign and shifted the
-     * whole range by 11.
-     */
-    lsRcLevel: (p: Packet): number => rcLevel(p.u8(FUN + 17)),
-    setLsRcLevel: (p: Packet, level: number): void => p.setU8(FUN + 17, rcWire(level)),
-    rsRcLevel: (p: Packet): number => rcLevel(p.u8(FUN + 18)),
-    setRsRcLevel: (p: Packet, level: number): void => p.setU8(FUN + 18, rcWire(level)),
-
-    /** Raw anti-jitter bytes — kept for byte-level tests. */
-    lsAntiJitter: (p: Packet): number => p.u8(FUN + 17),
-    setLsAntiJitter: (p: Packet, v: number): void => p.setU8(FUN + 17, v),
-    rsAntiJitter: (p: Packet): number => p.u8(FUN + 18),
-    setRsAntiJitter: (p: Packet, v: number): void => p.setU8(FUN + 18, v)
+    }
   }
 }
 

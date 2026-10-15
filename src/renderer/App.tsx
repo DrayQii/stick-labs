@@ -1791,8 +1791,6 @@ function ResetEverythingCard({ profile, fd, edit, onReload, notify }: {
             })
             fun.extend.setStickResolutionBits(fd, 12)
             fun.extend.setReportRateGear(fd, 5)
-            fun.extend.setLsAntiJitter(fd, 11)
-            fun.extend.setRsAntiJitter(fd, 11)
           })
           onReload()
           notify('Everything reset to stock neutral — Write to apply it to the pad.')

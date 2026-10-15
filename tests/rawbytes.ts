@@ -1,10 +1,10 @@
 /**
- * Raw-byte unlock: standard 8-12 bit + RC -10..+10 must round-trip, and raw
- * wires outside the documented range must be stored byte-exact (the pad
- * decides what to do with them — we just must not corrupt neighbours).
+ * Raw-byte unlock: standard 8-12 bit must round-trip, and raw wires outside the
+ * documented range must be stored byte-exact (the pad decides what to do with
+ * them — we just must not corrupt neighbours).
  */
 import { parseProfile, serializeProfile, fun, stick } from '../src/shared/profile.ts'
-import { describeRawResolution, describeRawRc, resampleCurve, addDesignPoint, outerBufferToBytes, outerBufferFromBytes, isOuterUnlimited, bitsToWireRaw } from '../src/shared/sticklab.ts'
+import { describeRawResolution, resampleCurve, addDesignPoint, outerBufferToBytes, outerBufferFromBytes, isOuterUnlimited, bitsToWireRaw } from '../src/shared/sticklab.ts'
 
 let failures = 0
 const check = (name, ok, detail = '') => {
@@ -33,23 +33,13 @@ for (const w of [0, 5, 9, 64, 255]) {
   check(`raw resolution wire ${w} stored`, fun.extend.stickResolution(p.funData) === w, describeRawResolution(w).label)
 }
 
-// RC levels round-trip, raw wires stored.
-for (const lvl of [-10, -3, 0, 5, 10]) {
-  fun.extend.setLsRcLevel(p.funData, lvl)
-  fun.extend.setRsRcLevel(p.funData, lvl)
-  check(`RC ${lvl} round-trips L/R`, fun.extend.lsRcLevel(p.funData) === lvl && fun.extend.rsRcLevel(p.funData) === lvl)
-}
-for (const w of [0, 1, 21, 22, 255]) {
-  fun.extend.setLsAntiJitter(p.funData, w)
-  check(`raw RC wire ${w} stored`, fun.extend.lsAntiJitter(p.funData) === w, describeRawRc(w).label)
-}
-
-// Neighbour isolation: raw writes must not touch adjacent bytes.
+// Neighbour isolation: a raw write must land byte-exact and must not touch the
+// bytes beside it. Fun_Data +17/+18 are never written by this app, so they have
+// to stay exactly as the pad sent them.
 fun.extend.setStickResolution(p.funData, 200)
-fun.extend.setLsAntiJitter(p.funData, 201)
-fun.extend.setRsAntiJitter(p.funData, 202)
 const bytes = serializeProfile(p)
-check('raw wires land at Fun_Data +16/+17/+18', bytes[0x20 + 16] === 200 && bytes[0x20 + 17] === 201 && bytes[0x20 + 18] === 202)
+check('raw wire lands at Fun_Data +16', bytes[0x20 + 16] === 200)
+check('neighbour bytes untouched (Fun_Data +17/+18)', bytes[0x20 + 17] === 0 && bytes[0x20 + 18] === 0)
 
 // Curve resampling: free-point designs quantize to exactly 5 hardware slots.
 {

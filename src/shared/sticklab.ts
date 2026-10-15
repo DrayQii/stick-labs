@@ -5,8 +5,6 @@
  * - stick resolution wire byte (Fun_Data +16) = 12 - bits, so 0..4 = 12..8 bit.
  *   12-bit = 4096 levels is the ADC max. Anything beyond is raw-byte
  *   experimentation, not a supported mode — the UI must say so.
- * - RC filter wire byte (Fun_Data +17/+18) = level + 11 (1..21), level -10..+10,
- *   0 = off. Wire 0 = never-written default (treated as 0/off).
  */
 
 /** Standard hardware range. */
@@ -65,65 +63,6 @@ export function describeRawResolution(wire: number): RawResolutionInfo {
     label = `wire ${w} → ${bits}-bit (out of ADC range — experimental)`
   }
   return { wire: w, bits, levels, step, standard, label }
-}
-
-// ---------------------------------------------------------------------------
-// RC filter model
-// ---------------------------------------------------------------------------
-
-export const RC_MIN = -10
-export const RC_MAX = 10
-
-export function rcLevelToWire(level: number): number {
-  return Math.max(1, Math.min(21, Math.round(level) + 11))
-}
-
-export function rcWireToLevel(wire: number): number {
-  if ((wire & 0xff) === 0) return 0
-  return Math.max(RC_MIN, Math.min(RC_MAX, (wire & 0xff) - 11))
-}
-
-export interface RawRcInfo {
-  wire: number
-  level: number
-  standard: boolean
-  label: string
-}
-
-export function describeRawRc(wire: number): RawRcInfo {
-  const w = Math.max(0, Math.min(255, Math.round(wire)))
-  const standard = (w >= 1 && w <= 21) || w === 0
-  const level = rcWireToLevel(w)
-  const label =
-    w === 0
-      ? 'wire 0 = never-written default (treated as 0/off)'
-      : standard
-        ? `level ${level > 0 ? `+${level}` : `${level}`}${level === 0 ? ' (off)' : ''}`
-        : `wire ${w} → level ${level} clamped (experimental, outside 1..21)`
-  return { wire: w, level, standard, label }
-}
-
-/**
- * EMA smoothing factor for preview only. Maps level 0 → no smoothing
- * (alpha 1) and +10 → heavy (alpha ~0.15). Negative levels (sharpen) are
- * shown as alpha > 1 anticipation — visual aid, not firmware math.
- */
-export function rcAlpha(level: number): number {
-  if (level <= 0) return 1
-  return Math.max(0.12, 1 - level * 0.088)
-}
-
-/** Step response preview: raw step vs EMA-smoothed step over N frames. */
-export function rcStepResponse(level: number, frames = 60): number[] {
-  const alpha = rcAlpha(level)
-  const out: number[] = []
-  let y = 0
-  for (let i = 0; i < frames; i++) {
-    const target = i < 8 ? 0 : 1
-    y += alpha * (target - y)
-    out.push(y)
-  }
-  return out
 }
 
 /** X grid of the 5 firmware curve slots (bytes +14..+23). */
@@ -340,16 +279,6 @@ export function addDesignPoint(design: Array<{ x: number; y: number }>): Array<{
   const mid = { x: Math.round((a.x + b.x) / 2), y: Math.round((a.y + b.y) / 2) }
   return [...pts.slice(0, best), mid, ...pts.slice(best)]
 }
-
-export const RC_PRESETS: ReadonlyArray<{ name: string; level: number; hint: string }> = [
-  { name: 'Raw −10', level: -10, hint: 'most jitter, sharpest' },
-  { name: 'Crisp −5', level: -5, hint: 'light jitter, fast' },
-  { name: 'Off 0', level: 0, hint: 'no filtering — the centre start point' },
-  { name: 'Light +3', level: 3, hint: 'tiny smoothing' },
-  { name: 'Balanced +5', level: 5, hint: 'default feel' },
-  { name: 'Heavy +8', level: 8, hint: 'calm, slight lag' },
-  { name: 'Max +10', level: 10, hint: 'smoothest, laggiest' }
-]
 
 /**
  * Outer threshold as a signed buffer %, Steam-style:
