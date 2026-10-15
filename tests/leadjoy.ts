@@ -14,9 +14,11 @@ import {
   ljButtonQuery,
   ljButtonWriteRecord,
   ljBuildStickWrite,
+  ljBuildTriggerWrite,
   ljButtonTarget,
   ljChecksum,
   ljDecodeStream,
+  ljFrameBytes,
   ljFrameOut,
   ljFragmentOut,
   ljGlobalQuery,
@@ -28,6 +30,7 @@ import {
   ljParseSingleFrame,
   ljParseStick,
   ljParseStickSide,
+  ljParseTriggerD1,
   ljParseTrigger,
   ljParseWriteAck,
   ljPercentToWire,
@@ -309,6 +312,31 @@ check(
 const ack71 = [...unhex('a50bcc82a16347a165004f'), ...new Array(64 - 11).fill(0)]
 check('stick ack parses', JSON.stringify(ljParseWriteAck(ljParseSingleFrame(ack71), 71)) === JSON.stringify({ record: 71 }))
 check('percent anchors', ljPercentToWire(25) === 8192 && ljPercentToWire(10) === 3277)
+
+// --- trigger writes (deadzone-flip capture) -----------------------------------
+const trigWr = ljDecodeStream(fixture('trig-wr-main.bin')) as unknown as {
+  c: number
+  w: { b: number; c: number; d1: import('../src/shared/leadjoy.ts').LjValue }
+}
+check('trigger write envelope', trigWr.c === 91 && trigWr.w.b === 1 && trigWr.w.c === 0)
+const d1Trig = ljParseTriggerD1(trigWr.w.d1)
+check(
+  'trigger deadzones 10/95 both',
+  JSON.stringify(d1Trig.dzl) === JSON.stringify([10, 95]) && JSON.stringify(d1Trig.dzr) === JSON.stringify([10, 95]) &&
+    d1Trig.mol === 2 && d1Trig.mor === 2 && d1Trig.vtl === 0 && d1Trig.vtr === 0
+)
+check('trigger write rebuild byte-exact', hex(ljBuildTriggerWrite(0, d1Trig)) === hex(fixture('trig-wr-main.bin')))
+check('trigger frame byte-exact', hex(ljFrameBytes(fixture('trig-wr-main.bin'))) === hex(fixture('trig-wr-frame.bin')))
+const ack91 = [...unhex('a50bcc82a1635ba1650063'), ...new Array(64 - 11).fill(0)]
+check('trigger ack parses', JSON.stringify(ljParseWriteAck(ljParseSingleFrame(ack91), 91)) === JSON.stringify({ record: 91 }))
+for (const zones of [[[101, 95], [10, 95]], [[-1, 95], [10, 95]], [[5.5, 95], [10, 95]]]) {
+  try {
+    ljBuildTriggerWrite(0, { ...d1Trig, dzl: zones[0] as [number, number], dzr: zones[1] as [number, number] })
+    check(`trigger builder refuses ${JSON.stringify(zones[0])}`, false)
+  } catch {
+    check(`trigger builder refuses ${JSON.stringify(zones[0])}`, true)
+  }
+}
 check('curve validator accepts fixture', JSON.stringify(ljValidateCurveWire(d1Right.cv)) === JSON.stringify(d1Right.cv))
 for (const bad of [[], new Array(15).fill(0), new Array(16).fill(32768), new Array(16).fill(-1), new Array(16).fill(1.5), 'nope', null]) {
   try {

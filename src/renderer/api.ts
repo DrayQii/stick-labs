@@ -79,6 +79,8 @@ interface LabApi {
   leadjoyWriteButton(req: { path: string; slot: number; id: number; target: number | null }): Promise<{ verified: boolean; restored: boolean }>
   /** LeadJoy stick curve write (verified write, 16 wire ints). */
   leadjoyWriteStick(req: { path: string; slot: number; side: number; cv: number[] }): Promise<{ verified: boolean; restored: boolean }>
+  /** LeadJoy trigger deadzone write (verified write, ints 0..100). */
+  leadjoyWriteTrigger(req: { path: string; slot: number; zones: { leftInner: number; leftOuter: number; rightInner: number; rightOuter: number } }): Promise<{ verified: boolean; restored: boolean }>
   on(channel: string, fn: (payload: never) => void): () => void
 }
 

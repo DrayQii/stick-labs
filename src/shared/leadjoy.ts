@@ -70,6 +70,8 @@ export const LJ_REC_STICK = 70
 /** Stick write record (full side image under key `w`). */
 export const LJ_REC_STICK_WRITE = 71
 export const LJ_REC_TRIGGER = 90
+/** Trigger write record (full d1 image, single-frame OUT). */
+export const LJ_REC_TRIGGER_WRITE = 91
 export const LJ_REC_GLOBAL = 100
 export const LJ_REC_RUMBLE = 120
 export const LJ_REC_MOTION_DEVICES = 220
@@ -290,10 +292,14 @@ export function ljChecksum(bytes: ArrayLike<number>, end: number): number {
  * the checksum; the rest is zero padding (ignored by the pad).
  */
 export function ljFrameOut(doc: LjValue): number[] {
-  const body = ljMpEncode(doc)
-  const len = 3 + body.length + 1
-  if (len > LJ_REPORT_LEN) throw new Error(`ljFrameOut: document too large (${body.length} bytes)`)
-  const frame = [LJ_OUT_CLASS, len, LJ_MARKER, ...body]
+  return ljFrameBytes(ljMpEncode(doc))
+}
+
+/** Frame pre-encoded MessagePack bytes (LEN + checksum + zero pad). */
+export function ljFrameBytes(stream: ReadonlyArray<number>): number[] {
+  const len = 3 + stream.length + 1
+  if (len > LJ_REPORT_LEN) throw new Error(`ljFrameBytes: document too large (${stream.length} bytes)`)
+  const frame = [LJ_OUT_CLASS, len, LJ_MARKER, ...stream]
   frame.push(ljChecksum(frame, frame.length))
   while (frame.length < LJ_REPORT_LEN) frame.push(0)
   return frame
@@ -872,6 +878,80 @@ export interface LjTriggerTuning {
   slot: number
   left: { mode: number; inner: number; outer: number; vibration: number }
   right: { mode: number; inner: number; outer: number; vibration: number }
+  /** Full d1 image (round-trips through ljBuildTriggerWrite). */
+  d1: LjTriggerD1
+}
+
+/** Full record-90/91 trigger image, in vendor key order. */
+export interface LjTriggerD1 {
+  mol: number
+  dzl: [number, number]
+  vtl: number
+  mor: number
+  dzr: [number, number]
+  vtr: number
+}
+
+function asIntPair(value: LjValue, what: string): [number, number] {
+  const arr = asNumberArray(value, what)
+  if (arr.length !== 2) throw new Error(`leadjoy: ${what} is not a pair`)
+  return [arr[0] ?? 0, arr[1] ?? 0]
+}
+
+/** Parse a record-90/91 trigger image (reads and writes share the layout). */
+export function ljParseTriggerD1(d1: LjValue): LjTriggerD1 {
+  const m = asRecord(d1)
+  return {
+    mol: asNumber(m.mol, 'trigger.mol'),
+    dzl: asIntPair(m.dzl, 'trigger.dzl'),
+    vtl: asNumber(m.vtl, 'trigger.vtl'),
+    mor: asNumber(m.mor, 'trigger.mor'),
+    dzr: asIntPair(m.dzr, 'trigger.dzr'),
+    vtr: asNumber(m.vtr, 'trigger.vtr')
+  }
+}
+
+/** Editable deadzones: ints 0..100 (percent). Modes/vibration pass through. */
+export interface LjTriggerZones {
+  leftInner: number
+  leftOuter: number
+  rightInner: number
+  rightOuter: number
+}
+
+function asZone(value: unknown, what: string): number {
+  if (typeof value !== 'number' || !Number.isInteger(value) || value < 0 || value > 100) {
+    throw new Error(`leadjoy: trigger ${what} (${String(value)}) is not an int 0..100`)
+  }
+  return value
+}
+
+/**
+ * Build one trigger write document: record id 91 under key `w`, same d1
+ * layout and key order as reads. Only deadzone ints travel from the caller
+ * (validated 0..100); the caller passes mode/vibration back from the pad
+ * read, never invented. Single-frame OUT; the pad acks with `{c:91,e:0}`.
+ */
+export function ljBuildTriggerWrite(slot: LjSlot, d1: LjTriggerD1): number[] {
+  const dz = (pair: [number, number], what: string): [number, number] => [
+    asZone(pair[0], `${what}[0]`),
+    asZone(pair[1], `${what}[1]`)
+  ]
+  return ljMpEncode({
+    c: LJ_REC_TRIGGER_WRITE,
+    w: {
+      b: 1,
+      c: slot,
+      d1: {
+        mol: d1.mol,
+        dzl: dz(d1.dzl, 'dzl'),
+        vtl: d1.vtl,
+        mor: d1.mor,
+        dzr: dz(d1.dzr, 'dzr'),
+        vtr: d1.vtr
+      }
+    }
+  })
 }
 
 /** Parse a reassembled record-90 document (LT/RT). */
@@ -879,24 +959,13 @@ export function ljParseTrigger(doc: LjValue): LjTriggerTuning {
   const root = asRecord(doc)
   if (asNumber(root.c, 'trigger.c') !== LJ_REC_TRIGGER) throw new Error('leadjoy: not a trigger record')
   const r = asRecord(root.r)
-  const d1 = asRecord(r.d1)
-  const dzl = asNumberArray(d1.dzl, 'trigger.dzl')
-  const dzr = asNumberArray(d1.dzr, 'trigger.dzr')
+  const d1 = ljParseTriggerD1(r.d1)
   return {
     board: asNumber(r.b, 'trigger.r.b'),
     slot: asNumber(r.c, 'trigger.r.c'),
-    left: {
-      mode: asNumber(d1.mol, 'trigger.mol'),
-      inner: dzl[0] ?? 0,
-      outer: dzl[1] ?? 0,
-      vibration: asNumber(d1.vtl, 'trigger.vtl')
-    },
-    right: {
-      mode: asNumber(d1.mor, 'trigger.mor'),
-      inner: dzr[0] ?? 0,
-      outer: dzr[1] ?? 0,
-      vibration: asNumber(d1.vtr, 'trigger.vtr')
-    }
+    left: { mode: d1.mol, inner: d1.dzl[0], outer: d1.dzl[1], vibration: d1.vtl },
+    right: { mode: d1.mor, inner: d1.dzr[0], outer: d1.dzr[1], vibration: d1.vtr },
+    d1
   }
 }
 

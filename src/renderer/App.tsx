@@ -23,7 +23,7 @@ import { createPortal } from 'react-dom'
 import { LANGS, LangContext, tr, useLangState, useT } from './i18n'
 import { THEMES, ThemeContext, useThemeState } from './theme'
 import type { DeepPollResult } from '@shared/deeppoll'
-import { LJ_PHYSICAL, ljPercentToWire, type LjSnapshot } from '@shared/leadjoy'
+import { LJ_PHYSICAL, ljPercentToWire, type LjSnapshot, type LjTriggerZones } from '@shared/leadjoy'
 
 
 /**
@@ -1854,80 +1854,155 @@ function StickCross({ lx, ly, rx, ry }: { lx: number; ly: number; rx: number; ry
  * converts to wire and the pad proves it with readback. Point 1 output is
  * locked at 0 (the vendor deadzone-floor invariant).
  */
-function LjStickCard({ snap, side, busy, onWrite }: {
+/** Staged LeadJoy edits — the topbar Write commits these, one record at a time. */
+interface LjDraft {
+  buttons: Record<number, number | null>
+  sticks: Partial<Record<0 | 1, Array<{ x: number; y: number }>>>
+  trigger: LjTriggerZones | null
+}
+
+/**
+ * LeadJoy stick cards — the same two-card shape as the GameSir Sticks tab:
+ * deadzone on the left, 8-point curve on the right. Edits stage upward; the
+ * topbar Write commits the whole side image and the pad proves it with
+ * readback. Point 1 output is locked at 0 (the vendor deadzone-floor
+ * invariant).
+ */
+function LjDeadzoneCard({ snap, side, points, onChange, onReset }: {
   snap: LjSnapshot
   side: 0 | 1
-  busy: boolean
-  onWrite: (cv: number[]) => void
+  points: Array<{ x: number; y: number }>
+  onChange: (next: Array<{ x: number; y: number }>) => void
+  onReset: () => void
 }): JSX.Element | null {
   const t = useT()
   const stick = snap.sticks.find((s) => s.side === side)
-  const toGrid = (pts: Array<readonly [number, number]>): Array<{ x: number; y: number }> =>
-    pts.map(([x, y]) => ({ x: Math.round(x * 10), y: Math.round(y * 10) }))
-  const padPts = toGrid(stick?.curvePct ?? [])
-  const [draft, setDraft] = useState(padPts)
-  useEffect(() => {
-    setDraft(toGrid(stick?.curvePct ?? []))
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [snap, side])
-  if (!stick || draft.length !== 8 || padPts.length !== 8) return null
-  const dirty = JSON.stringify(draft) !== JSON.stringify(padPts)
-  const deadzone = draft[0]?.x ?? 0
+  if (!stick || points.length !== 8) return null
+  const deadzone = points[0]?.x ?? 0
+  const setDeadzone = (pct10: number): void => {
+    const next = points.map((p) => ({ ...p }))
+    const hi = next[1]?.x ?? 1000
+    next[0] = { x: Math.max(0, Math.min(hi, Math.round(pct10))), y: 0 }
+    onChange(next)
+  }
   return (
     <div className="card">
-      <h3>{stick.sideName} — {(deadzone / 10).toFixed(1)}% {t('lj.deadzone')} · {t('lj.center')} {stick.center[0]},{stick.center[1]}</h3>
+      <h3>{t('sticks.deadzone')} — {stick.sideName} {(deadzone / 10).toFixed(1)}%</h3>
+      <Hint>{t('lj.dzHint')}</Hint>
+      <div className="stack" style={{ gap: 12, marginTop: 8 }}>
+        <Slider label={t('sticks.start')} value={deadzone} min={0} max={1000} step={1} format={(v) => `${(v / 10).toFixed(1)}%`} onChange={setDeadzone} />
+      </div>
+      <div className="row wrap" style={{ gap: 8, marginTop: 10 }}>
+        <label className="row" style={{ gap: 6, fontSize: 12 }}>
+          <span className="label">{t('sticks.nStart')}</span>
+          <input
+            className="input"
+            style={{ width: 76 }}
+            type="number"
+            min={0}
+            max={100}
+            step={0.1}
+            value={Number((deadzone / 10).toFixed(1))}
+            onChange={(e) => {
+              const v = Number(e.target.value)
+              if (!Number.isFinite(v)) return
+              setDeadzone(Math.max(0, Math.min(100, v)) * 10)
+            }}
+          />
+          <span style={{ color: 'var(--text-3)' }}>%</span>
+        </label>
+        <button className="btn sm ghost" onClick={onReset}>{t('lj.reset')}</button>
+      </div>
+      <div className="note" style={{ marginTop: 8 }}>
+        {t('lj.center')} <span className="mono">{stick.center[0]},{stick.center[1]}</span>
+      </div>
+    </div>
+  )
+}
+
+function LjCurveCard({ snap, side, points, onChange, onReset }: {
+  snap: LjSnapshot
+  side: 0 | 1
+  points: Array<{ x: number; y: number }>
+  onChange: (next: Array<{ x: number; y: number }>) => void
+  onReset: () => void
+}): JSX.Element | null {
+  const t = useT()
+  const stick = snap.sticks.find((s) => s.side === side)
+  if (!stick || points.length !== 8) return null
+  const pad = stick.curvePct.map(([x, y]) => ({ x: Math.round(x * 10), y: Math.round(y * 10) }))
+  const dirty = JSON.stringify(points) !== JSON.stringify(pad)
+  const setPoint = (i: number, axis: 'x' | 'y', v: number): void => {
+    if (!Number.isFinite(v)) return
+    const next = points.map((p) => ({ ...p }))
+    if (axis === 'x') {
+      const lo = i > 0 ? next[i - 1].x : 0
+      const hi = i < next.length - 1 ? next[i + 1].x : 1000
+      next[i].x = Math.max(lo, Math.min(hi, Math.round(v * 10)))
+      if (i === 0) next[i].y = 0
+    } else {
+      next[i].y = Math.max(0, Math.min(1000, Math.round(v * 10)))
+    }
+    onChange(next)
+  }
+  return (
+    <div className="card">
+      <h3>{t('sticks.curve')} — 8 {t('sticks.points')}</h3>
       <Hint>{t('lj.stickHint')}</Hint>
       <CurvePlot
-        points={draft}
+        points={points}
         max={1000}
-        overlay={padPts}
+        overlay={pad}
         onChange={(next) => {
           const fixed = next.map((p) => ({ ...p }))
           if (fixed[0]) fixed[0] = { x: fixed[0].x, y: 0 }
-          setDraft(fixed)
+          onChange(fixed)
         }}
       />
-      <div style={{ marginTop: 8 }}>
-        <Slider
-          label={`${stick.sideName} ${t('lj.deadzone')}`}
-          value={deadzone}
-          min={0}
-          max={1000}
-          step={1}
-          format={(v) => `${(v / 10).toFixed(1)}%`}
-          onChange={(v) => {
-            setDraft((prev) => {
-              const next = prev.map((p) => ({ ...p }))
-              const hi = next[1]?.x ?? 1000
-              next[0] = { x: Math.max(0, Math.min(hi, Math.round(v))), y: 0 }
-              return next
-            })
-          }}
-        />
+      <div className="row" style={{ gap: 8, margin: '8px 0' }}>
+        <div style={{ flex: 1 }} />
+        <button className="btn sm ghost" disabled={!dirty} onClick={onReset}>{t('sticks.reload')}</button>
+      </div>
+      <table className="tbl" style={{ marginTop: 8 }}>
+        <thead><tr><th>#</th><th>X</th><th>Y</th></tr></thead>
+        <tbody>
+          {points.map((p, i) => (
+            <tr key={i}>
+              <td className="mono">{i + 1}</td>
+              <td><input className="input" type="number" min={0} max={100} step={0.1} value={Number((p.x / 10).toFixed(1))} onChange={(e) => setPoint(i, 'x', Number(e.target.value))} /></td>
+              <td><input className="input" type="number" min={0} max={100} step={0.1} disabled={i === 0} value={Number((p.y / 10).toFixed(1))} onChange={(e) => setPoint(i, 'y', Number(e.target.value))} /></td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
+/**
+ * LeadJoy trigger editor: LT/RT inner/outer deadzones. Modes and vibration
+ * thresholds pass through from the pad read untouched; edits stage upward and
+ * the topbar Write sends the whole trigger image with readback.
+ */
+function LjTriggerCard({ value, onChange, onReset }: {
+  value: LjTriggerZones
+  onChange: (zones: LjTriggerZones) => void
+  onReset: () => void
+}): JSX.Element {
+  const t = useT()
+  const num = (v: number): number => Math.max(0, Math.min(100, Math.round(v)))
+  return (
+    <div className="card">
+      <h3>{t('lj.trigTitle')}</h3>
+      <Hint>{t('lj.trigHint')}</Hint>
+      <div className="stack" style={{ gap: 12, marginTop: 8 }}>
+        <Slider label={`LT ${t('lj.inner')}`} value={value.leftInner} min={0} max={100} step={1} format={(v) => `${v}%`} onChange={(v) => onChange({ ...value, leftInner: Math.min(num(v), value.leftOuter) })} />
+        <Slider label={`LT ${t('lj.outer')}`} value={value.leftOuter} min={0} max={100} step={1} format={(v) => `${v}%`} onChange={(v) => onChange({ ...value, leftOuter: Math.max(num(v), value.leftInner) })} />
+        <Slider label={`RT ${t('lj.inner')}`} value={value.rightInner} min={0} max={100} step={1} format={(v) => `${v}%`} onChange={(v) => onChange({ ...value, rightInner: Math.min(num(v), value.rightOuter) })} />
+        <Slider label={`RT ${t('lj.outer')}`} value={value.rightOuter} min={0} max={100} step={1} format={(v) => `${v}%`} onChange={(v) => onChange({ ...value, rightOuter: Math.max(num(v), value.rightInner) })} />
       </div>
       <div className="row" style={{ marginTop: 8 }}>
-        <button
-          className="btn sm primary"
-          disabled={busy || !dirty}
-          onClick={() => {
-            const cv = draft.flatMap((p) => [ljPercentToWire(p.x / 10), ljPercentToWire(p.y / 10)])
-            cv[1] = 0
-            onWrite(cv)
-          }}
-        >
-          {t('top.write')}
-        </button>
-        <button
-          className="btn sm ghost"
-          disabled={busy || !dirty}
-          onClick={() => setDraft(padPts)}
-        >
-          {t('lj.reset')}
-        </button>
-      </div>
-      {dirty && <div className="note warn" style={{ marginTop: 8 }}>{t('msg.dirty')}</div>}
-      <div className="mono" style={{ marginTop: 8, fontSize: 12 }}>
-        {draft.map((p, i) => `P${i + 1} ${(p.x / 10).toFixed(1)}/${(p.y / 10).toFixed(1)}`).join(' · ')}
+        <button className="btn sm ghost" onClick={onReset}>{t('lj.reset')}</button>
       </div>
     </div>
   )
@@ -1948,11 +2023,14 @@ export default function App(): JSX.Element {
   ).filter((c) => !(c.productId === 0x0575 && hasDirectPad))
   const [connected, setConnected] = useState(false)
   const [info, setInfo] = useState<DeviceInfo | null>(null)
-  // LeadJoy Saber Plus (no GameSir handshake; buttons writable 1:1, sticks locked).
+  // LeadJoy Saber Plus — surfaced through the same UI as the GameSir pads.
+  // Edits stage into `ljDraft`; the topbar Write commits them record by
+  // record (each verified with readback); slots switch from the topbar.
   const [ljPath, setLjPath] = useState<string | null>(null)
   const [ljSnap, setLjSnap] = useState<LjSnapshot | null>(null)
   const [ljBusy, setLjBusy] = useState(false)
   const [ljSlot, setLjSlot] = useState<0 | 1 | 2>(0)
+  const [ljDraft, setLjDraft] = useState<LjDraft>({ buttons: {}, sticks: {}, trigger: null })
   const [pid, setPid] = useState<number | null>(null)
   const [model, setModel] = useState<ControllerModel | null>(null)
   const [slot, setSlot] = useState<number>(() => {
@@ -2120,8 +2198,12 @@ export default function App(): JSX.Element {
     void api().version().then(setAppVersion).catch(() => undefined)
   }, [])
 
-  async function readLeadJoy(slot: 0 | 1 | 2): Promise<void> {
+  /** Read one LeadJoy slot (Main/Sub1/Sub2) into the snapshot. */
+  async function loadLeadJoySlot(slot: 0 | 1 | 2, force = false): Promise<void> {
     if (!ljPath || ljBusy) return
+    if (!force && ljDirty && !window.confirm(t('lj.discard'))) return
+    setLjDraft({ buttons: {}, sticks: {}, trigger: null })
+    setSavedAt(null)
     setLjBusy(true)
     setErr(null)
     try {
@@ -2134,35 +2216,66 @@ export default function App(): JSX.Element {
     }
   }
 
-  /** Tournament 1:1 remap (stock or any table id — main refuses the rest). */
-  async function writeLeadJoy(id: number, target: number | null): Promise<void> {
-    if (!ljPath || ljBusy) return
-    setLjBusy(true)
-    setErr(null)
-    setMsg(t('lj.writing'))
-    try {
-      await api().leadjoyWriteButton({ path: ljPath, slot: ljSlot, id, target })
-      setLjSnap(await api().leadjoyReadSlot({ path: ljPath, slot: ljSlot }))
-      setMsg(t('msg.saved'))
-    } catch (e) {
-      setErr((e as Error).message)
-    } finally {
-      setLjBusy(false)
-    }
+  /** Stage a 1:1 button remap (or unmapped) — committed by the topbar Write. */
+  function stageLjButton(id: number, value: number): void {
+    setLjDraft((prev) => ({ ...prev, buttons: { ...prev.buttons, [id]: value === 0 ? null : value } }))
   }
 
-  /** LeadJoy stick curve write (whole side image, verified with readback). */
-  async function writeLeadJoyStick(side: 0 | 1, cv: number[]): Promise<void> {
-    if (!ljPath || ljBusy) return
+  /** Stage a stick curve (8 points, 0.1% grid); `null` reverts to the pad. */
+  function stageLjStick(side: 0 | 1, points: Array<{ x: number; y: number }> | null): void {
+    setLjDraft((prev) => {
+      const sticks = { ...prev.sticks }
+      if (points) sticks[side] = points
+      else delete sticks[side]
+      return { ...prev, sticks }
+    })
+  }
+
+  /** Stage the trigger deadzones; `null` reverts to the pad. */
+  function stageLjTrigger(zones: LjTriggerZones | null): void {
+    setLjDraft((prev) => ({ ...prev, trigger: zones }))
+  }
+
+  /**
+   * Commit every staged LeadJoy edit: each record is written live and proven
+   * with a readback (a mismatch restores the old value and reports). Entries
+   * that already match the pad are skipped, so a retry after a partial commit
+   * only resends what is missing.
+   */
+  async function writeLeadJoyDraft(): Promise<void> {
+    if (!ljPath || ljBusy || !ljDirty) return
     setLjBusy(true)
     setErr(null)
     setMsg(t('lj.writing'))
     try {
-      await api().leadjoyWriteStick({ path: ljPath, slot: ljSlot, side, cv })
+      for (const [key, target] of Object.entries(ljDraft.buttons)) {
+        const id = Number(key)
+        if (target === ljPadTarget(id)) continue
+        await api().leadjoyWriteButton({ path: ljPath, slot: ljSlot, id, target })
+      }
+      for (const key of Object.keys(ljDraft.sticks)) {
+        const side = Number(key) as 0 | 1
+        const grid = ljDraft.sticks[side]
+        if (!grid || JSON.stringify(grid) === JSON.stringify(ljPadGrid(side))) continue
+        const cv = grid.flatMap((p) => [ljPercentToWire(p.x / 10), ljPercentToWire(p.y / 10)])
+        cv[1] = 0
+        await api().leadjoyWriteStick({ path: ljPath, slot: ljSlot, side, cv })
+      }
+      if (ljDraft.trigger && JSON.stringify(ljDraft.trigger) !== JSON.stringify(ljPadZones)) {
+        await api().leadjoyWriteTrigger({ path: ljPath, slot: ljSlot, zones: ljDraft.trigger })
+      }
       setLjSnap(await api().leadjoyReadSlot({ path: ljPath, slot: ljSlot }))
+      setSavedAt({ slot: ljSlot + 1, at: Date.now() })
       setMsg(t('msg.saved'))
     } catch (e) {
       setErr((e as Error).message)
+      // Some records may have landed before the failure — re-read so the UI
+      // shows the pad's real state (staged entries that match drop out of dirty).
+      try {
+        setLjSnap(await api().leadjoyReadSlot({ path: ljPath, slot: ljSlot }))
+      } catch {
+        /* handle down — keep the last good snapshot */
+      }
     } finally {
       setLjBusy(false)
     }
@@ -2182,17 +2295,33 @@ export default function App(): JSX.Element {
         return
       }
       if (pre && pre.support === 'detect-only') {
-        // Named but layout-unproven (e.g. LeadJoy Saber Plus): show it as
-        // detected + locked without sending the GameSir handshake at all —
-        // foreign bytes on another vendor's pad buy nothing and the timeout
-        // only confuses. Live input still flows; tuning unlocks per feature.
+        // Named but layout-unproven: no GameSir handshake — foreign bytes on
+        // another vendor's pad buy nothing and the timeout only confuses. The
+        // Saber Plus drives the same UI from here (connected, slot read on
+        // connect); other detect-only pads stay locked as before.
         setModel(pre)
         setPid(cand?.productId ?? null)
         setBlob(null)
         setLjSnap(null)
+        setLjDraft({ buttons: {}, sticks: {}, trigger: null })
         setLjSlot(0)
-        setLjPath(pre.id === 'SaberPlus' ? path : null)
+        setSavedAt(null)
+        const saber = pre.id === 'SaberPlus'
+        setLjPath(saber ? path : null)
+        setConnected(saber)
+        setConnPath(saber ? path : null)
         setMsg(`${pre.marketingName} detected — ${pre.supportNote}`)
+        if (saber) {
+          setLjBusy(true)
+          try {
+            setLjSnap(await api().leadjoyReadSlot({ path, slot: 0 }))
+            setMsg(null)
+          } catch (e) {
+            setErr((e as Error).message)
+          } finally {
+            setLjBusy(false)
+          }
+        }
         return
       }
       const res = await api().connect(path)
@@ -2403,6 +2532,31 @@ export default function App(): JSX.Element {
   const resWire = fd ? fun.extend.stickResolution(fd) : 0
   const resInfo = describeRawResolution(fd ? fun.extend.stickResolution(fd) : 0)
 
+  // --- LeadJoy derived state: same UI, different wire ----------------------
+  const isLj = !!ljPath && model?.id === 'SaberPlus'
+  const ljPadGrid = (side: 0 | 1): Array<{ x: number; y: number }> =>
+    (ljSnap?.sticks.find((s) => s.side === side)?.curvePct ?? []).map(([x, y]) => ({ x: Math.round(x * 10), y: Math.round(y * 10) }))
+  const ljPadZones: LjTriggerZones | null = ljSnap
+    ? {
+        leftInner: ljSnap.trigger.left.inner,
+        leftOuter: ljSnap.trigger.left.outer,
+        rightInner: ljSnap.trigger.right.inner,
+        rightOuter: ljSnap.trigger.right.outer
+      }
+    : null
+  const ljPadTarget = (id: number): number | null => {
+    const b = ljSnap?.buttons.find((x) => x.id === id)
+    if (!b || b.target == null) return null
+    return ljSnap?.buttons.find((x) => x.label === b.target)?.id ?? null
+  }
+  const ljStickPoints = (side: 0 | 1): Array<{ x: number; y: number }> => ljDraft.sticks[side] ?? ljPadGrid(side)
+  const ljZones = ljDraft.trigger ?? ljPadZones
+  const ljDirty =
+    isLj &&
+    (Object.entries(ljDraft.buttons).some(([id, v]) => v !== ljPadTarget(Number(id))) ||
+      ([0, 1] as const).some((s) => ljDraft.sticks[s] !== undefined && JSON.stringify(ljDraft.sticks[s]) !== JSON.stringify(ljPadGrid(s))) ||
+      (ljDraft.trigger !== null && JSON.stringify(ljDraft.trigger) !== JSON.stringify(ljPadZones)))
+
   // Center guard: while measuring, track the worst rest deviation of the
   // current stick; the countdown then proposes a Start % that covers it.
   useEffect(() => {
@@ -2588,6 +2742,11 @@ export default function App(): JSX.Element {
               <>{t('msg.fw')} {info.firmware} · {t('msg.liveSlot')} P{info.currentProfile}<br />{model ? model.marketingName : t('msg.unknownModel')}</>
             </div>
           )}
+          {isLj && ljSnap && (
+            <div className="note">
+              <>{model?.marketingName}<br />{t('lj.version')} {ljSnap.version} · {t('lj.board')} {ljSnap.board}</>
+            </div>
+          )}
           {pid === 0x0575 && (
             <div className="note bad">
               {t('msg.receiver')}
@@ -2620,21 +2779,36 @@ export default function App(): JSX.Element {
             <span className="sub">{t('topbar.sub')}</span>
           </div>
           <div className="row" style={{ gap: 8 }}>
-            {[1, 2, 3, 4].map((s) => (
-              <button
-                key={s}
-                className={`choice-btn${s === slot ? ' active' : ''}`}
-                disabled={!connected || busy || locked}
-                onClick={() => void loadSlot(s)}
-              >
-                <span className="choice-label">P{s}</span>
-              </button>
-            ))}
-            <button className="btn sm primary" disabled={!connected || !dirty || busy || locked} onClick={() => void write()}>
-              {busy ? t('common.working') : t('top.write')}
+            {isLj
+              ? (['Main', 'Sub1', 'Sub2'] as const).map((name, i) => (
+                  <button
+                    key={name}
+                    className={`choice-btn${i === ljSlot ? ' active' : ''}`}
+                    disabled={ljBusy}
+                    onClick={() => void loadLeadJoySlot(i as 0 | 1 | 2)}
+                  >
+                    <span className="choice-label">{name}</span>
+                  </button>
+                ))
+              : [1, 2, 3, 4].map((s) => (
+                  <button
+                    key={s}
+                    className={`choice-btn${s === slot ? ' active' : ''}`}
+                    disabled={!connected || busy || locked}
+                    onClick={() => void loadSlot(s)}
+                  >
+                    <span className="choice-label">P{s}</span>
+                  </button>
+                ))}
+            <button
+              className="btn sm primary"
+              disabled={isLj ? ljBusy || !ljDirty : !connected || !dirty || busy || locked}
+              onClick={() => void (isLj ? writeLeadJoyDraft() : write())}
+            >
+              {(isLj ? ljBusy : busy) ? t('common.working') : t('top.write')}
             </button>
-            {dirty && <span className="pill warn">{t('msg.unsaved')}</span>}
-            {!dirty && savedAt && savedAt.slot === slot && (
+            {(isLj ? ljDirty : dirty) && <span className="pill warn">{t('msg.unsaved')}</span>}
+            {!(isLj ? ljDirty : dirty) && savedAt && savedAt.slot === (isLj ? ljSlot + 1 : slot) && (
               <span className="pill good" title={t('msg.verifiedTitle')}>
                 {t('msg.saved')} {new Date(savedAt.at).toLocaleTimeString()}
               </span>
@@ -2671,51 +2845,127 @@ export default function App(): JSX.Element {
           )}
           {err && <div className="note bad">{err}</div>}
           {msg && <div className="note">{msg}</div>}
-          {dirty && <div className="note warn">{t('msg.dirty')}</div>}
+          {(isLj ? ljDirty : dirty) && <div className="note warn">{t('msg.dirty')}</div>}
           {!connected && (
             <div className="msg"><h3>{t('msg.connect')}</h3><p>{t('msg.models')} {t('msg.connectBody')}</p></div>
           )}
-          {!connected && model?.id === 'SaberPlus' && ljPath && (
-            <div className="card" style={{ marginTop: 12 }}>
-              <h3>{model.marketingName} — {(['Main', 'Sub1', 'Sub2'] as const)[ljSlot]}</h3>
-              <p>{t('lj.lockedNote')}</p>
-              <div className="row">
-                {(['Main', 'Sub1', 'Sub2'] as const).map((name, i) => (
-                  <button
-                    key={name}
-                    className={`choice-btn${i === ljSlot ? ' active' : ''}`}
-                    disabled={ljBusy}
-                    onClick={() => void readLeadJoy(i as 0 | 1 | 2)}
-                  >
-                    <span className="choice-label">{name}</span>
+          {isLj && (
+            <>
+              <div className="row" style={{ gap: 8, marginBottom: 12 }}>
+                {(['Left', 'Right'] as const).map((n, i) => (
+                  <button key={n} className={`choice-btn${i === which ? ' active' : ''}`} onClick={() => setWhich(i)}>
+                    <span className="choice-label">{(n === 'Left' ? t('cal.left') : t('cal.right'))} {t('sticks.stick')}</span>
                   </button>
                 ))}
-                <button className="btn sm primary" disabled={ljBusy} onClick={() => void readLeadJoy(ljSlot)}>
-                  {ljBusy ? t('lj.reading') : t('lj.read')}
-                </button>
+                <div style={{ flex: 1 }} />
+                <span className="pill">{model?.marketingName} · {(['Main', 'Sub1', 'Sub2'] as const)[ljSlot]}</span>
               </div>
-              {ljSnap && (
-                <div className="stack" style={{ gap: 10, marginTop: 10, fontSize: 13 }}>
-                  <span className="mono">{t('lj.version')} {ljSnap.version} · {t('lj.board')} {ljSnap.board}</span>
-                  <div>
-                    <strong>{t('lj.sticks')}</strong>
-                    {ljSnap.sticks.map((s) => (
-                      <div key={s.side} className="mono">
-                        {s.sideName}: {s.deadzonePct.toFixed(1)}% {t('lj.deadzone')} · {t('lj.center')} {s.center[0]},{s.center[1]} ·
-                        {' '}{s.curvePct.map(([x, y]) => `${x.toFixed(1)}/${y.toFixed(1)}`).join(' ')}
-                      </div>
-                    ))}
+              {!ljSnap && <div className="msg"><h3>{ljBusy ? t('lj.reading') : t('msg.loading')}</h3></div>}
+              {ljSnap && tab === 'sticks' && (
+                <div className="two" style={{ alignItems: 'start' }}>
+                  <div className="stack" style={{ gap: 16 }}>
+                    <LjDeadzoneCard
+                      snap={ljSnap}
+                      side={which === 0 ? 0 : 1}
+                      points={ljStickPoints(which === 0 ? 0 : 1)}
+                      onChange={(next) => stageLjStick(which === 0 ? 0 : 1, next)}
+                      onReset={() => stageLjStick(which === 0 ? 0 : 1, null)}
+                    />
                   </div>
-                  <div>
-                    <strong>{t('lj.triggers')}</strong>
-                    <div className="mono">LT mode {ljSnap.trigger.left.mode} · {ljSnap.trigger.left.inner}–{ljSnap.trigger.left.outer}%</div>
-                    <div className="mono">RT mode {ljSnap.trigger.right.mode} · {ljSnap.trigger.right.inner}–{ljSnap.trigger.right.outer}%</div>
+                  <div className="stack" style={{ gap: 16 }}>
+                    <LjCurveCard
+                      snap={ljSnap}
+                      side={which === 0 ? 0 : 1}
+                      points={ljStickPoints(which === 0 ? 0 : 1)}
+                      onChange={(next) => stageLjStick(which === 0 ? 0 : 1, next)}
+                      onReset={() => stageLjStick(which === 0 ? 0 : 1, null)}
+                    />
                   </div>
                 </div>
               )}
-            </div>
+              {ljSnap && tab === 'device' && (
+                <div className="two" style={{ alignItems: 'start' }}>
+                  <div className="stack" style={{ gap: 16 }}>
+                    <div className="card">
+                      <h3>{model?.marketingName}</h3>
+                      <Hint>{t('lj.deviceHint')}</Hint>
+                      <div className="stack" style={{ gap: 6, marginTop: 8, fontSize: 13 }}>
+                        <span className="mono">{t('lj.version')} {ljSnap.version} · {t('lj.board')} {ljSnap.board}</span>
+                        <span className="mono">{t('lj.slot')} {(['Main', 'Sub1', 'Sub2'] as const)[ljSlot]}</span>
+                        <span className="mono">{t('lj.center')} L {ljSnap.sticks[0]?.center.join(',')} · R {ljSnap.sticks[1]?.center.join(',')}</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="stack" style={{ gap: 16 }}>
+                    <div className="card">
+                      <h3>{t('device.polling')}</h3>
+                      <Hint>{t('lj.rateLocked')}</Hint>
+                    </div>
+                  </div>
+                </div>
+              )}
+              {ljSnap && tab === 'buttons' && (
+                <>
+                  {ljZones && <LjTriggerCard value={ljZones} onChange={stageLjTrigger} onReset={() => stageLjTrigger(null)} />}
+                  <div className="card" style={{ marginTop: 16 }}>
+                    <h3>{t('buttons.title')}</h3>
+                    <Hint>{t('lj.bindHint')}</Hint>
+                    <table className="tbl" style={{ marginTop: 8 }}>
+                      <thead><tr><th>{t('buttons.source')}</th><th>{t('buttons.target')}</th><th>{t('buttons.effective')}</th></tr></thead>
+                      <tbody>
+                        {(() => {
+                          const nameToId: Record<string, number> = {}
+                          for (const b of ljSnap.buttons) nameToId[b.label] = b.id
+                          const ljOptions = [{ value: 0, label: t('buttons.unmapped') }, ...ljSnap.buttons.map((b) => ({ value: b.id, label: b.label }))]
+                          const ljLabel = (v: number): string => {
+                            if (v === 0) return t('buttons.unmapped')
+                            return ljSnap.buttons.find((b) => b.id === v)?.label ?? `#${v}`
+                          }
+                          const rows = [
+                            ...[24, 25, 26, 27].map((id) => ({ id, phys: LJ_PHYSICAL[id] ?? '' })),
+                            ...ljSnap.buttons.filter((b) => b.id !== 24 && b.id !== 25 && b.id !== 26 && b.id !== 27).map((b) => ({ id: b.id, phys: '' }))
+                          ]
+                          return rows.map((row) => {
+                            const snap = ljSnap.buttons.find((b) => b.id === row.id)
+                            const targetName = snap?.target ?? null
+                            const padCurrent = targetName == null ? 0 : (nameToId[targetName] ?? -1)
+                            const staged = ljDraft.buttons[row.id]
+                            const current = staged !== undefined ? (staged ?? 0) : padCurrent
+                            const effName = staged === undefined ? targetName : (staged === null ? null : ljLabel(staged))
+                            const sourceName = row.phys ? `${row.phys} · ${snap?.label ?? ''}` : (snap?.label ?? `ID ${row.id}`)
+                            return (
+                              <tr key={row.id}>
+                                <td><span className="row" style={{ gap: 7, alignItems: 'center' }}><LjKeyIcon id={row.id} />{sourceName}</span></td>
+                                <td>
+                                  {padCurrent === -1 && staged === undefined ? (
+                                    <span className="mono">{targetName}</span>
+                                  ) : (
+                                    <KeySelect
+                                      value={current}
+                                      disabled={ljBusy}
+                                      open={bindOpen === `lj-${row.id}`}
+                                      onToggle={() => setBindOpen(bindOpen === `lj-${row.id}` ? null : `lj-${row.id}`)}
+                                      onClose={() => setBindOpen(null)}
+                                      onPick={(v) => stageLjButton(row.id, v)}
+                                      options={ljOptions}
+                                      getLabel={ljLabel}
+                                      renderIcon={(v) => <LjKeyIcon id={v} />}
+                                    />
+                                  )}
+                                </td>
+                                <td><span className="row" style={{ gap: 7, alignItems: 'center' }}>{current > 0 && <LjKeyIcon id={current} />}{effName ?? '—'}</span></td>
+                              </tr>
+                            )
+                          })
+                        })()}
+                      </tbody>
+                    </table>
+                  </div>
+                </>
+              )}
+            </>
           )}
-          {connected && !profile && (
+          {connected && !profile && !isLj && (
             !model || model.support !== 'full' ? (
               <div className="msg">
                 <h3>{model ? `${model.marketingName} — ${t('msg.locked')}` : `${t('msg.unknownModel')} — ${t('msg.locked')}`}</h3>
@@ -3016,33 +3266,6 @@ export default function App(): JSX.Element {
                 </div>
               </div>
               )}
-              {tab === 'sticks' && model?.id === 'SaberPlus' && ljPath && (
-              <div className="stack" style={{ gap: 16 }}>
-                <div className="row">
-                  {(['Main', 'Sub1', 'Sub2'] as const).map((name, i) => (
-                    <button
-                      key={name}
-                      className={`choice-btn${i === ljSlot ? ' active' : ''}`}
-                      disabled={ljBusy}
-                      onClick={() => void readLeadJoy(i as 0 | 1 | 2)}
-                    >
-                      <span className="choice-label">{name}</span>
-                    </button>
-                  ))}
-                  {!ljSnap && (
-                    <button className="btn sm primary" disabled={ljBusy} onClick={() => void readLeadJoy(ljSlot)}>
-                      {ljBusy ? t('lj.reading') : t('lj.read')}
-                    </button>
-                  )}
-                </div>
-                {ljSnap && (
-                  <>
-                    <LjStickCard snap={ljSnap} side={0} busy={ljBusy} onWrite={(cv) => void writeLeadJoyStick(0, cv)} />
-                    <LjStickCard snap={ljSnap} side={1} busy={ljBusy} onWrite={(cv) => void writeLeadJoyStick(1, cv)} />
-                  </>
-                )}
-              </div>
-              )}
               {tab === 'device' && (
               <div className="two" style={{ alignItems: 'start' }}>
                 <div className="stack" style={{ gap: 16 }}>
@@ -3247,80 +3470,15 @@ export default function App(): JSX.Element {
             </div>
             </>
           )}
-          {tab === 'buttons' && model?.id === 'SaberPlus' && ljPath && (
-            <div className="card" style={{ marginTop: 16 }}>
-              <h3>{t('buttons.title')}</h3>
-              <Hint>{t('lj.bindHint')}</Hint>
-              <div className="row" style={{ marginTop: 8 }}>
-                {(['Main', 'Sub1', 'Sub2'] as const).map((name, i) => (
-                  <button
-                    key={name}
-                    className={`choice-btn${i === ljSlot ? ' active' : ''}`}
-                    disabled={ljBusy}
-                    onClick={() => void readLeadJoy(i as 0 | 1 | 2)}
-                  >
-                    <span className="choice-label">{name}</span>
-                  </button>
-                ))}
-                {!ljSnap && (
-                  <button className="btn sm primary" disabled={ljBusy} onClick={() => void readLeadJoy(ljSlot)}>
-                    {ljBusy ? t('lj.reading') : t('lj.read')}
-                  </button>
-                )}
-              </div>
-              {ljSnap && (
-              <table className="tbl" style={{ marginTop: 8 }}>
-                <thead><tr><th>{t('buttons.source')}</th><th>{t('buttons.target')}</th><th>{t('buttons.effective')}</th></tr></thead>
-                <tbody>
-                  {(() => {
-                    const nameToId: Record<string, number> = {}
-                    for (const b of ljSnap.buttons) nameToId[b.label] = b.id
-                    const ljOptions = [{ value: 0, label: t('buttons.unmapped') }, ...ljSnap.buttons.map((b) => ({ value: b.id, label: b.label }))]
-                    const ljLabel = (v: number): string => {
-                      if (v === 0) return t('buttons.unmapped')
-                      return ljSnap.buttons.find((b) => b.id === v)?.label ?? `#${v}`
-                    }
-                    const rows = [
-                      ...[24, 25, 26, 27].map((id) => ({ id, phys: LJ_PHYSICAL[id] ?? '' })),
-                      ...ljSnap.buttons.filter((b) => b.id !== 24 && b.id !== 25 && b.id !== 26 && b.id !== 27).map((b) => ({ id: b.id, phys: '' }))
-                    ]
-                    return rows.map((row) => {
-                      const snap = ljSnap.buttons.find((b) => b.id === row.id)
-                      const targetName = snap?.target ?? null
-                      const current = targetName == null ? 0 : nameToId[targetName] ?? -1
-                      const sourceName = row.phys ? `${row.phys} · ${snap?.label ?? ''}` : (snap?.label ?? `ID ${row.id}`)
-                      return (
-                        <tr key={row.id}>
-                          <td><span className="row" style={{ gap: 7, alignItems: 'center' }}><LjKeyIcon id={row.id} />{sourceName}</span></td>
-                          <td>
-                            {current === -1 ? (
-                              <span className="mono">{targetName}</span>
-                            ) : (
-                              <KeySelect
-                                value={current}
-                                disabled={ljBusy}
-                                open={bindOpen === `lj-${row.id}`}
-                                onToggle={() => setBindOpen(bindOpen === `lj-${row.id}` ? null : `lj-${row.id}`)}
-                                onClose={() => setBindOpen(null)}
-                                onPick={(v) => void writeLeadJoy(row.id, v === 0 ? null : v)}
-                                options={ljOptions}
-                                getLabel={ljLabel}
-                                renderIcon={(v) => <LjKeyIcon id={v} />}
-                              />
-                            )}
-                          </td>
-                          <td><span className="row" style={{ gap: 7, alignItems: 'center' }}>{current !== 0 && current !== -1 && <LjKeyIcon id={current} />}{current === 0 ? '—' : (targetName ?? '')}</span></td>
-                        </tr>
-                      )
-                    })
-                  })()}
-                </tbody>
-              </table>
-              )}
-            </div>
-          )}
           {tab === 'profiles' && (
-            <ProfilesPanel connected={connected} activeSlot={info?.currentProfile ?? null} locked={locked} modelId={modelId} modelLen={modelLen} dumpLength={model?.dumpLength ?? 0} modelName={model?.marketingName ?? null} />
+            isLj ? (
+              <div className="msg">
+                <h3>{model?.marketingName} — {t('lj.profilesLockedTitle')}</h3>
+                <p>{t('lj.profilesLockedBody')}</p>
+              </div>
+            ) : (
+              <ProfilesPanel connected={connected} activeSlot={info?.currentProfile ?? null} locked={locked} modelId={modelId} modelLen={modelLen} dumpLength={model?.dumpLength ?? 0} modelName={model?.marketingName ?? null} />
+            )
           )}
           {tab === 'calibrate' && (
             connected && model?.support === 'full' ? (

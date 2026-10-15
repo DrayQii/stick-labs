@@ -6,7 +6,7 @@ import { app, BrowserWindow, dialog, ipcMain, session, shell } from 'electron'
 import { join } from 'node:path'
 import { Controller, type DeviceInfo } from './controller'
 import { discover, discoverLive } from './hid'
-import { ljReadButtonTable, ljReadMainSnapshot, ljReadSnapshot, ljWriteButtonVerified, ljWriteStickVerified } from './leadjoy'
+import { ljReadButtonTable, ljReadMainSnapshot, ljReadSnapshot, ljWriteButtonVerified, ljWriteStickVerified, ljWriteTriggerVerified } from './leadjoy'
 import { ljButtonWriteRecord } from '../shared/leadjoy'
 import { steamInfo, exportApexDeadzones, listInstalledGames, exportDeadzonesToGames } from './steam'
 import { PROFILE_LENGTH } from '../shared/protocol'
@@ -134,6 +134,12 @@ handle('leadjoy:writeStick', async (req: { path: string; slot: number; side: num
   if (slot !== 0 && slot !== 1 && slot !== 2) throw new Error(`leadjoy: slot ${slot} is not Main/Sub1/Sub2`)
   if (side !== 0 && side !== 1) throw new Error(`leadjoy: side ${side} is not left/right`)
   return ljWriteStickVerified(path, slot, side, cv)
+})
+handle('leadjoy:writeTrigger', async (req: { path: string; slot: number; zones: { leftInner: number; leftOuter: number; rightInner: number; rightOuter: number } }) => {
+  const { path, slot, zones } = req ?? {}
+  if (typeof path !== 'string' || path.length === 0) throw new Error('leadjoy: refusing write without a device path')
+  if (slot !== 0 && slot !== 1 && slot !== 2) throw new Error(`leadjoy: slot ${slot} is not Main/Sub1/Sub2`)
+  return ljWriteTriggerVerified(path, slot, zones)
 })
 handle('device:connect', async (path: string): Promise<DeviceInfo> => {
   sessionEpoch++

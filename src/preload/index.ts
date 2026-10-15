@@ -44,6 +44,8 @@ const api = {
     call<{ verified: boolean; restored: boolean }>('leadjoy:writeButton', req),
   leadjoyWriteStick: (req: { path: string; slot: number; side: number; cv: number[] }) =>
     call<{ verified: boolean; restored: boolean }>('leadjoy:writeStick', req),
+  leadjoyWriteTrigger: (req: { path: string; slot: number; zones: { leftInner: number; leftOuter: number; rightInner: number; rightOuter: number } }) =>
+    call<{ verified: boolean; restored: boolean }>('leadjoy:writeTrigger', req),
   on: (channel: string, fn: (payload: any) => void): (() => void) => {
     const listener = (_e: unknown, payload: unknown): void => fn(payload)
     ipcRenderer.on(channel, listener)
