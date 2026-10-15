@@ -72,13 +72,14 @@ order still open (one distinct flip each will settle it).
 Parsing Main buttons, clearing M1 to Origin, and re-encoding for slot 1
 reproduces the captured Sub1 document byte-for-byte (`tests/leadjoy.ts`).
 
-In-app reads ship: `src/main/leadjoy.ts` runs the vendor navigation queries
-through the shared builders and returns a read-only snapshot. Buttons are
-fully writable 1:1 in the Buttons tab (all 22 ids × Main/Sub1/Sub2,
-verified writes through `leadjoy:writeButton`); sticks are writable in the
-Sticks tab (per-stick 8-point curve editor + deadzone slider, verified
-writes through `leadjoy:writeStick`). Triggers stay read-only until their
-write records are captured.
+In-app control ships through the **same UI as the GameSir pads**: connecting
+the Saber Plus marks it connected and reads Main immediately, slots live in
+the topbar (Main/Sub1/Sub2, same spot as P1–P4), and edits stage until the
+topbar Write commits them. Buttons (all 22 ids, 1:1 remaps), stick curves /
+deadzones and trigger deadzones are all writable, each record written live,
+acked and read back (`leadjoy:writeButton` / `writeStick` / `writeTrigger`);
+a mismatch restores the old value. Records that are not decoded for this pad
+(report-rate, resolution) stay untouched and say so in the Device tab.
 
 ## Open (needs captures)
 
@@ -89,8 +90,9 @@ write records are captured.
   the right side the pad already held (25% head, full image), got the
   `{c:71,e:0}` ack, and read back a byte-identical image (`verified=true`,
   independent re-read matches).
-- Trigger writes (record 90/91): one LT-deadzone flip + Save capture still
-  needed — the stick session did not touch triggers.
-- Keyboard/mouse target `t` values (out of 1:1 scope; A/B/Y/X are proven).
+- Trigger writes (record 90/91): codec + builder shipped (byte-exact vs the
+  LT-deadzone capture, `tests/leadjoy.ts`); field proof = a no-op deadzone
+  rewrite the next time the pad is on the bench (user-confirmed step).
 - Trigger mode enum beyond Linear=2; shape enum beyond Circle=1.
+- Keyboard/mouse target `t` values (out of 1:1 scope; A/B/Y/X are proven).
 - Live input report layout (XInput interface, separate from MI_04).
