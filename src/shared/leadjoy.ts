@@ -753,7 +753,7 @@ export function ljApplyStickPatch(d1: LjStickSide, patch: LjStickPatch): LjStick
   if (patch.rjc !== undefined) out.rjc = ljFlag(patch.rjc, 'rjc')
   if (patch.xr !== undefined) out.xr = ljFlag(patch.xr, 'xr')
   if (patch.yr !== undefined) out.yr = ljFlag(patch.yr, 'yr')
-  if (patch.mse !== undefined) out.mse = ljRangeInt(patch.mse, 'mse', 100)
+  if (patch.mse !== undefined) out.mse = ljRangeInt(patch.mse, 'mse', 255)
   if (patch.asf !== undefined) out.asf = ljRangeInt(patch.asf, 'asf', 100)
   return out
 }

@@ -344,7 +344,8 @@ check(
     JSON.stringify(patched.cv) === JSON.stringify(d1Right.cv) && patched.cpl === d1Right.cpl
 )
 check('stick patch copies rather than mutates', d1Right.ci !== 0 && d1Right.mm !== 1)
-for (const bad of [{ mm: 2 }, { mse: 101 }, { mse: 1.5 }, { xr: -1 }, { ci: 7 }]) {
+check('controller-rate ladder reaches the byte cap', ljApplyStickPatch(d1Right, { mse: 255 }).mse === 255)
+for (const bad of [{ mm: 2 }, { mse: 256 }, { mse: 1.5 }, { xr: -1 }, { ci: 7 }]) {
   let threw = false
   try {
     ljApplyStickPatch(d1Right, bad)
