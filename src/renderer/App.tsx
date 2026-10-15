@@ -23,6 +23,7 @@ import { createPortal } from 'react-dom'
 import { LANGS, LangContext, tr, useLangState, useT } from './i18n'
 import { THEMES, ThemeContext, useThemeState } from './theme'
 import type { DeepPollResult } from '@shared/deeppoll'
+import type { LjSnapshot } from '@shared/leadjoy'
 
 
 /**
@@ -1807,6 +1808,10 @@ export default function App(): JSX.Element {
   ).filter((c) => !(c.productId === 0x0575 && hasDirectPad))
   const [connected, setConnected] = useState(false)
   const [info, setInfo] = useState<DeviceInfo | null>(null)
+  // LeadJoy Saber Plus read-only preview (no GameSir handshake, no writes).
+  const [ljPath, setLjPath] = useState<string | null>(null)
+  const [ljSnap, setLjSnap] = useState<LjSnapshot | null>(null)
+  const [ljBusy, setLjBusy] = useState(false)
   const [pid, setPid] = useState<number | null>(null)
   const [model, setModel] = useState<ControllerModel | null>(null)
   const [slot, setSlot] = useState<number>(() => {
@@ -1974,6 +1979,19 @@ export default function App(): JSX.Element {
     void api().version().then(setAppVersion).catch(() => undefined)
   }, [])
 
+  async function readLeadJoy(): Promise<void> {
+    if (!ljPath || ljBusy) return
+    setLjBusy(true)
+    setErr(null)
+    try {
+      setLjSnap(await api().leadjoyReadMain(ljPath))
+    } catch (e) {
+      setErr((e as Error).message)
+    } finally {
+      setLjBusy(false)
+    }
+  }
+
   async function connect(path: string): Promise<void> {
     setErr(null)
     try {
@@ -1995,12 +2013,16 @@ export default function App(): JSX.Element {
         setModel(pre)
         setPid(cand?.productId ?? null)
         setBlob(null)
+        setLjSnap(null)
+        setLjPath(pre.id === 'SaberPlus' ? path : null)
         setMsg(`${pre.marketingName} detected — ${pre.supportNote}`)
         return
       }
       const res = await api().connect(path)
       setConnPath(path)
       setConnected(true)
+      setLjPath(null)
+      setLjSnap(null)
       setInfo(res)
       setPid(cand?.productId ?? null)
       const m = identifyModel(cand?.product, cand?.productId) ?? null
@@ -2374,6 +2396,8 @@ export default function App(): JSX.Element {
                 setPid(null)
                 setModel(null)
                 setBlob(null)
+                setLjPath(null)
+                setLjSnap(null)
                 setDirty(false)
               }}
             >
@@ -2471,6 +2495,43 @@ export default function App(): JSX.Element {
           {dirty && <div className="note warn">{t('msg.dirty')}</div>}
           {!connected && (
             <div className="msg"><h3>{t('msg.connect')}</h3><p>{t('msg.models')} {t('msg.connectBody')}</p></div>
+          )}
+          {!connected && model?.id === 'SaberPlus' && ljPath && (
+            <div className="card" style={{ marginTop: 12 }}>
+              <h3>{model.marketingName} — {t('lj.mainSlot')}</h3>
+              <p>{t('lj.lockedNote')}</p>
+              <div className="row">
+                <button className="btn sm primary" disabled={ljBusy} onClick={() => void readLeadJoy()}>
+                  {ljBusy ? t('lj.reading') : t('lj.read')}
+                </button>
+              </div>
+              {ljSnap && (
+                <div className="stack" style={{ gap: 10, marginTop: 10, fontSize: 13 }}>
+                  <span className="mono">{t('lj.version')} {ljSnap.version} · {t('lj.board')} {ljSnap.board}</span>
+                  <div>
+                    <strong>{t('lj.sticks')}</strong>
+                    {ljSnap.sticks.map((s) => (
+                      <div key={s.side} className="mono">
+                        {s.sideName}: {s.deadzonePct.toFixed(1)}% {t('lj.deadzone')} · {t('lj.center')} {s.center[0]},{s.center[1]} ·
+                        {' '}{s.curvePct.map(([x, y]) => `${x.toFixed(1)}/${y.toFixed(1)}`).join(' ')}
+                      </div>
+                    ))}
+                  </div>
+                  <div>
+                    <strong>{t('lj.triggers')}</strong>
+                    <div className="mono">LT mode {ljSnap.trigger.left.mode} · {ljSnap.trigger.left.inner}–{ljSnap.trigger.left.outer}%</div>
+                    <div className="mono">RT mode {ljSnap.trigger.right.mode} · {ljSnap.trigger.right.inner}–{ljSnap.trigger.right.outer}%</div>
+                  </div>
+                  <div>
+                    <strong>{t('lj.buttons')}</strong>
+                    {ljSnap.buttons.filter((b) => b.target !== null).map((b) => (
+                      <div key={b.id} className="mono">{b.label} → {b.target}</div>
+                    ))}
+                    <div>{ljSnap.buttons.filter((b) => b.target === null).length} {t('lj.stock')}</div>
+                  </div>
+                </div>
+              )}
+            </div>
           )}
           {connected && !profile && (
             !model || model.support !== 'full' ? (

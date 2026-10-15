@@ -9,6 +9,7 @@ import {
   LJ_MAP_ORIGIN,
   ljBoardQuery,
   ljBuildButtonTable,
+  ljBuildSnapshot,
   ljButtonQuery,
   ljButtonTarget,
   ljChecksum,
@@ -175,6 +176,25 @@ for (const [name, sample] of samples) {
   const dec = ljMpDecode(enc, 0)
   check(`msgpack ${name}`, dec.next === enc.length && JSON.stringify(dec.value) === JSON.stringify(sample))
 }
+
+// --- snapshot -----------------------------------------------------------------
+const snap = ljBuildSnapshot(
+  { c: 12, e: 0, r: '36.16.12' },
+  ljParseBoard(ljDecodeStream(fixture('board.bin'))),
+  btnMain,
+  left,
+  right,
+  trig
+)
+check('snapshot version/board', snap.version === '36.16.12' && snap.board === 'DEFAULT_BOARD' && snap.slot === 0)
+check(
+  'snapshot m1',
+  snap.buttons.find((b) => b.id === 24)?.target === 'X' && snap.buttons.filter((b) => b.target !== null).length === 1
+)
+check(
+  'snapshot deadzones',
+  Math.abs((snap.sticks[0]?.deadzonePct ?? -1) - 0) < 1e-9 && Math.abs((snap.sticks[1]?.deadzonePct ?? -1) - 30) < 0.05
+)
 
 if (failures > 0) {
   console.error(`${failures} FAILURES`)

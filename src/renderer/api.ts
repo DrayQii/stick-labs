@@ -7,6 +7,7 @@ export interface Candidate {
   live: boolean | null
 }
 import type { DeepPollResult } from '@shared/deeppoll'
+import type { LjSnapshot } from '@shared/leadjoy'
 export interface DeviceInfo {
   firmware: string
   dongle: string
@@ -70,6 +71,8 @@ interface LabApi {
   /** MARIUS board — read-only preview scaffold. No write path exists. */
   /** Kernel USB poll check (elevated ETW trace, UAC prompts once per run). */
   deeppoll(vid: number, pid: number, seconds?: number): Promise<DeepPollResult>
+  /** LeadJoy Saber Plus: read-only Main-slot snapshot (no writes exist). */
+  leadjoyReadMain(path: string): Promise<LjSnapshot>
   on(channel: string, fn: (payload: never) => void): () => void
 }
 

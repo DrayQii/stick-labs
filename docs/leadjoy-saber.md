@@ -46,6 +46,10 @@ capture=16 up=17 down=18 left=19 right=20 m1=24 m2=25 m3=26 m4=27 c=3.
 Parsing Main buttons, clearing M1 to Origin, and re-encoding for slot 1
 reproduces the captured Sub1 document byte-for-byte (`tests/leadjoy.ts`).
 
+In-app reads ship: `src/main/leadjoy.ts` runs the vendor navigation queries
+through the shared builders and returns a read-only snapshot, shown on the
+Saber Plus card (preview only — no editors, no writes).
+
 ## Open (needs captures)
 
 - Write/save-flush framing: flip any button + Save in the vendor app while

@@ -6,6 +6,7 @@ import { app, BrowserWindow, dialog, ipcMain, session, shell } from 'electron'
 import { join } from 'node:path'
 import { Controller, type DeviceInfo } from './controller'
 import { discover, discoverLive } from './hid'
+import { ljReadMainSnapshot } from './leadjoy'
 import { steamInfo, exportApexDeadzones, listInstalledGames, exportDeadzonesToGames } from './steam'
 import { PROFILE_LENGTH } from '../shared/protocol'
 import { runDeepPoll } from './deeppoll'
@@ -108,6 +109,7 @@ function handle(channel: string, fn: (...args: any[]) => unknown): void {
 }
 
 handle('device:discover', () => discoverLive())
+handle('leadjoy:readMain', (path: string) => ljReadMainSnapshot(path))
 handle('device:connect', async (path: string): Promise<DeviceInfo> => {
   sessionEpoch++
   const info = await controller.connect(path)

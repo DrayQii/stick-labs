@@ -1,5 +1,6 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import type { DeepPollResult } from '../shared/deeppoll'
+import type { LjSnapshot } from '../shared/leadjoy'
 
 async function call<T>(channel: string, ...args: unknown[]): Promise<T> {
   const result = (await ipcRenderer.invoke(channel, ...args)) as {
@@ -37,6 +38,7 @@ const api = {
     call<{ count: number; samples: number[]; min: number; max: number; median: number; mean: number }>('diag:ping', count),
   deeppoll: (vid: number, pid: number, seconds?: number) =>
     call<DeepPollResult>('diag:deeppoll', vid, pid, seconds),
+  leadjoyReadMain: (path: string) => call<LjSnapshot>('leadjoy:readMain', path),
   on: (channel: string, fn: (payload: any) => void): (() => void) => {
     const listener = (_e: unknown, payload: unknown): void => fn(payload)
     ipcRenderer.on(channel, listener)

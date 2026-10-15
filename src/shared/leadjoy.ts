@@ -662,3 +662,75 @@ export function ljParseBoard(doc: LjValue): LjBoardInfo {
   const d2 = asRecord(r.d2)
   return { board: asNumber(r.b, 'board.r.b'), name: asString(d2.n, 'board.n') }
 }
+
+// ---------------------------------------------------------------------------
+// Read-only snapshot for the app preview (plain JSON, no writes involved).
+// ---------------------------------------------------------------------------
+
+export interface LjSnapshotButton {
+  id: number
+  label: string
+  target: string | null
+}
+
+export interface LjSnapshotStick {
+  side: number
+  sideName: string
+  deadzonePct: number
+  center: [number, number]
+  shape: number
+  curvePct: Array<readonly [number, number]>
+}
+
+export interface LjSnapshotTriggerSide {
+  mode: number
+  inner: number
+  outer: number
+}
+
+export interface LjSnapshot {
+  version: string
+  board: string
+  slot: number
+  buttons: LjSnapshotButton[]
+  sticks: LjSnapshotStick[]
+  trigger: { left: LjSnapshotTriggerSide; right: LjSnapshotTriggerSide }
+}
+
+function snapshotStick(tuning: LjStickTuning): LjSnapshotStick {
+  return {
+    side: tuning.side,
+    sideName: tuning.side === 0 ? 'Left' : 'Right',
+    deadzonePct: tuning.curvePercent[0]?.[0] ?? 0,
+    center: tuning.center,
+    shape: tuning.shape,
+    curvePct: tuning.curvePercent
+  }
+}
+
+/** Assemble one read-only snapshot from parsed Main-slot records. */
+export function ljBuildSnapshot(
+  versionDoc: LjValue,
+  board: LjBoardInfo,
+  buttons: LjButtonTable,
+  left: LjStickTuning,
+  right: LjStickTuning,
+  trigger: LjTriggerTuning
+): LjSnapshot {
+  const version = asRecord(versionDoc)
+  return {
+    version: asString(version.r, 'version.r'),
+    board: board.name,
+    slot: buttons.slot,
+    buttons: buttons.records.map((rec) => ({
+      id: rec.k,
+      label: LJ_BUTTON_NAMES[rec.k] ?? `ID ${rec.k}`,
+      target: ljButtonTarget(rec)
+    })),
+    sticks: [snapshotStick(left), snapshotStick(right)],
+    trigger: {
+      left: { mode: trigger.left.mode, inner: trigger.left.inner, outer: trigger.left.outer },
+      right: { mode: trigger.right.mode, inner: trigger.right.inner, outer: trigger.right.outer }
+    }
+  }
+}
