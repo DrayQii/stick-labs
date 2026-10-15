@@ -24,6 +24,11 @@
  * - 60: button table {b, c:slot, d1:[22x {k,a,dn,up}]}. Source ids are the
  *   query ids; a remap target reuses the same id space (proven: R5/M1 id
  *   0x18 -> X id 4 arrives as dn {t:2, v:[4,0,0,0]}; Origin is t:0 v:[0,0,0,0]).
+ *   A=1, B=2, Y=5 (save-flush capture: k=26->1, k=25->2, k=27->5).
+ * - 61: button WRITE, single-record {b, c:slot, d1:[{k,a,dn,up}]} under key
+ *   `w`, fragmented OUT like reads; the pad acks each write with a
+ *   single-frame {c:61,e:0}. Write action maps serialize t,v,n,r,sp,mr,ms,ri
+ *   (reads come back t,n,mr,ms,r,sp,ri,v).
  * - 70: per-stick tuning {b, c:slot, d, d1:{co:[x,y] center, ci, cv:[16x]
  *   EightPoint curve as [in0,out0..in7,out7] in 0..32767 (percent*327.68,
  *   32768 clamps to 32767), cpl/cpu/cpr/cpd stick-trigger radii, ...}}.
@@ -33,9 +38,10 @@
  * - 120: rumble {b, c:slot, d1:{enl,grl,trl,trml,enr,grr,trr,trmr}}.
  * - 220: motion-control device colors [{mkn,c:[r,g,b],s}].
  *
- * Status: full READ model proven. No writes ship: the vendor save-flush
- * bytes are still uncaptured, so every write path stays locked until a
- * Save capture proves the write framing on hardware with readback.
+ * Status: full READ model proven, and the single-record button WRITE (61)
+ * is capture-proven byte-exact with its {c:61,e:0} ack. Live write proof
+ * (write + readback from this app's handle) is still gated on explicit
+ * per-step user confirmation, so every write path stays locked until then.
  */
 
 /** USB identity of the Saber Plus config interface (MI_04). */
@@ -56,6 +62,8 @@ export const LJ_IN_CLASS = 0xa4
 export const LJ_REC_VERSION = 12
 export const LJ_REC_BOARD = 51
 export const LJ_REC_BUTTONS = 60
+/** Button write record (single-record writes under key `w`). */
+export const LJ_REC_BUTTONS_WRITE = 61
 export const LJ_REC_STICK = 70
 export const LJ_REC_TRIGGER = 90
 export const LJ_REC_GLOBAL = 100
@@ -326,6 +334,28 @@ export function ljReassemble(frames: ArrayLike<number>[]): LjReassembled {
 }
 
 /**
+ * Split one MessagePack document into 64B fragmented OUT frames (A4 class):
+ * first `[A4][40][CC][80|total][59B][CK]`, then full middles, then a final
+ * `[A4][LEN<40][CC][01][rest][CK]`, zero-padded. Mirrors the pad's own
+ * fragment layout, proven byte-exact against the vendor save-flush capture.
+ */
+export function ljFragmentOut(stream: ReadonlyArray<number>): number[][] {
+  if (stream.length === 0) throw new Error('ljFragmentOut: refusing empty write')
+  const chunks: number[][] = []
+  for (let i = 0; i < stream.length; i += 59) chunks.push(stream.slice(i, i + 59))
+  const total = chunks.length
+  if (total > 127) throw new Error(`ljFragmentOut: ${total} fragments do not fit the 0x80|total header`)
+  return chunks.map((payload, index) => {
+    const seq = index === 0 ? 0x80 | total : total - index
+    const len = payload.length + 5
+    const frame = [LJ_IN_CLASS, len, LJ_MARKER, seq, ...payload]
+    frame.push(ljChecksum(frame, frame.length))
+    while (frame.length < LJ_REPORT_LEN) frame.push(0)
+    return frame
+  })
+}
+
+/**
  * Parse one single-frame (0xA5) IN report. Returns the document; verifies
  * LEN/CK the same way fragmented frames are verified.
  */
@@ -534,6 +564,43 @@ export function ljBuildButtonTable(slot: LjSlot, records: ReadonlyArray<LjButton
       d1: records.map((rec) => ({ k: rec.k, a: rec.a, dn: { ...rec.dn, v: [...rec.dn.v] }, up: { ...rec.up, v: [...rec.up.v] } }))
     }
   })
+}
+
+/**
+ * Build one single-record button write document: writes carry record id 61
+ * under key `w` (reads use 60 under `g`), and the vendor serializes action
+ * maps in t,v,n,r,sp,mr,ms,ri order (reads come back t,n,mr,ms,r,sp,ri,v).
+ * Byte-exact against the save-flush capture. Fragment with ljFragmentOut;
+ * the pad answers each write with a single-frame `{c:61,e:0}` ack.
+ */
+export function ljBuildButtonWrite(slot: LjSlot, record: LjButtonRecord): number[] {
+  const action = (a: LjButtonAction): Record<string, LjValue> => ({
+    t: a.t,
+    v: [...a.v],
+    n: a.n,
+    r: a.r,
+    sp: a.sp,
+    mr: a.mr,
+    ms: a.ms,
+    ri: a.ri
+  })
+  return ljMpEncode({
+    c: LJ_REC_BUTTONS_WRITE,
+    w: {
+      b: 1,
+      c: slot,
+      d1: [{ k: record.k, a: record.a, dn: action(record.dn), up: action(record.up) }]
+    }
+  })
+}
+
+/** Parse a button-write ack; throws unless it is `{c:61,e:0}`. */
+export function ljParseWriteAck(doc: LjValue): { record: number } {
+  const root = asRecord(doc)
+  const record = asNumber(root.c, 'ack.c')
+  if (record !== LJ_REC_BUTTONS_WRITE) throw new Error(`leadjoy: write ack for record ${record}`)
+  if (asNumber(root.e, 'ack.e') !== 0) throw new Error('leadjoy: write ack reports an error')
+  return { record }
 }
 
 /** map_to discriminator: 0 = Origin (unmapped), 2 = GamepadButton (proven). */

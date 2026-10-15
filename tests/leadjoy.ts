@@ -9,12 +9,14 @@ import {
   LJ_MAP_ORIGIN,
   ljBoardQuery,
   ljBuildButtonTable,
+  ljBuildButtonWrite,
   ljBuildSnapshot,
   ljButtonQuery,
   ljButtonTarget,
   ljChecksum,
   ljDecodeStream,
   ljFrameOut,
+  ljFragmentOut,
   ljGlobalQuery,
   ljMotionDevicesQuery,
   ljMpDecode,
@@ -24,6 +26,7 @@ import {
   ljParseSingleFrame,
   ljParseStick,
   ljParseTrigger,
+  ljParseWriteAck,
   ljPercentToWire,
   ljReassemble,
   ljRumbleQuery,
@@ -194,6 +197,58 @@ check(
 check(
   'snapshot deadzones',
   Math.abs((snap.sticks[0]?.deadzonePct ?? -1) - 0) < 1e-9 && Math.abs((snap.sticks[1]?.deadzonePct ?? -1) - 30) < 0.05
+)
+
+// --- single-record writes (save-flush capture) --------------------------------
+function originAction(): { t: number; n: string; mr: number; ms: number; r: number; sp: number; ri: number; v: number[] } {
+  return { t: 0, n: '', mr: 0, ms: 0, r: 0, sp: 0, ri: 0, v: [0, 0, 0, 0] }
+}
+// All four captured flips decode to their JSON targets (A=1 B=2 X=4 Y=5).
+const writeTargets: Array<[number, number[]]> = [
+  [24, [4, 0, 0, 0]],
+  [25, [2, 0, 0, 0]],
+  [26, [1, 0, 0, 0]],
+  [27, [5, 0, 0, 0]]
+]
+for (const [id, v] of writeTargets) {
+  const doc = ljDecodeStream(fixture(`wr-${id}-stream.bin`)) as unknown as {
+    c: number
+    w: { b: number; c: number; d1: Array<{ k: number; a: number; dn: { t: number; v: number[] } }> }
+  }
+  const rec = doc.w.d1[0]
+  check(
+    `write k=${id} -> v=[${v[0]}]`,
+    doc.c === 61 && doc.w.b === 1 && doc.w.c === 0 && rec?.k === id && rec?.a === 0 &&
+      rec?.dn.t === LJ_MAP_GAMEPAD && JSON.stringify(rec?.dn.v) === JSON.stringify(v)
+  )
+}
+// Rebuilding M2->B with the vendor key order reproduces the capture byte-exact.
+const m2write = ljBuildButtonWrite(0, {
+  k: 25,
+  a: 0,
+  dn: { t: 2, n: '', mr: 0, ms: 0, r: 0, sp: 0, ri: 0, v: [2, 0, 0, 0] },
+  up: originAction()
+})
+check('write doc byte-exact', hex(m2write) === hex(fixture('wr-25-stream.bin')))
+// Fragmenting it reproduces the two captured OUT frames byte-exact.
+const wrFrames = ljFragmentOut(m2write)
+check('write fragments byte-exact', hex(wrFrames.flat()) === hex(fixture('wr-25-frames.bin')))
+check('write fragments reassemble', hex(ljReassemble(wrFrames).stream) === hex(m2write))
+// The pad acks each write with a single-frame {c:61,e:0}.
+const ackFrame = [...unhex('a50bcc82a1633da1650045'), ...new Array(64 - 11).fill(0)]
+check('write ack parses', JSON.stringify(ljParseWriteAck(ljParseSingleFrame(ackFrame))) === JSON.stringify({ record: 61 }))
+try {
+  ljParseWriteAck({ c: 60, e: 0 })
+  check('wrong ack rejected', false)
+} catch {
+  check('wrong ack rejected', true)
+}
+// Small documents fragment to a single 0x81 frame and round-trip.
+const tiny = ljMpEncode({ c: 12 })
+const tinyFrames = ljFragmentOut(tiny)
+check(
+  'single fragment round-trips',
+  tinyFrames.length === 1 && (tinyFrames[0]?.[3] ?? 0) === 0x81 && hex(ljReassemble(tinyFrames).stream) === hex(tiny)
 )
 
 if (failures > 0) {
