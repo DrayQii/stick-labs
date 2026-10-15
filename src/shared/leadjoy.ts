@@ -688,8 +688,7 @@ export function ljPercentToWire(percent: number): number {
 }
 
 /** Validate a 16-value stick curve image (ints 0..32767). Returns a copy. */
-export function ljValidateCurveWire(cv: unknown): number[] {
-  if (!Array.isArray(cv) || cv.length !== LJ_CURVE_POINTS * 2) {
+export function ljValidateCurveWire(cv: unknown): number[] {  if (!Array.isArray(cv) || cv.length !== LJ_CURVE_POINTS * 2) {
     throw new Error(`leadjoy: curve needs ${LJ_CURVE_POINTS * 2} values`)
   }
   return cv.map((v, i) => {
@@ -698,6 +697,22 @@ export function ljValidateCurveWire(cv: unknown): number[] {
     }
     return v
   })
+}
+
+/**
+ * Stick gate ("shape") codes — the only two the vendor app offers, verified by
+ * reading the pad and the app's own config after switching each one:
+ * RoundedRectangle = 0, Circle = 1. The library also carries a `LeftRight`
+ * variant, but the app exposes no such option, so it stays unwritable.
+ */
+export const LJ_SHAPES = { RoundedRectangle: 0, Circle: 1 } as const
+export type LjShapeCode = (typeof LJ_SHAPES)[keyof typeof LJ_SHAPES]
+
+export function ljValidateShape(code: unknown): LjShapeCode {
+  if (code !== LJ_SHAPES.RoundedRectangle && code !== LJ_SHAPES.Circle) {
+    throw new Error(`leadjoy: shape ${String(code)} is not a proven code (0 rounded-rect, 1 circle)`)
+  }
+  return code
 }
 
 /** Wire back to percent. */

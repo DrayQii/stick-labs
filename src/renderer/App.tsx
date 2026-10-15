@@ -23,7 +23,7 @@ import { createPortal } from 'react-dom'
 import { LANGS, LangContext, tr, useLangState, useT } from './i18n'
 import { THEMES, ThemeContext, useThemeState } from './theme'
 import type { DeepPollResult } from '@shared/deeppoll'
-import { LJ_PHYSICAL, ljCurveZones, ljFitZones, ljLinearCurve, ljPercentToWire, ljSampleDesign, type LjSnapshot, type LjStickZones, type LjTriggerZones } from '@shared/leadjoy'
+import { LJ_SHAPES, LJ_PHYSICAL, ljCurveZones, ljFitZones, ljLinearCurve, ljPercentToWire, ljSampleDesign, type LjSnapshot, type LjStickZones, type LjTriggerZones } from '@shared/leadjoy'
 
 
 /**
@@ -1858,6 +1858,7 @@ function StickCross({ lx, ly, rx, ry }: { lx: number; ly: number; rx: number; ry
 interface LjDraft {
   buttons: Record<number, number | null>
   sticks: Partial<Record<0 | 1, Array<{ x: number; y: number }>>>
+  shapes: Partial<Record<0 | 1, number>>
   trigger: LjTriggerZones | null
 }
 
@@ -1977,12 +1978,15 @@ function LjOuterCard({ points, onChange }: {
   )
 }
 
-function LjShapeCard({ shape }: { shape: number }): JSX.Element {
+function LjShapeCard({ shape, busy, onChange }: {
+  shape: number
+  busy: boolean
+  onChange: (code: number) => void
+}): JSX.Element {
   const t = useT()
   const opts = [
-    { key: 'circle', label: t('sticks.shapeRound'), hint: t('sticks.shapeHintRound'), active: shape === 1, writable: true },
-    { key: 'square', label: t('sticks.shapeSquare'), hint: t('lj.shapeLocked'), active: false, writable: false },
-    { key: 'raw', label: t('sticks.shapeRaw'), hint: t('lj.shapeLocked'), active: false, writable: false }
+    { code: LJ_SHAPES.Circle, label: t('sticks.shapeRound') },
+    { code: LJ_SHAPES.RoundedRectangle, label: t('lj.shapeRect') }
   ]
   return (
     <div className="card">
@@ -1990,7 +1994,12 @@ function LjShapeCard({ shape }: { shape: number }): JSX.Element {
       <Hint>{t('lj.shapeHint')}</Hint>
       <div className="stack" style={{ gap: 8 }}>
         {opts.map((o) => (
-          <button key={o.key} className={`choice-btn${o.active ? ' active' : ''}`} title={o.hint} disabled={!o.writable}>
+          <button
+            key={o.code}
+            className={`choice-btn${shape === o.code ? ' active' : ''}`}
+            disabled={busy}
+            onClick={() => onChange(o.code)}
+          >
             <span className="choice-label">{o.label}</span>
           </button>
         ))}
@@ -2159,7 +2168,7 @@ export default function App(): JSX.Element {
   const [ljSnap, setLjSnap] = useState<LjSnapshot | null>(null)
   const [ljBusy, setLjBusy] = useState(false)
   const [ljSlot, setLjSlot] = useState<0 | 1 | 2>(0)
-  const [ljDraft, setLjDraft] = useState<LjDraft>({ buttons: {}, sticks: {}, trigger: null })
+  const [ljDraft, setLjDraft] = useState<LjDraft>({ buttons: {}, sticks: {}, trigger: null, shapes: {} })
   const [ljLive, setLjLive] = useState<{ lx: number; ly: number; rx: number; ry: number } | null>(null)
   const [pid, setPid] = useState<number | null>(null)
   const [model, setModel] = useState<ControllerModel | null>(null)
@@ -2332,7 +2341,7 @@ export default function App(): JSX.Element {
   async function loadLeadJoySlot(slot: 0 | 1 | 2, force = false): Promise<void> {
     if (!ljPath || ljBusy) return
     if (!force && ljDirty && !window.confirm(t('lj.discard'))) return
-    setLjDraft({ buttons: {}, sticks: {}, trigger: null })
+    setLjDraft({ buttons: {}, sticks: {}, trigger: null, shapes: {} })
     setSavedAt(null)
     setLjBusy(true)
     setErr(null)
@@ -2366,6 +2375,11 @@ export default function App(): JSX.Element {
     setLjDraft((prev) => ({ ...prev, trigger: zones }))
   }
 
+  /** Stage a pad-proven stick gate code (0 rounded-rect, 1 circle). */
+  function stageLjShape(side: 0 | 1, code: number): void {
+    setLjDraft((prev) => ({ ...prev, shapes: { ...prev.shapes, [side]: code } }))
+  }
+
   /**
    * Commit every staged LeadJoy edit: each record is written live and proven
    * with a readback (a mismatch restores the old value and reports). Entries
@@ -2386,10 +2400,20 @@ export default function App(): JSX.Element {
       for (const key of Object.keys(ljDraft.sticks)) {
         const side = Number(key) as 0 | 1
         const grid = ljDraft.sticks[side]
+        // A staged gate change for the same side already carries this curve.
+        if (ljDraft.shapes[side] !== undefined && ljDraft.shapes[side] !== ljPadShape(side)) continue
         if (!grid || JSON.stringify(grid) === JSON.stringify(ljPadGrid(side))) continue
         const cv = grid.flatMap((p) => [ljPercentToWire(p.x / 10), ljPercentToWire(p.y / 10)])
-        cv[1] = 0
         await api().leadjoyWriteStick({ path: ljPath, slot: ljSlot, side, cv })
+      }
+      for (const key of Object.keys(ljDraft.shapes)) {
+        const side = Number(key) as 0 | 1
+        const code = ljDraft.shapes[side]
+        if (code === undefined || code === ljPadShape(side)) continue
+        // Shape travels on the same stick image, so send the current curve too.
+        const grid = ljStickPoints(side)
+        const cv = grid.flatMap((p) => [ljPercentToWire(p.x / 10), ljPercentToWire(p.y / 10)])
+        await api().leadjoyWriteStick({ path: ljPath, slot: ljSlot, side, cv, shape: code })
       }
       if (ljDraft.trigger && JSON.stringify(ljDraft.trigger) !== JSON.stringify(ljPadZones)) {
         await api().leadjoyWriteTrigger({ path: ljPath, slot: ljSlot, zones: ljDraft.trigger })
@@ -2433,7 +2457,7 @@ export default function App(): JSX.Element {
         setPid(cand?.productId ?? null)
         setBlob(null)
         setLjSnap(null)
-        setLjDraft({ buttons: {}, sticks: {}, trigger: null })
+        setLjDraft({ buttons: {}, sticks: {}, trigger: null, shapes: {} })
         setLjSlot(0)
         setSavedAt(null)
         const saber = pre.id === 'SaberPlus'
@@ -2680,11 +2704,13 @@ export default function App(): JSX.Element {
     return ljSnap?.buttons.find((x) => x.label === b.target)?.id ?? null
   }
   const ljStickPoints = (side: 0 | 1): Array<{ x: number; y: number }> => ljDraft.sticks[side] ?? ljPadGrid(side)
+  const ljPadShape = (side: 0 | 1): number => ljSnap?.sticks.find((s) => s.side === side)?.shape ?? LJ_SHAPES.Circle
   const ljZones = ljDraft.trigger ?? ljPadZones
   const ljDirty =
     isLj &&
     (Object.entries(ljDraft.buttons).some(([id, v]) => v !== ljPadTarget(Number(id))) ||
       ([0, 1] as const).some((s) => ljDraft.sticks[s] !== undefined && JSON.stringify(ljDraft.sticks[s]) !== JSON.stringify(ljPadGrid(s))) ||
+      Object.entries(ljDraft.shapes).some(([side, code]) => code !== ljPadShape(Number(side) as 0 | 1)) ||
       (ljDraft.trigger !== null && JSON.stringify(ljDraft.trigger) !== JSON.stringify(ljPadZones)))
 
   // Live sticks for the Saber Plus come from the system Gamepad API: its own
@@ -3039,7 +3065,7 @@ export default function App(): JSX.Element {
                         onReset={() => stageLjStick(side, null)}
                         onCopyToOther={() => stageLjStick(other, pts.map((p) => ({ ...p })))}
                       />
-                      <LjShapeCard shape={ljSnap.sticks.find((s) => s.side === side)?.shape ?? 1} />
+                      <LjShapeCard shape={ljDraft.shapes[side] ?? ljPadShape(side)} busy={ljBusy} onChange={(code) => stageLjShape(side, code)} />
                     </div>
                   </div>
                 )

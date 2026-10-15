@@ -32,6 +32,7 @@ import {
   ljStickQuery,
   ljTriggerQuery,
   ljValidateCurveWire,
+  ljValidateShape,
   ljVersionQuery,
   type LjButtonRecord,
   type LjButtonTable,
@@ -191,13 +192,15 @@ export async function ljWriteStickVerified(
   path: string,
   slot: LjSlot,
   side: 0 | 1,
-  cv: number[]
+  cv: number[],
+  shape?: number
 ): Promise<{ verified: boolean; restored: boolean }> {
   const curve = ljValidateCurveWire(cv)
+  const code = shape === undefined ? undefined : ljValidateShape(shape)
   const handle = openHandle(path)
   try {
     const before = await readStick(handle, slot, side)
-    const want: LjStickSide = { ...before, cv: curve }
+    const want: LjStickSide = { ...before, cv: curve, ...(code === undefined ? {} : { ci: code }) }
     await writeStick(handle, slot, side, want)
     const landed = await readStick(handle, slot, side)
     if (JSON.stringify(landed) === JSON.stringify(want)) return { verified: true, restored: false }

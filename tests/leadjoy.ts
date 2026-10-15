@@ -7,6 +7,7 @@ import {
   LJ_BUTTON_QUERY_IDS,
   LJ_MAP_GAMEPAD,
   LJ_MAP_ORIGIN,
+  LJ_SHAPES,
   ljBoardQuery,
   ljBuildButtonTable,
   ljBuildButtonWrite,
@@ -44,6 +45,7 @@ import {
   ljStickQuery,
   ljTriggerQuery,
   ljValidateCurveWire,
+  ljValidateShape,
   ljVersionQuery,
   ljWireToPercent,
   type LjButtonRecord
@@ -319,6 +321,19 @@ check('stick ack parses', JSON.stringify(ljParseWriteAck(ljParseSingleFrame(ack7
 check('percent anchors', ljPercentToWire(25) === 8192 && ljPercentToWire(10) === 3277)
 
 // --- stick zones (deadzone / anti-deadzone / outer on the 8-point curve) ------
+check('shape codes match the pad', LJ_SHAPES.Circle === 1 && LJ_SHAPES.RoundedRectangle === 0)
+check('shape validator accepts both proven codes', ljValidateShape(0) === 0 && ljValidateShape(1) === 1)
+for (const bad of [2, -1, 0.5, 'circle', null]) {
+  let threw = false
+  try {
+    ljValidateShape(bad)
+  } catch {
+    threw = true
+  }
+  check(`shape validator refuses ${JSON.stringify(bad)}`, threw)
+}
+const shapedRect = ljDecodeStream(ljBuildStickWrite(0, 1, { ...d1Right, ci: LJ_SHAPES.RoundedRectangle })) as unknown as { w: { d1: unknown } }
+check('shape write carries the new gate code', ljParseStickSide(shapedRect.w.d1).ci === 0 && d1Right.ci !== 0)
 const grid10 = (pts: ReadonlyArray<readonly [number, number]>): Array<[number, number]> =>
   pts.map(([x, y]) => [Math.round(x * 10), Math.round(y * 10)])
 const zRight = ljCurveZones(grid10(right.curvePercent))
