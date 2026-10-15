@@ -44,8 +44,8 @@ order still open (one distinct flip each will settle it).
   each, 96B documents:
   - k=26 -> v=[1] (JSON m3->A), k=25 -> v=[2] (m2->B),
     k=27 -> v=[5] (m4->Y), k=24 -> v=[4] (m1->X).
-  - So A=1, B=2, X=4, Y=5. Physical order (pending letter confirmation:
-    user set R4->A, L5->B, L4->Y) reads R5=M1(24), L5=M2(25), R4=M3(26), L4=M4(27).
+  - So A=1, B=2, X=4, Y=5. Physical order confirmed by the user
+    (R4->A, L5->B, L4->Y): R5=M1(24), L5=M2(25), R4=M3(26), L4=M4(27).
 - Write envelope: `{"c":61, "w":{"b":1,"c":slot,"d1":[{k,a,dn,up}]}}` —
   record 61 under key `w` (reads: 60 under `g`). Write action maps use
   t,v,n,r,sp,mr,ms,ri order (reads return t,n,mr,ms,r,sp,ri,v); the builder
@@ -69,10 +69,9 @@ Saber Plus card (preview only — no editors, no writes).
 
 ## Open (needs captures)
 
-- Live write proof: `ljWriteButtonVerified` (read first, write, ack, read
-  back, restore-on-mismatch) is implemented but NEVER RUN without explicit
-  per-step user confirmation. Proposed first shot: rewrite the value the pad
-  already holds (M1->X) and read it back — zero behavior change either way.
+- Live write proof DONE 2026-10-15: `ljWriteButtonVerified` rewrote the
+  value the pad already held (M1->X), got the `{c:61,e:0}` ack, and read
+  back a byte-identical record (`verified=true`, no restore needed).
 - Keyboard/mouse target `t` values (out of 1:1 scope; A/B/Y/X are proven).
 - Trigger mode enum beyond Linear=2; shape enum beyond Circle=1.
 - Live input report layout (XInput interface, separate from MI_04).

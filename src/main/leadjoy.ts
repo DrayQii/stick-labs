@@ -138,6 +138,16 @@ async function readButtonTable(handle: HIDInstance, slot: LjSlot): Promise<LjBut
   return ljParseButtonTable(ljDecodeStream(await queryStream(handle, ljButtonQuery(slot))))
 }
 
+/** Read one slot's button table (open / read / close). */
+export async function ljReadButtonTable(path: string, slot: LjSlot): Promise<LjButtonTable> {
+  const handle = openHandle(path)
+  try {
+    return await readButtonTable(handle, slot)
+  } finally {
+    closeHandle(handle)
+  }
+}
+
 /** Send one single-record write and await its {c:61,e:0} ack. */
 async function writeRecord(handle: HIDInstance, slot: LjSlot, record: LjButtonRecord): Promise<void> {
   for (const fragment of ljFragmentOut(ljBuildButtonWrite(slot, record))) {

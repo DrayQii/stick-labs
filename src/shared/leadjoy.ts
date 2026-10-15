@@ -458,6 +458,18 @@ export const LJ_BUTTON_NAMES: Readonly<Record<number, string>> = {
   3: 'C'
 }
 
+/**
+ * Wire id -> physical control, user-confirmed 2026-10-15 (R5->X, R4->A,
+ * L5->B, L4->Y flips triangulated against JSON m1..m4 and the wire atoms).
+ * R5/L5 are the rear paddles, R4/L4 the extra bumpers.
+ */
+export const LJ_PHYSICAL: Readonly<Record<number, string>> = {
+  24: 'R5',
+  25: 'L5',
+  26: 'R4',
+  27: 'L4'
+}
+
 /** Remap targets reuse the source-id space (proven: X = 4). */
 export function ljButtonTargetName(code: number): string {
   return LJ_BUTTON_NAMES[code] ?? `ID ${code}`
