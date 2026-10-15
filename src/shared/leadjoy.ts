@@ -681,6 +681,19 @@ export function ljPercentToWire(percent: number): number {
   return Math.max(0, raw)
 }
 
+/** Validate a 16-value stick curve image (ints 0..32767). Returns a copy. */
+export function ljValidateCurveWire(cv: unknown): number[] {
+  if (!Array.isArray(cv) || cv.length !== LJ_CURVE_POINTS * 2) {
+    throw new Error(`leadjoy: curve needs ${LJ_CURVE_POINTS * 2} values`)
+  }
+  return cv.map((v, i) => {
+    if (typeof v !== 'number' || !Number.isInteger(v) || v < 0 || v > LJ_WIRE_MAX) {
+      throw new Error(`leadjoy: curve value ${i} (${String(v)}) is not a wire int 0..32767`)
+    }
+    return v
+  })
+}
+
 /** Wire back to percent. */
 export function ljWireToPercent(wire: number): number {
   return (wire / 32768) * 100

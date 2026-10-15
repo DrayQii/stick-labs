@@ -42,6 +42,8 @@ const api = {
   leadjoyReadSlot: (req: { path: string; slot: number }) => call<LjSnapshot>('leadjoy:readSlot', req),
   leadjoyWriteButton: (req: { path: string; slot: number; id: number; target: number | null }) =>
     call<{ verified: boolean; restored: boolean }>('leadjoy:writeButton', req),
+  leadjoyWriteStick: (req: { path: string; slot: number; side: number; cv: number[] }) =>
+    call<{ verified: boolean; restored: boolean }>('leadjoy:writeStick', req),
   on: (channel: string, fn: (payload: any) => void): (() => void) => {
     const listener = (_e: unknown, payload: unknown): void => fn(payload)
     ipcRenderer.on(channel, listener)

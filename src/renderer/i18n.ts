@@ -228,6 +228,8 @@ const STR: Dict = {
   'lj.read': { en: 'Read pad (preview)', zh: '读取手柄（预览）', ja: 'パッドを読み取る（プレビュー）', ru: 'Прочитать геймпад (превью)' },
   'lj.reading': { en: 'Reading pad…', zh: '正在读取手柄…', ja: 'パッド読み取り中…', ru: 'Чтение геймпада…' },
   'lj.writing': { en: 'Writing…', zh: '正在写入…', ja: '書き込み中…', ru: 'Запись…' },
+  'lj.reset': { en: 'Reset', zh: '重置', ja: 'リセット', ru: 'Сбросить' },
+  'lj.stickHint': { en: 'Drag the 8-point curve (0.1% grid, amber = pad) or set the deadzone precisely. Write sends the whole side image and reads back — point 1 output stays 0.', zh: '拖动 8 点曲线（0.1% 网格，琥珀色为手柄当前值）或精确设置死区。写入发送整个单侧镜像并读回——第 1 点输出恒为 0。', ja: '8点カーブをドラッグ（0.1%グリッド、琥珀色＝パッド現在値）またはデッドゾーンを精密設定。書き込みは片側全体を送信して読み戻します — 点1の出力は0固定。', ru: 'Тяните 8-точечную кривую (сетка 0.1%, янтарь = геймпад) или точно задайте дедзону. Запись шлёт весь образ стороны и перечитывается — выход точки 1 всегда 0.' },
   'lj.version': { en: 'Version', zh: '版本', ja: 'バージョン', ru: 'Версия' },
   'lj.board': { en: 'Board', zh: '配置板', ja: 'ボード', ru: 'Плата' },
   'lj.bindHint': { en: '1:1 remaps only. Each pick writes to the pad, waits for its ack, and reads back — a mismatch restores the old value and reports.', zh: '仅一对一重映射。每次选择都会写入手柄、等待确认并读回——不匹配则恢复旧值并报告。', ja: '1:1リマップのみ。選択ごとに書き込み・応答待ち・読み戻しを行い、不一致は復元して報告します。', ru: 'Только ремапы 1:1. Каждый выбор пишется в геймпад, ждёт подтверждение и перечитывается — при несовпадении старое значение восстанавливается.' },

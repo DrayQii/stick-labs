@@ -23,7 +23,7 @@ import { createPortal } from 'react-dom'
 import { LANGS, LangContext, tr, useLangState, useT } from './i18n'
 import { THEMES, ThemeContext, useThemeState } from './theme'
 import type { DeepPollResult } from '@shared/deeppoll'
-import { LJ_PHYSICAL, type LjSnapshot } from '@shared/leadjoy'
+import { LJ_PHYSICAL, ljPercentToWire, type LjSnapshot } from '@shared/leadjoy'
 
 
 /**
@@ -80,15 +80,15 @@ function Slider(props: {  label: string
   )
 }
 
-function CurvePlot({ points, onChange, overlay, smooth }: { points: Array<{ x: number; y: number }>; onChange?: (next: Array<{ x: number; y: number }>) => void; overlay?: Array<{ x: number; y: number }>; smooth?: boolean }): JSX.Element {
+function CurvePlot({ points, onChange, overlay, smooth, max = 255 }: { points: Array<{ x: number; y: number }>; onChange?: (next: Array<{ x: number; y: number }>) => void; overlay?: Array<{ x: number; y: number }>; smooth?: boolean; max?: number }): JSX.Element {
   const ref = useRef<HTMLCanvasElement | null>(null)
   const drag = useRef<number | null>(null)
 
   function toPx(w: number, h: number): { toX: (v: number) => number; toY: (v: number) => number } {
     const pad = 10
     return {
-      toX: (v: number): number => pad + (v / 255) * (w - pad * 2),
-      toY: (v: number): number => h - pad - (v / 255) * (h - pad * 2)
+      toX: (v: number): number => pad + (v / max) * (w - pad * 2),
+      toY: (v: number): number => h - pad - (v / max) * (h - pad * 2)
     }
   }
 
@@ -116,13 +116,13 @@ function CurvePlot({ points, onChange, overlay, smooth }: { points: Array<{ x: n
     const w = canvas.clientWidth
     const h = 200
     const pad = 10
-    const x = Math.max(0, Math.min(255, Math.round(((e.clientX - rect.left - pad) / (w - pad * 2)) * 255)))
-    const y = Math.max(0, Math.min(255, Math.round((1 - (e.clientY - rect.top - pad) / (h - pad * 2)) * 255)))
+    const x = Math.max(0, Math.min(max, Math.round(((e.clientX - rect.left - pad) / (w - pad * 2)) * max)))
+    const y = Math.max(0, Math.min(max, Math.round((1 - (e.clientY - rect.top - pad) / (h - pad * 2)) * max)))
     const next = points.map((p) => ({ ...p }))
     // Keep x-ordered: a dragged point may not cross its neighbours, or the
     // drawn polyline zigzags and the table rows leave slot order.
     const lo = i > 0 ? next[i - 1].x : 0
-    const hi = i < next.length - 1 ? next[i + 1].x : 255
+    const hi = i < next.length - 1 ? next[i + 1].x : max
     next[i] = { x: Math.max(lo, Math.min(hi, x)), y }
     onChange(next)
   }
@@ -139,8 +139,8 @@ function CurvePlot({ points, onChange, overlay, smooth }: { points: Array<{ x: n
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
     ctx.clearRect(0, 0, w, h)
     const pad = 10
-    const toX = (v: number): number => pad + (v / 255) * (w - pad * 2)
-    const toY = (v: number): number => h - pad - (v / 255) * (h - pad * 2)
+    const toX = (v: number): number => pad + (v / max) * (w - pad * 2)
+    const toY = (v: number): number => h - pad - (v / max) * (h - pad * 2)
     ctx.strokeStyle = '#3a2230'
     for (let i = 0; i <= 4; i++) {
       const t = (i / 4) * (w - pad * 2) + pad
@@ -153,24 +153,24 @@ function CurvePlot({ points, onChange, overlay, smooth }: { points: Array<{ x: n
     ctx.setLineDash([4, 4])
     ctx.beginPath()
     ctx.moveTo(toX(0), toY(0))
-    ctx.lineTo(toX(255), toY(255))
+    ctx.lineTo(toX(max), toY(max))
     ctx.stroke()
     ctx.setLineDash([])
-    // Max X / Y boundary lines (255 edges) with labels.
+    // Max X / Y boundary lines (max edges) with labels.
     ctx.strokeStyle = 'rgba(62,207,142,0.55)'
     ctx.lineWidth = 1.5
     ctx.beginPath()
-    ctx.moveTo(toX(255), pad)
-    ctx.lineTo(toX(255), h - pad)
+    ctx.moveTo(toX(max), pad)
+    ctx.lineTo(toX(max), h - pad)
     ctx.stroke()
     ctx.beginPath()
-    ctx.moveTo(pad, toY(255))
-    ctx.lineTo(w - pad, toY(255))
+    ctx.moveTo(pad, toY(max))
+    ctx.lineTo(w - pad, toY(max))
     ctx.stroke()
     ctx.fillStyle = '#3ecf8e'
     ctx.font = '10px system-ui'
-    ctx.fillText('X max 255', toX(255) - 52, pad + 11)
-    ctx.fillText('Y max 255', pad + 4, toY(255) + 13)
+    ctx.fillText(`X max ${max}`, toX(max) - 52, pad + 11)
+    ctx.fillText(`Y max ${max}`, pad + 4, toY(max) + 13)
     // Endpoint projections: actual max X / max Y reached by the design.
     if (points.length > 0) {
       const maxX = Math.max(...points.map((p) => p.x))
@@ -179,11 +179,11 @@ function CurvePlot({ points, onChange, overlay, smooth }: { points: Array<{ x: n
       ctx.setLineDash([5, 4])
       ctx.beginPath()
       ctx.moveTo(toX(maxX), toY(0))
-      ctx.lineTo(toX(maxX), toY(255))
+      ctx.lineTo(toX(maxX), toY(max))
       ctx.stroke()
       ctx.beginPath()
       ctx.moveTo(toX(0), toY(maxY))
-      ctx.lineTo(toX(255), toY(maxY))
+      ctx.lineTo(toX(max), toY(maxY))
       ctx.stroke()
       ctx.setLineDash([])
       ctx.fillStyle = '#f5b544'
@@ -222,7 +222,7 @@ function CurvePlot({ points, onChange, overlay, smooth }: { points: Array<{ x: n
       ctx.arc(toX(p.x), toY(p.y), 5, 0, Math.PI * 2)
       ctx.fill()
     })
-  }, [points, overlay, smooth])
+  }, [points, overlay, smooth, max])
   return (
     <canvas
       ref={ref}
@@ -1848,6 +1848,91 @@ function StickCross({ lx, ly, rx, ry }: { lx: number; ly: number; rx: number; ry
   return <canvas ref={ref} className="plot" style={{ height: 190 }} />
 }
 
+/**
+ * LeadJoy stick editor: draggable 8-point curve (0.1% grid) + precise
+ * deadzone slider + explicit Write. Draft lives in decide-percent; Write
+ * converts to wire and the pad proves it with readback. Point 1 output is
+ * locked at 0 (the vendor deadzone-floor invariant).
+ */
+function LjStickCard({ snap, side, busy, onWrite }: {
+  snap: LjSnapshot
+  side: 0 | 1
+  busy: boolean
+  onWrite: (cv: number[]) => void
+}): JSX.Element | null {
+  const t = useT()
+  const stick = snap.sticks.find((s) => s.side === side)
+  const toGrid = (pts: Array<readonly [number, number]>): Array<{ x: number; y: number }> =>
+    pts.map(([x, y]) => ({ x: Math.round(x * 10), y: Math.round(y * 10) }))
+  const padPts = toGrid(stick?.curvePct ?? [])
+  const [draft, setDraft] = useState(padPts)
+  useEffect(() => {
+    setDraft(toGrid(stick?.curvePct ?? []))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [snap, side])
+  if (!stick || draft.length !== 8 || padPts.length !== 8) return null
+  const dirty = JSON.stringify(draft) !== JSON.stringify(padPts)
+  const deadzone = draft[0]?.x ?? 0
+  return (
+    <div className="card">
+      <h3>{stick.sideName} — {(deadzone / 10).toFixed(1)}% {t('lj.deadzone')} · {t('lj.center')} {stick.center[0]},{stick.center[1]}</h3>
+      <Hint>{t('lj.stickHint')}</Hint>
+      <CurvePlot
+        points={draft}
+        max={1000}
+        overlay={padPts}
+        onChange={(next) => {
+          const fixed = next.map((p) => ({ ...p }))
+          if (fixed[0]) fixed[0] = { x: fixed[0].x, y: 0 }
+          setDraft(fixed)
+        }}
+      />
+      <div style={{ marginTop: 8 }}>
+        <Slider
+          label={`${stick.sideName} ${t('lj.deadzone')}`}
+          value={deadzone}
+          min={0}
+          max={1000}
+          step={1}
+          format={(v) => `${(v / 10).toFixed(1)}%`}
+          onChange={(v) => {
+            setDraft((prev) => {
+              const next = prev.map((p) => ({ ...p }))
+              const hi = next[1]?.x ?? 1000
+              next[0] = { x: Math.max(0, Math.min(hi, Math.round(v))), y: 0 }
+              return next
+            })
+          }}
+        />
+      </div>
+      <div className="row" style={{ marginTop: 8 }}>
+        <button
+          className="btn sm primary"
+          disabled={busy || !dirty}
+          onClick={() => {
+            const cv = draft.flatMap((p) => [ljPercentToWire(p.x / 10), ljPercentToWire(p.y / 10)])
+            cv[1] = 0
+            onWrite(cv)
+          }}
+        >
+          {t('top.write')}
+        </button>
+        <button
+          className="btn sm ghost"
+          disabled={busy || !dirty}
+          onClick={() => setDraft(padPts)}
+        >
+          {t('lj.reset')}
+        </button>
+      </div>
+      {dirty && <div className="note warn" style={{ marginTop: 8 }}>{t('msg.dirty')}</div>}
+      <div className="mono" style={{ marginTop: 8, fontSize: 12 }}>
+        {draft.map((p, i) => `P${i + 1} ${(p.x / 10).toFixed(1)}/${(p.y / 10).toFixed(1)}`).join(' · ')}
+      </div>
+    </div>
+  )
+}
+
 export default function App(): JSX.Element {
   const [candidates, setCandidates] = useState<Candidate[]>([])
   const [connPath, setConnPath] = useState<string | null>(null)
@@ -2057,6 +2142,23 @@ export default function App(): JSX.Element {
     setMsg(t('lj.writing'))
     try {
       await api().leadjoyWriteButton({ path: ljPath, slot: ljSlot, id, target })
+      setLjSnap(await api().leadjoyReadSlot({ path: ljPath, slot: ljSlot }))
+      setMsg(t('msg.saved'))
+    } catch (e) {
+      setErr((e as Error).message)
+    } finally {
+      setLjBusy(false)
+    }
+  }
+
+  /** LeadJoy stick curve write (whole side image, verified with readback). */
+  async function writeLeadJoyStick(side: 0 | 1, cv: number[]): Promise<void> {
+    if (!ljPath || ljBusy) return
+    setLjBusy(true)
+    setErr(null)
+    setMsg(t('lj.writing'))
+    try {
+      await api().leadjoyWriteStick({ path: ljPath, slot: ljSlot, side, cv })
       setLjSnap(await api().leadjoyReadSlot({ path: ljPath, slot: ljSlot }))
       setMsg(t('msg.saved'))
     } catch (e) {
@@ -2912,6 +3014,33 @@ export default function App(): JSX.Element {
                   </div>
 
                 </div>
+              </div>
+              )}
+              {tab === 'sticks' && model?.id === 'SaberPlus' && ljPath && (
+              <div className="stack" style={{ gap: 16 }}>
+                <div className="row">
+                  {(['Main', 'Sub1', 'Sub2'] as const).map((name, i) => (
+                    <button
+                      key={name}
+                      className={`choice-btn${i === ljSlot ? ' active' : ''}`}
+                      disabled={ljBusy}
+                      onClick={() => void readLeadJoy(i as 0 | 1 | 2)}
+                    >
+                      <span className="choice-label">{name}</span>
+                    </button>
+                  ))}
+                  {!ljSnap && (
+                    <button className="btn sm primary" disabled={ljBusy} onClick={() => void readLeadJoy(ljSlot)}>
+                      {ljBusy ? t('lj.reading') : t('lj.read')}
+                    </button>
+                  )}
+                </div>
+                {ljSnap && (
+                  <>
+                    <LjStickCard snap={ljSnap} side={0} busy={ljBusy} onWrite={(cv) => void writeLeadJoyStick(0, cv)} />
+                    <LjStickCard snap={ljSnap} side={1} busy={ljBusy} onWrite={(cv) => void writeLeadJoyStick(1, cv)} />
+                  </>
+                )}
               </div>
               )}
               {tab === 'device' && (

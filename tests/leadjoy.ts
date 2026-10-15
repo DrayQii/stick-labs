@@ -35,6 +35,7 @@ import {
   ljRumbleQuery,
   ljStickQuery,
   ljTriggerQuery,
+  ljValidateCurveWire,
   ljVersionQuery,
   ljWireToPercent,
   type LjButtonRecord
@@ -308,6 +309,15 @@ check(
 const ack71 = [...unhex('a50bcc82a16347a165004f'), ...new Array(64 - 11).fill(0)]
 check('stick ack parses', JSON.stringify(ljParseWriteAck(ljParseSingleFrame(ack71), 71)) === JSON.stringify({ record: 71 }))
 check('percent anchors', ljPercentToWire(25) === 8192 && ljPercentToWire(10) === 3277)
+check('curve validator accepts fixture', JSON.stringify(ljValidateCurveWire(d1Right.cv)) === JSON.stringify(d1Right.cv))
+for (const bad of [[], new Array(15).fill(0), new Array(16).fill(32768), new Array(16).fill(-1), new Array(16).fill(1.5), 'nope', null]) {
+  try {
+    ljValidateCurveWire(bad)
+    check(`curve validator refuses ${JSON.stringify(bad)?.slice(0, 20)}`, false)
+  } catch {
+    check(`curve validator refuses ${JSON.stringify(bad)?.slice(0, 20)}`, true)
+  }
+}
 
 if (failures > 0) {
   console.error(`${failures} FAILURES`)

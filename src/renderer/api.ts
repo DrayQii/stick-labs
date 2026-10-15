@@ -77,6 +77,8 @@ interface LabApi {
   leadjoyReadSlot(req: { path: string; slot: number }): Promise<LjSnapshot>
   /** LeadJoy button 1:1 remap (verified write, table ids/stock only). */
   leadjoyWriteButton(req: { path: string; slot: number; id: number; target: number | null }): Promise<{ verified: boolean; restored: boolean }>
+  /** LeadJoy stick curve write (verified write, 16 wire ints). */
+  leadjoyWriteStick(req: { path: string; slot: number; side: number; cv: number[] }): Promise<{ verified: boolean; restored: boolean }>
   on(channel: string, fn: (payload: never) => void): () => void
 }
 
