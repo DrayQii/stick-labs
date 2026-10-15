@@ -2157,16 +2157,7 @@ function LjControllerRateCard({ value, busy, onChange }: {
   onChange: (next: { enabled: number; rate: number }) => void
 }): JSX.Element {
   const t = useT()
-  // Same ladder as the GameSir Controller Rate card: wire 50 = stock neutral,
-  // and the firmware byte caps at 255 (300 shows as 300*, storing 255).
-  const presets = [
-    { label: t('device.none'), wire: 50, title: t('device.stock50') },
-    ...[100, 150, 200, 250, 300].map((r) => ({
-      label: r > 255 ? `${r}*` : String(r),
-      wire: Math.min(r, 255),
-      title: r > 255 ? 'Firmware byte caps at 255 — stores 255' : `Stores ${r}`
-    }))
-  ]
+  const presets = [50, 60, 70, 80, 90, 100]
   return (
     <div className="card">
       <h3>{t('device.rate')}</h3>
@@ -2190,15 +2181,14 @@ function LjControllerRateCard({ value, busy, onChange }: {
           <span className="mono">{t('device.stored')}: {value.rate}</span>
         </div>
         <div className="row wrap" style={{ gap: 8 }}>
-          {presets.map((p) => (
+          {presets.map((r) => (
             <button
-              key={p.label}
-              className={`choice-btn${value.rate === p.wire ? ' active' : ''}`}
-              title={p.title}
+              key={r}
+              className={`choice-btn${value.rate === r ? ' active' : ''}`}
               disabled={busy}
-              onClick={() => onChange({ ...value, rate: p.wire })}
+              onClick={() => onChange({ ...value, rate: r })}
             >
-              <span className="choice-label">{p.label}</span>
+              <span className="choice-label">{r === 50 ? t('device.none') : String(r)}</span>
             </button>
           ))}
         </div>
