@@ -77,11 +77,12 @@ the Saber Plus marks it connected and reads Main immediately, slots live in
 the topbar (Main/Sub1/Sub2, same spot as P1–P4), and edits stage until the
 topbar Write commits them. The Sticks tab mirrors the GameSir Sticks tab card
 for card — live cross, dead zone + anti-deadzone, outer threshold, custom
-curve designer, shape. Buttons (all 22 ids, 1:1 remaps), stick curves /
-deadzones and trigger deadzones are all writable, each record written live,
-acked and read back (`leadjoy:writeButton` / `writeStick` / `writeTrigger`);
-a mismatch restores the old value. Records that are not decoded for this pad
-(report-rate, resolution) stay untouched and say so in the Device tab.
+curve designer, shape (gates: Circle / Rounded rectangle). Buttons (all 22
+ids, 1:1 remaps), stick curves / deadzones / gate and trigger deadzones are
+all writable, each record written live, acked and read back
+(`leadjoy:writeButton` / `writeStick` / `writeTrigger`); a mismatch restores
+the old value. Records that are not decoded for this pad (report-rate,
+resolution) stay untouched and say so in the Device tab.
 
 This pad has no separate deadzone/anti bytes, so the GameSir card's four
 numbers land on the curve endpoints: START/ANTI-START are point 1 (in/out),
@@ -101,7 +102,12 @@ END/ANTI-END are point 8 (in/out) — `ljCurveZones` / `ljFitZones` /
 - Trigger writes (record 90/91): codec + builder shipped (byte-exact vs the
   LT-deadzone capture, `tests/leadjoy.ts`); field proof = a no-op deadzone
   rewrite the next time the pad is on the bench (user-confirmed step).
-- Trigger mode enum beyond Linear=2; shape enum beyond Circle=1.
+- Trigger mode enum beyond Linear=2. Stick gates are settled: **Circle = 1,
+  RoundedRectangle = 0** — proven 2026-10-15 by switching each in the vendor
+  app and reading `ci` off the pad, correlated with the vendor's own
+  `DEFAULT_BOARD.json` labels. The library also carries a `LeftRight` variant,
+  but the app offers no such option, so `ljValidateShape` refuses anything
+  other than 0/1.
 - Keyboard/mouse target `t` values (out of 1:1 scope; A/B/Y/X are proven).
 - Live input: the pad's vendor interface 0 (class 0xFF/0x5D/0x01, EP 0x81 IN,
   32-byte reports per its config descriptor) is exposed by Windows as HID node
