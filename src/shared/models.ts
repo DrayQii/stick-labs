@@ -76,7 +76,7 @@ export const MODELS: ReadonlyArray<ControllerModel> = [
     profileLength: 0,
     dumpLength: 0,
     support: 'detect-only',
-    supportNote: 'Config channel mapped (MI_04 page FF80/0001, JSON command model and 512B reads decoded from the vendor log and USB). No proven writes yet — tuning stays locked until a save-flush capture proves the wire bytes.'
+    supportNote: 'Reads proven from this app\u2019s own handle (framing + checksum + buttons/sticks/triggers/rumble maps decoded byte-exact, fixtures/leadjoy/). Tuning stays locked until a vendor save-flush capture proves the write bytes.'
   },
   {
     id: 'G7SE',
