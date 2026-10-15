@@ -31,6 +31,10 @@ Button query carries 22 ids in vendor order
 answers sorted ascending. Id map (JSON-order aligned, anchored by hardware):
 a=1 b=2 x=4 y=5 l1=7 r1=8 l2=9 r2=10 select=11 start=12 l3=14 r3=15
 capture=16 up=17 down=18 left=19 right=20 m1=24 m2=25 m3=26 m4=27 c=3.
+Physical layout (user-confirmed): R5/L5 are the rear paddles, R4/L4 the
+extra bumpers. Wire anchor: R5 = M1 (id 24) — the R5->X flip arrives as
+m1->X in JSON and `dn {t:2,v:[4,0,0,0]}` on the wire. M2/M3/M4 <-> L5/R4/L4
+order still open (one distinct flip each will settle it).
 
 ## Proven flips (pad-confirmed)
 
