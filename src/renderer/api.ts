@@ -7,7 +7,7 @@ export interface Candidate {
   live: boolean | null
 }
 import type { DeepPollResult } from '@shared/deeppoll'
-import type { LjSnapshot, LjStickPatch } from '@shared/leadjoy'
+import type { LjButtonTarget, LjSnapshot, LjStickPatch } from '@shared/leadjoy'
 export interface DeviceInfo {
   firmware: string
   dongle: string
@@ -75,8 +75,8 @@ interface LabApi {
   leadjoyReadMain(path: string): Promise<LjSnapshot>
   /** LeadJoy slot snapshot (Main 0 / Sub1 1 / Sub2 2). */
   leadjoyReadSlot(req: { path: string; slot: number }): Promise<LjSnapshot>
-  /** LeadJoy button 1:1 remap (verified write, table ids/stock only). */
-  leadjoyWriteButton(req: { path: string; slot: number; id: number; target: number | null }): Promise<{ verified: boolean; restored: boolean }>
+  /** LeadJoy button remap (verified write; stock, gamepad, keyboard or mouse target). */
+  leadjoyWriteButton(req: { path: string; slot: number; id: number; target: LjButtonTarget | null }): Promise<{ verified: boolean; restored: boolean }>
   /** LeadJoy stick image write (verified read-modify-write of a validated patch). */
   leadjoyWriteStick(req: { path: string; slot: number; side: number; patch: LjStickPatch }): Promise<{ verified: boolean; restored: boolean }>
   /** LeadJoy trigger deadzone write (verified write, ints 0..100). */

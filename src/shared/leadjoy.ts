@@ -493,27 +493,135 @@ function ljOriginAction(): LjButtonAction {
 }
 
 /**
- * Build a tournament-safe 1:1 write record: any of the 22 table ids as
- * source, stock (null) or any table id as target. The framing, ack, and
- * per-write readback are identical for every id (proven live on M1), so no
- * id is special — but anything outside the table, and any map_to besides
- * Origin (t=0) / GamepadButton (t=2), throws. The main handler and any
- * future caller share this gate, never just the UI.
+ * map_to discriminator for a remap target. Proven from the pad + the vendor
+ * app's own config, each by binding one and reading it back:
+ *   0 = Origin (stock/unmapped), 2 = GamepadButton (gamepad-code space),
+ *   3 = KeyboardKey (USB HID keyboard usage id), 4 = MouseButton (HID button 1..5).
+ * Macro exists in the vendor protocol but its discriminator is not captured, so
+ * it stays unwritable.
  */
-export function ljButtonWriteRecord(id: number, target: number | null): LjButtonRecord {
+export const LJ_MAP_ORIGIN = 0
+export const LJ_MAP_GAMEPAD = 2
+export const LJ_MAP_KEYBOARD = 3
+export const LJ_MAP_MOUSE = 4
+
+/** A remap target: which kind of output, and its code in that kind's space. */
+export interface LjButtonTarget {
+  t: number
+  code: number
+}
+
+/**
+ * USB HID Keyboard/Keypad usage ids (page 0x07) — the space this pad stores
+ * keyboard targets in. Anchored on hardware: G = 10 (0x0A), O = 18 (0x12),
+ * S = 22 (0x16), straight off the pad with the vendor app naming them.
+ */
+export const LJ_HID_KEYS: ReadonlyArray<{ code: number; label: string }> = [
+  { code: 4, label: 'A' }, { code: 5, label: 'B' }, { code: 6, label: 'C' }, { code: 7, label: 'D' },
+  { code: 8, label: 'E' }, { code: 9, label: 'F' }, { code: 10, label: 'G' }, { code: 11, label: 'H' },
+  { code: 12, label: 'I' }, { code: 13, label: 'J' }, { code: 14, label: 'K' }, { code: 15, label: 'L' },
+  { code: 16, label: 'M' }, { code: 17, label: 'N' }, { code: 18, label: 'O' }, { code: 19, label: 'P' },
+  { code: 20, label: 'Q' }, { code: 21, label: 'R' }, { code: 22, label: 'S' }, { code: 23, label: 'T' },
+  { code: 24, label: 'U' }, { code: 25, label: 'V' }, { code: 26, label: 'W' }, { code: 27, label: 'X' },
+  { code: 28, label: 'Y' }, { code: 29, label: 'Z' },
+  { code: 30, label: '1' }, { code: 31, label: '2' }, { code: 32, label: '3' }, { code: 33, label: '4' },
+  { code: 34, label: '5' }, { code: 35, label: '6' }, { code: 36, label: '7' }, { code: 37, label: '8' },
+  { code: 38, label: '9' }, { code: 39, label: '0' },
+  { code: 40, label: 'Enter' }, { code: 41, label: 'Esc' }, { code: 42, label: 'Backspace' },
+  { code: 43, label: 'Tab' }, { code: 44, label: 'Space' }, { code: 45, label: '-' }, { code: 46, label: '=' },
+  { code: 47, label: '[' }, { code: 48, label: ']' }, { code: 49, label: '\\' }, { code: 51, label: ';' },
+  { code: 52, label: "'" }, { code: 53, label: '`' }, { code: 54, label: ',' }, { code: 55, label: '.' },
+  { code: 56, label: '/' }, { code: 57, label: 'Caps Lock' },
+  { code: 58, label: 'F1' }, { code: 59, label: 'F2' }, { code: 60, label: 'F3' }, { code: 61, label: 'F4' },
+  { code: 62, label: 'F5' }, { code: 63, label: 'F6' }, { code: 64, label: 'F7' }, { code: 65, label: 'F8' },
+  { code: 66, label: 'F9' }, { code: 67, label: 'F10' }, { code: 68, label: 'F11' }, { code: 69, label: 'F12' },
+  { code: 70, label: 'Print Screen' }, { code: 71, label: 'Scroll Lock' }, { code: 72, label: 'Pause' },
+  { code: 73, label: 'Insert' }, { code: 74, label: 'Home' }, { code: 75, label: 'Page Up' },
+  { code: 76, label: 'Delete' }, { code: 77, label: 'End' }, { code: 78, label: 'Page Down' },
+  { code: 79, label: 'Right' }, { code: 80, label: 'Left' }, { code: 81, label: 'Down' }, { code: 82, label: 'Up' },
+  { code: 83, label: 'Num Lock' }, { code: 84, label: 'Num /' }, { code: 85, label: 'Num *' },
+  { code: 86, label: 'Num -' }, { code: 87, label: 'Num +' }, { code: 88, label: 'Num Enter' },
+  { code: 89, label: 'Num 1' }, { code: 90, label: 'Num 2' }, { code: 91, label: 'Num 3' },
+  { code: 92, label: 'Num 4' }, { code: 93, label: 'Num 5' }, { code: 94, label: 'Num 6' },
+  { code: 95, label: 'Num 7' }, { code: 96, label: 'Num 8' }, { code: 97, label: 'Num 9' },
+  { code: 98, label: 'Num 0' }, { code: 99, label: 'Num .' },
+  { code: 224, label: 'Left Ctrl' }, { code: 225, label: 'Left Shift' }, { code: 226, label: 'Left Alt' },
+  { code: 227, label: 'Left Win' }, { code: 228, label: 'Right Ctrl' }, { code: 229, label: 'Right Shift' },
+  { code: 230, label: 'Right Alt' }, { code: 231, label: 'Right Win' }
+]
+
+/** HID mouse button numbers the pad stores (1 = left, 2 = right, 3 = middle…). */
+export const LJ_MOUSE_BUTTONS: ReadonlyArray<{ code: number; label: string }> = [
+  { code: 1, label: 'Left Click' },
+  { code: 2, label: 'Right Click' },
+  { code: 3, label: 'Middle Click' },
+  { code: 4, label: 'Back' },
+  { code: 5, label: 'Forward' }
+]
+
+const LJ_KEY_LABELS = new Map<number, string>([
+  ...LJ_HID_KEYS.map((k) => [k.code, k.label] as const),
+  ...LJ_MOUSE_BUTTONS.map((k) => [k.code, k.label] as const)
+])
+
+/** Human label for a target (null only for Origin/stock). */
+export function ljTargetLabel(target: LjButtonTarget): string | null {
+  if (target.t === LJ_MAP_ORIGIN) return null
+  if (target.t === LJ_MAP_GAMEPAD) return ljButtonTargetName(target.code)
+  if (target.t === LJ_MAP_KEYBOARD) return LJ_KEY_LABELS.get(target.code) ?? `key ${target.code}`
+  if (target.t === LJ_MAP_MOUSE) return LJ_KEY_LABELS.get(target.code) ?? `mouse ${target.code}`
+  return `t=${target.t} code=${target.code}`
+}
+
+/** Read the remap target back out of a record (the pad's `dn` action). */
+export function ljButtonRecordTarget(record: LjButtonRecord): LjButtonTarget {
+  const dn = record.dn
+  if (dn.t === LJ_MAP_GAMEPAD) return { t: LJ_MAP_GAMEPAD, code: dn.v[0] ?? 0 }
+  if (dn.t === LJ_MAP_KEYBOARD) return { t: LJ_MAP_KEYBOARD, code: dn.v[1] ?? 0 }
+  if (dn.t === LJ_MAP_MOUSE) return { t: LJ_MAP_MOUSE, code: dn.v[0] ?? 0 }
+  return { t: dn.t, code: dn.v[0] ?? 0 }
+}
+
+function ljTargetAction(target: LjButtonTarget): LjButtonAction {
+  if (target.t === LJ_MAP_ORIGIN) return ljOriginAction()
+  if (target.t === LJ_MAP_GAMEPAD) {
+    if (!LJ_ALL_BUTTON_IDS.includes(target.code)) {
+      throw new Error(`leadjoy: gamepad target ${target.code} is outside the 22-id table`)
+    }
+    return { t: LJ_MAP_GAMEPAD, n: '', mr: 0, ms: 0, r: 0, sp: 0, ri: 0, v: [target.code, 0, 0, 0] }
+  }
+  // Keyboard keys sit in v[1] and mouse buttons in v[0] — both read straight off
+  // the pad with the vendor app naming them (G=10, O=18, S=22, right click=2).
+  if (target.t === LJ_MAP_KEYBOARD) {
+    if (!LJ_HID_KEYS.some((k) => k.code === target.code)) {
+      throw new Error(`leadjoy: keyboard code ${target.code} is not a known HID usage`)
+    }
+    return { t: LJ_MAP_KEYBOARD, n: '', mr: 0, ms: 0, r: 0, sp: 0, ri: 0, v: [0, target.code, 0, 0] }
+  }
+  if (target.t === LJ_MAP_MOUSE) {
+    if (!LJ_MOUSE_BUTTONS.some((k) => k.code === target.code)) {
+      throw new Error(`leadjoy: mouse button ${target.code} is outside 1..5`)
+    }
+    return { t: LJ_MAP_MOUSE, n: '', mr: 0, ms: 0, r: 0, sp: 0, ri: 0, v: [target.code, 0, 0, 0] }
+  }
+  throw new Error(`leadjoy: map_to ${target.t} is not captured — refusing to write it`)
+}
+
+/**
+ * Build one button write record: any of the 22 table ids as source, any proven
+ * target kind as destination (stock, gamepad, keyboard key, mouse button).
+ * Framing/ack/readback are identical for every id and kind — only the action
+ * differs — so no id is special. Anything outside the proven spaces throws;
+ * the main handler and any future caller share this gate, never just the UI.
+ */
+export function ljButtonWriteRecord(id: number, target: LjButtonTarget | null): LjButtonRecord {
   if (!LJ_ALL_BUTTON_IDS.includes(id)) {
     throw new Error(`leadjoy: button id ${id} is outside the 22-id table`)
-  }
-  if (target !== null && !LJ_ALL_BUTTON_IDS.includes(target)) {
-    throw new Error(`leadjoy: target ${target} is outside tournament 1:1 (table ids/stock only)`)
   }
   return {
     k: id,
     a: 0,
-    dn:
-      target === null
-        ? ljOriginAction()
-        : { t: LJ_MAP_GAMEPAD, n: '', mr: 0, ms: 0, r: 0, sp: 0, ri: 0, v: [target, 0, 0, 0] },
+    dn: target === null ? ljOriginAction() : ljTargetAction(target),
     up: ljOriginAction()
   }
 }
@@ -663,17 +771,9 @@ export function ljParseWriteAck(doc: LjValue, expected: number): { record: numbe
   return { record }
 }
 
-/** map_to discriminator: 0 = Origin (unmapped), 2 = GamepadButton (proven). */
-export const LJ_MAP_ORIGIN = 0
-export const LJ_MAP_GAMEPAD = 2
-
 /** Human-readable mapping for one record: null when unmapped (Origin). */
 export function ljButtonTarget(record: LjButtonRecord): string | null {
-  if (record.dn.t === LJ_MAP_ORIGIN) return null
-  if (record.dn.t === LJ_MAP_GAMEPAD && record.dn.v.length > 0) {
-    return ljButtonTargetName(record.dn.v[0] ?? -1)
-  }
-  return `t=${record.dn.t} v=[${record.dn.v.join(',')}]`
+  return ljTargetLabel(ljButtonRecordTarget(record))
 }
 
 // ---------------------------------------------------------------------------
@@ -1167,7 +1267,10 @@ export function ljParseBoard(doc: LjValue): LjBoardInfo {
 export interface LjSnapshotButton {
   id: number
   label: string
+  /** Display label for the current target (null = stock/unmapped). */
   target: string | null
+  /** Structured target so the UI can re-pick keyboard/mouse too. */
+  map: LjButtonTarget
 }
 
 export interface LjSnapshotStick {
@@ -1225,7 +1328,8 @@ export function ljBuildSnapshot(
     buttons: buttons.records.map((rec) => ({
       id: rec.k,
       label: LJ_BUTTON_NAMES[rec.k] ?? `ID ${rec.k}`,
-      target: ljButtonTarget(rec)
+      target: ljButtonTarget(rec),
+      map: ljButtonRecordTarget(rec)
     })),
     sticks: [snapshotStick(left), snapshotStick(right)],
     trigger: {

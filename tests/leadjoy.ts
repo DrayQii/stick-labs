@@ -6,6 +6,8 @@ import { join } from 'node:path'
 import {
   LJ_BUTTON_QUERY_IDS,
   LJ_MAP_GAMEPAD,
+  LJ_MAP_KEYBOARD,
+  LJ_MAP_MOUSE,
   LJ_MAP_ORIGIN,
   LJ_SHAPES,
   ljBoardQuery,
@@ -22,6 +24,7 @@ import {
   ljLinearCurve,
   ljNormZones,
   ljSampleDesign,
+  ljButtonRecordTarget,
   ljButtonTarget,
   ljChecksum,
   ljDecodeStream,
@@ -272,27 +275,67 @@ check(
   tinyFrames.length === 1 && (tinyFrames[0]?.[3] ?? 0) === 0x81 && hex(ljReassemble(tinyFrames).stream) === hex(tiny)
 )
 
-// --- tournament gate ----------------------------------------------------------
+// --- target gate (stock / gamepad / keyboard / mouse) -------------------------
 check(
   'gate builds R4->A',
-  JSON.stringify(ljButtonWriteRecord(26, 1).dn) === JSON.stringify({ t: 2, n: '', mr: 0, ms: 0, r: 0, sp: 0, ri: 0, v: [1, 0, 0, 0] })
+  JSON.stringify(ljButtonWriteRecord(26, { t: LJ_MAP_GAMEPAD, code: 1 }).dn) ===
+    JSON.stringify({ t: 2, n: '', mr: 0, ms: 0, r: 0, sp: 0, ri: 0, v: [1, 0, 0, 0] })
 )
 check(
   'gate builds stock',
   ljButtonWriteRecord(25, null).dn.t === LJ_MAP_ORIGIN && ljButtonWriteRecord(25, null).up.v.every((v) => v === 0)
 )
-for (const [id, target] of [[99, null], [24, 99], [1, 0], [26, 256], [0, null]] as Array<[number, number | null]>) {
+check(
+  'gate builds a keyboard key (HID usage in v[1])',
+  JSON.stringify(ljButtonWriteRecord(24, { t: LJ_MAP_KEYBOARD, code: 22 }).dn) ===
+    JSON.stringify({ t: 3, n: '', mr: 0, ms: 0, r: 0, sp: 0, ri: 0, v: [0, 22, 0, 0] })
+)
+check(
+  'gate builds a mouse button (HID number in v[0])',
+  JSON.stringify(ljButtonWriteRecord(25, { t: LJ_MAP_MOUSE, code: 2 }).dn) ===
+    JSON.stringify({ t: 4, n: '', mr: 0, ms: 0, r: 0, sp: 0, ri: 0, v: [2, 0, 0, 0] })
+)
+for (const [id, target] of [
+  [99, null],
+  [24, { t: LJ_MAP_GAMEPAD, code: 99 }],
+  [1, { t: LJ_MAP_GAMEPAD, code: 0 }],
+  [26, { t: LJ_MAP_GAMEPAD, code: 256 }],
+  [0, null],
+  [24, { t: LJ_MAP_KEYBOARD, code: 200 }],
+  [24, { t: LJ_MAP_MOUSE, code: 9 }],
+  [24, { t: 1, code: 1 }]
+] as Array<[number, { t: number; code: number } | null]>) {
   try {
     ljButtonWriteRecord(id, target)
-    check(`gate refuses id=${id} target=${target}`, false)
+    check(`gate refuses id=${id} target=${JSON.stringify(target)}`, false)
   } catch {
-    check(`gate refuses id=${id} target=${target}`, true)
+    check(`gate refuses id=${id} target=${JSON.stringify(target)}`, true)
   }
 }
 check(
   'gate builds A->B',
-  JSON.stringify(ljButtonWriteRecord(1, 2)) ===
+  JSON.stringify(ljButtonWriteRecord(1, { t: LJ_MAP_GAMEPAD, code: 2 })) ===
     JSON.stringify({ k: 1, a: 0, dn: { t: 2, n: '', mr: 0, ms: 0, r: 0, sp: 0, ri: 0, v: [2, 0, 0, 0] }, up: { t: 0, n: '', mr: 0, ms: 0, r: 0, sp: 0, ri: 0, v: [0, 0, 0, 0] } })
+)
+
+// --- keyboard / mouse targets (bound in the vendor app, read off the pad) -----
+// Anchors: G = 10, O = 18, S = 22 (USB HID usages), L5 = mouse button 2.
+const btnKb = ljParseButtonTable(ljDecodeStream(fixture('btn-kb-main.bin')))
+const kbRec = (k: number): LjButtonRecord => btnKb.records.find((r) => r.k === k) as LjButtonRecord
+check(
+  'keyboard record decodes (R5 -> S)',
+  JSON.stringify(ljButtonRecordTarget(kbRec(24))) === JSON.stringify({ t: 3, code: 22 }) && ljButtonTarget(kbRec(24)) === 'S'
+)
+check(
+  'mouse record decodes (L5 -> right click)',
+  JSON.stringify(ljButtonRecordTarget(kbRec(25))) === JSON.stringify({ t: 4, code: 2 }) && ljButtonTarget(kbRec(25)) === 'Right Click'
+)
+check('keyboard O and G decode', ljButtonTarget(kbRec(26)) === 'O' && ljButtonTarget(kbRec(27)) === 'G')
+check(
+  'keyboard/mouse actions rebuild byte-identical',
+  [24, 25, 26, 27].every(
+    (k) => JSON.stringify(ljButtonWriteRecord(k, ljButtonRecordTarget(kbRec(k))).dn) === JSON.stringify(kbRec(k).dn)
+  )
 )
 
 // --- stick writes (curve-flip capture) ----------------------------------------

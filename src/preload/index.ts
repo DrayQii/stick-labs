@@ -1,6 +1,6 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import type { DeepPollResult } from '../shared/deeppoll'
-import type { LjSnapshot, LjStickPatch } from '../shared/leadjoy'
+import type { LjButtonTarget, LjSnapshot, LjStickPatch } from '../shared/leadjoy'
 
 async function call<T>(channel: string, ...args: unknown[]): Promise<T> {
   const result = (await ipcRenderer.invoke(channel, ...args)) as {
@@ -40,7 +40,7 @@ const api = {
     call<DeepPollResult>('diag:deeppoll', vid, pid, seconds),
   leadjoyReadMain: (path: string) => call<LjSnapshot>('leadjoy:readMain', path),
   leadjoyReadSlot: (req: { path: string; slot: number }) => call<LjSnapshot>('leadjoy:readSlot', req),
-  leadjoyWriteButton: (req: { path: string; slot: number; id: number; target: number | null }) =>
+  leadjoyWriteButton: (req: { path: string; slot: number; id: number; target: LjButtonTarget | null }) =>
     call<{ verified: boolean; restored: boolean }>('leadjoy:writeButton', req),
   leadjoyWriteStick: (req: { path: string; slot: number; side: number; patch: LjStickPatch }) =>
     call<{ verified: boolean; restored: boolean }>('leadjoy:writeStick', req),

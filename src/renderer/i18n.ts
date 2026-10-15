@@ -250,7 +250,7 @@ const STR: Dict = {
   'lj.mouseOff': { en: 'Off', zh: '关', ja: 'オフ', ru: 'Выкл' },
   'lj.version': { en: 'Version', zh: '版本', ja: 'バージョン', ru: 'Версия' },
   'lj.board': { en: 'Board', zh: '配置板', ja: 'ボード', ru: 'Плата' },
-  'lj.bindHint': { en: '1:1 remaps only. Picks stage here; the topbar Write sends them — each button is written live, acked and read back, and a mismatch restores the old value.', zh: '仅一对一重映射。每次选择都会写入手柄、等待确认并读回——不匹配则恢复旧值并报告。', ja: '1:1リマップのみ。選択ごとに書き込み・応答待ち・読み戻しを行い、不一致は復元して報告します。', ru: 'Только ремапы 1:1. Каждый выбор пишется в геймпад, ждёт подтверждение и перечитывается — при несовпадении старое значение восстанавливается.' },
+  'lj.bindHint': { en: 'Any button → gamepad button, keyboard key or mouse button. Picks stage here; the topbar Write sends them — each button is written live, acked and read back, and a mismatch restores the old value.', zh: '仅一对一重映射。每次选择都会写入手柄、等待确认并读回——不匹配则恢复旧值并报告。', ja: '1:1リマップのみ。選択ごとに書き込み・応答待ち・読み戻しを行い、不一致は復元して報告します。', ru: 'Только ремапы 1:1. Каждый выбор пишется в геймпад, ждёт подтверждение и перечитывается — при несовпадении старое значение восстанавливается.' },
   'lj.deadzone': { en: 'deadzone', zh: '死区', ja: 'デッドゾーン', ru: 'дедзона' },
   'lj.center': { en: 'center', zh: '中心', ja: 'センター', ru: 'центр' },
   'lj.closeApp': { en: 'Close the LeadJoy app first — it holds the device.', zh: '请先关闭 LeadJoy 应用——它占用了设备。', ja: 'LeadJoyアプリを先に閉じてください。', ru: 'Сначала закройте приложение LeadJoy — оно держит устройство.' },

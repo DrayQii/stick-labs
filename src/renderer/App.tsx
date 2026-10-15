@@ -23,7 +23,7 @@ import { createPortal } from 'react-dom'
 import { LANGS, LangContext, tr, useLangState, useT } from './i18n'
 import { THEMES, ThemeContext, useThemeState } from './theme'
 import type { DeepPollResult } from '@shared/deeppoll'
-import { LJ_SHAPES, LJ_PHYSICAL, ljCurveZones, ljFitZones, ljLinearCurve, ljPercentToWire, ljSampleDesign, type LjSnapshot, type LjStickZones, type LjTriggerZones } from '@shared/leadjoy'
+import { LJ_HID_KEYS, LJ_MOUSE_BUTTONS, LJ_MAP_GAMEPAD, LJ_MAP_KEYBOARD, LJ_MAP_MOUSE, LJ_SHAPES, LJ_PHYSICAL, ljCurveZones, ljFitZones, ljLinearCurve, ljPercentToWire, ljSampleDesign, ljTargetLabel, type LjButtonTarget, type LjSnapshot, type LjStickZones, type LjTriggerZones } from '@shared/leadjoy'
 
 
 /**
@@ -1854,7 +1854,7 @@ function StickCross({ lx, ly, rx, ry }: { lx: number; ly: number; rx: number; ry
  */
 /** Staged LeadJoy edits — the topbar Write commits these, one record at a time. */
 interface LjDraft {
-  buttons: Record<number, number | null>
+  buttons: Record<number, LjButtonTarget | null>
   sticks: Partial<Record<0 | 1, Array<{ x: number; y: number }>>>
   shapes: Partial<Record<0 | 1, number>>
   mouse: Partial<Record<0 | 1, { enabled: number; rate: number }>>
@@ -1865,6 +1865,28 @@ interface LjDraft {
 const toPairs = (pts: ReadonlyArray<{ x: number; y: number }>): Array<[number, number]> => pts.map((p) => [p.x, p.y])
 const toPts = (pairs: ReadonlyArray<readonly [number, number]>): Array<{ x: number; y: number }> =>
   pairs.map(([x, y]) => ({ x, y }))
+
+/**
+ * KeySelect speaks plain numbers, so LeadJoy remap targets (stock / gamepad /
+ * keyboard / mouse) get a UI-only encoding here. Never hits the wire: the
+ * shared builder turns the decoded target into the pad's real action shape.
+ */
+const LJ_TARGET_KEY_BASE = 1000
+const LJ_TARGET_MOUSE_BASE = 2000
+const ljEncodeTarget = (target: LjButtonTarget): number =>
+  target.t === LJ_MAP_GAMEPAD
+    ? target.code
+    : target.t === LJ_MAP_KEYBOARD
+      ? LJ_TARGET_KEY_BASE + target.code
+      : LJ_TARGET_MOUSE_BASE + target.code
+const ljDecodeTarget = (v: number): LjButtonTarget =>
+  v >= LJ_TARGET_MOUSE_BASE
+    ? { t: LJ_MAP_MOUSE, code: v - LJ_TARGET_MOUSE_BASE }
+    : v >= LJ_TARGET_KEY_BASE
+      ? { t: LJ_MAP_KEYBOARD, code: v - LJ_TARGET_KEY_BASE }
+      : { t: LJ_MAP_GAMEPAD, code: v }
+const ljSameTarget = (a: LjButtonTarget | null, b: LjButtonTarget | null): boolean =>
+  a === null || b === null ? a === b : a.t === b.t && a.code === b.code
 
 /**
  * LeadJoy sticks — the GameSir Sticks tab wired to the record-71 curve image.
@@ -2406,9 +2428,9 @@ export default function App(): JSX.Element {
     }
   }
 
-  /** Stage a 1:1 button remap (or unmapped) — committed by the topbar Write. */
-  function stageLjButton(id: number, value: number): void {
-    setLjDraft((prev) => ({ ...prev, buttons: { ...prev.buttons, [id]: value === 0 ? null : value } }))
+  /** Stage a remap (gamepad / keyboard / mouse) or stock — committed by Write. */
+  function stageLjButton(id: number, target: LjButtonTarget | null): void {
+    setLjDraft((prev) => ({ ...prev, buttons: { ...prev.buttons, [id]: target } }))
   }
 
   /** Stage a stick curve (8 points, 0.1% grid); `null` reverts to the pad. */
@@ -2450,7 +2472,7 @@ export default function App(): JSX.Element {
     try {
       for (const [key, target] of Object.entries(ljDraft.buttons)) {
         const id = Number(key)
-        if (target === ljPadTarget(id)) continue
+        if (ljSameTarget(target, ljPadTarget(id))) continue
         await api().leadjoyWriteButton({ path: ljPath, slot: ljSlot, id, target })
       }
       // Curve, gate and mouse mapping all live on one stick image, so send a
@@ -2760,10 +2782,9 @@ export default function App(): JSX.Element {
         rightOuter: ljSnap.trigger.right.outer
       }
     : null
-  const ljPadTarget = (id: number): number | null => {
-    const b = ljSnap?.buttons.find((x) => x.id === id)
-    if (!b || b.target == null) return null
-    return ljSnap?.buttons.find((x) => x.label === b.target)?.id ?? null
+  const ljPadTarget = (id: number): LjButtonTarget | null => {
+    const m = ljSnap?.buttons.find((x) => x.id === id)?.map
+    return m && m.t !== 0 ? m : null
   }
   const ljStickPoints = (side: 0 | 1): Array<{ x: number; y: number }> => ljDraft.sticks[side] ?? ljPadGrid(side)
   const ljPadShape = (side: 0 | 1): number => ljSnap?.sticks.find((s) => s.side === side)?.shape ?? LJ_SHAPES.Circle
@@ -2775,7 +2796,7 @@ export default function App(): JSX.Element {
   const ljZones = ljDraft.trigger ?? ljPadZones
   const ljDirty =
     isLj &&
-    (Object.entries(ljDraft.buttons).some(([id, v]) => v !== ljPadTarget(Number(id))) ||
+    (Object.entries(ljDraft.buttons).some(([id, v]) => !ljSameTarget(v, ljPadTarget(Number(id)))) ||
       ([0, 1] as const).some((s) => ljDraft.sticks[s] !== undefined && JSON.stringify(ljDraft.sticks[s]) !== JSON.stringify(ljPadGrid(s))) ||
       Object.entries(ljDraft.shapes).some(([side, code]) => code !== ljPadShape(Number(side) as 0 | 1)) ||
       Object.entries(ljDraft.mouse).some(([side, m]) => {
@@ -3160,46 +3181,50 @@ export default function App(): JSX.Element {
                       <thead><tr><th>{t('buttons.source')}</th><th>{t('buttons.target')}</th><th>{t('buttons.effective')}</th></tr></thead>
                       <tbody>
                         {(() => {
-                          const nameToId: Record<string, number> = {}
-                          for (const b of ljSnap.buttons) nameToId[b.label] = b.id
-                          const ljOptions = [{ value: 0, label: t('buttons.unmapped') }, ...ljSnap.buttons.map((b) => ({ value: b.id, label: b.label }))]
-                          const ljLabel = (v: number): string => {
-                            if (v === 0) return t('buttons.unmapped')
-                            return ljSnap.buttons.find((b) => b.id === v)?.label ?? `#${v}`
-                          }
+                          const ljOptions = [
+                            { value: 0, label: t('buttons.unmapped') },
+                            ...ljSnap.buttons.map((b) => ({ value: b.id, label: b.label })),
+                            ...LJ_HID_KEYS.map((k) => ({ value: LJ_TARGET_KEY_BASE + k.code, label: k.label })),
+                            ...LJ_MOUSE_BUTTONS.map((k) => ({ value: LJ_TARGET_MOUSE_BASE + k.code, label: k.label }))
+                          ]
+                          const ljLabel = (v: number): string => ljTargetLabel(ljDecodeTarget(v)) ?? t('buttons.unmapped')
+                          // Gamepad targets get the pad glyphs; keys/mouse are text-only.
+                          const ljIcon = (v: number): JSX.Element | null =>
+                            v > 0 && v < LJ_TARGET_KEY_BASE ? <LjKeyIcon id={v} /> : null
                           const rows = [
                             ...[24, 25, 26, 27].map((id) => ({ id, phys: LJ_PHYSICAL[id] ?? '' })),
                             ...ljSnap.buttons.filter((b) => b.id !== 24 && b.id !== 25 && b.id !== 26 && b.id !== 27).map((b) => ({ id: b.id, phys: '' }))
                           ]
                           return rows.map((row) => {
                             const snap = ljSnap.buttons.find((b) => b.id === row.id)
-                            const targetName = snap?.target ?? null
-                            const padCurrent = targetName == null ? 0 : (nameToId[targetName] ?? -1)
                             const staged = ljDraft.buttons[row.id]
-                            const current = staged !== undefined ? (staged ?? 0) : padCurrent
-                            const effName = staged === undefined ? targetName : (staged === null ? null : ljLabel(staged))
+                            const padMap = snap?.map && snap.map.t !== 0 ? snap.map : null
+                            const current = staged !== undefined ? staged : padMap
+                            // An uncaptured kind (e.g. Macro) stays read-only text.
+                            const known = current === null || [LJ_MAP_GAMEPAD, LJ_MAP_KEYBOARD, LJ_MAP_MOUSE].includes(current.t)
+                            const label = current ? (ljTargetLabel(current) ?? t('buttons.unmapped')) : t('buttons.unmapped')
                             const sourceName = row.phys ? `${row.phys} · ${snap?.label ?? ''}` : (snap?.label ?? `ID ${row.id}`)
                             return (
                               <tr key={row.id}>
                                 <td><span className="row" style={{ gap: 7, alignItems: 'center' }}><LjKeyIcon id={row.id} />{sourceName}</span></td>
                                 <td>
-                                  {padCurrent === -1 && staged === undefined ? (
-                                    <span className="mono">{targetName}</span>
-                                  ) : (
+                                  {known ? (
                                     <KeySelect
-                                      value={current}
+                                      value={current ? ljEncodeTarget(current) : 0}
                                       disabled={ljBusy}
                                       open={bindOpen === `lj-${row.id}`}
                                       onToggle={() => setBindOpen(bindOpen === `lj-${row.id}` ? null : `lj-${row.id}`)}
                                       onClose={() => setBindOpen(null)}
-                                      onPick={(v) => stageLjButton(row.id, v)}
+                                      onPick={(v) => stageLjButton(row.id, v === 0 ? null : ljDecodeTarget(v))}
                                       options={ljOptions}
                                       getLabel={ljLabel}
-                                      renderIcon={(v) => <LjKeyIcon id={v} />}
+                                      renderIcon={ljIcon}
                                     />
+                                  ) : (
+                                    <span className="mono">{label}</span>
                                   )}
                                 </td>
-                                <td><span className="row" style={{ gap: 7, alignItems: 'center' }}>{current > 0 && <LjKeyIcon id={current} />}{effName ?? '—'}</span></td>
+                                <td><span className="row" style={{ gap: 7, alignItems: 'center' }}>{current && ljIcon(ljEncodeTarget(current))}{label}</span></td>
                               </tr>
                             )
                           })

@@ -7,7 +7,7 @@ import { join } from 'node:path'
 import { Controller, type DeviceInfo } from './controller'
 import { discover, discoverLive } from './hid'
 import { ljReadButtonTable, ljReadMainSnapshot, ljReadSnapshot, ljWriteButtonVerified, ljWriteStickVerified, ljWriteTriggerVerified } from './leadjoy'
-import type { LjStickPatch } from '../shared/leadjoy'
+import type { LjButtonTarget, LjStickPatch } from '../shared/leadjoy'
 import { ljButtonWriteRecord } from '../shared/leadjoy'
 import { steamInfo, exportApexDeadzones, listInstalledGames, exportDeadzonesToGames } from './steam'
 import { PROFILE_LENGTH } from '../shared/protocol'
@@ -123,7 +123,7 @@ handle('leadjoy:readSlot', (req: { path: string; slot: number }) => {
  * here, not just in the UI. Proven path: single-record 61/w write + ack +
  * readback (docs/leadjoy-saber.md).
  */
-handle('leadjoy:writeButton', async (req: { path: string; slot: number; id: number; target: number | null }) => {
+handle('leadjoy:writeButton', async (req: { path: string; slot: number; id: number; target: LjButtonTarget | null }) => {
   const { path, slot, id, target } = req ?? {}
   if (typeof path !== 'string' || path.length === 0) throw new Error('leadjoy: refusing write without a device path')
   if (slot !== 0 && slot !== 1 && slot !== 2) throw new Error(`leadjoy: slot ${slot} is not Main/Sub1/Sub2`)
