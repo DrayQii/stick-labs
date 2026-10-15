@@ -90,7 +90,60 @@ END/ANTI-END are point 8 (in/out) — `ljCurveZones` / `ljFitZones` /
 `ljLinearCurve` / `ljSampleDesign` in `src/shared/leadjoy.ts`, pinned in
 `tests/leadjoy.ts`.
 
+## Vendor field names ↔ wire fields (record 70 / joystick)
+
+Proven by reading the pad and cross-checking the vendor app's own
+`DEFAULT_BOARD.json` (which mirrors the pad with names):
+
+| Vendor JSON | Wire | Meaning |
+| ----------- | ---- | ------- |
+| `center_offset` | `co` | centre offset (pair) |
+| `shape` | `ci` | gate (Circle = 1, RoundedRectangle = 0) |
+| `release_joystick_cut` | `rjc` | 0/1 |
+| `mouse_mapping.enabled` | `mm` | 0/1 — mouse output |
+| `mouse_mapping.sensitivity` | `mse` | controller rate (50 = stock neutral) |
+| `mouse_mapping.operation_mode` | `mom` | 0 = Vector (`Fixed` code not yet read) |
+| `x_axis_reversed` / `y_axis_reversed` | `xr` / `yr` | 0/1 |
+| `anti_shake_factor` | `asf` | 0..100 assumed, range unconfirmed |
+| `curve.points` | `cv` | 8 × (in,out) wire ints |
+| `triggers.*.trigger_radius` | `cpl`/`cpu`/`cpr`/`cpd` | per direction |
+| `triggers.*.action` | `tkl`/`tku`/`tkr`/`tkd` | per-direction stick-trigger bind |
+
+Record 100 (`global`) is the **motion/gyro** config, not device-level: its
+fields line up with `main.motion.stick_like` (`sj` = simulate type, `tm` =
+trigger mode, `tk` = trigger keys, `cv` = response-curve points,
+`se` = sensitivity, `hvr` = horizontal/vertical ratio, `had` = horizontal axis
+direction, `hsr`/`hrr`/`vr` = reversals, `st` = sensor type, `ec`/`el` =
+button-like axis triggers/actions).
+
+`ljApplyStickPatch` writes these as a validated read-modify-write patch
+(unlisted fields pass through untouched), so a `cv`-only or `mse`-only change
+never disturbs the rest of the image.
+
+## No-admin RE sources (use these first)
+
+- `%LOCALAPPDATA%\Packages\ShenzhenDynamicFingertipN.leadjoy-pc-app_bx86y63yhsmre\LocalCache\Local\Leadjoy\logs\debug.log`
+  — the vendor app logs **every** `execute_json {"command":…}` it sends, with
+  wire-unit payloads. Changing a setting in the app and reading this is a
+  command-level capture that needs no admin.
+- `…\LocalCache\Local\Leadjoy\configs\Saber\DEFAULT_BOARD.json` — the pad's
+  current state with vendor **names** (shape, modes, mouse mapping…). Toggle a
+  setting in the app, then read the pad and the JSON: that is how the shape
+  codes and every field above were named.
+- `C:\Program Files\WindowsApps\ShenzhenDynamicFingertipN.leadjoy-pc-app_*_x64__bx86y63yhsmre\VFS\ProgramFilesX64\Leadjoy\device_manager_lib.dll`
+  — Rust library; its serde string table names every command and struct field.
+
+Device-level commands the library exposes: `Get/SetPollingRate` (`rate`),
+`Get/SetControllerMode` (`xinput`/`switch`/`ps4`/`ps5`/`mt`), `Get/SetDualOutput`,
+`Get/SetJoystickDpadSettings` (swap / output direction / diagonal lock),
+`SetStepSize` (`default`/`four_way`/`eight_way` — **D-pad**, not sticks),
+`ToggleButtonReporting`, `Start/EndCalibration` (joystick + trigger), motion
+control devices, FPS profiles and macros. There is **no** stick-resolution /
+bit-depth command or field anywhere — 8–12 bit is GameSir-only, so the Device
+tab says so rather than faking a control.
+
 ## Open (needs captures)
+
 
 - Live write proof DONE 2026-10-15: `ljWriteButtonVerified` rewrote the
   value the pad already held (M1->X), got the `{c:61,e:0}` ack, and read

@@ -55,6 +55,10 @@ execution policy) and `npx` is banned by convention — call tools with `node`:
 
 - Match devices by **VID + usagePage + usage, never PID** (PIDs only label a pad
   after opening). GameSir: `0x3537 / 0xfff0 / 0x40`. LeadJoy: `0x4131 / 0xff80 / 0x01`.
+- Reverse-engineering a vendor pad: **the vendor app is a no-admin source of
+  truth** — its own config JSON (names ↔ values) and its debug log (every
+  command it sends, with wire units) name fields that a bare capture only
+  numbers. See `docs/leadjoy-saber.md` for the paths and the field map.
 - Writes are read-modify-write with ack + readback; a mismatch restores the old
   value. Never add a write path without a byte-exact fixture and a live readback
   proof — no guessed wire bytes.
