@@ -1873,7 +1873,7 @@ const toPts = (pairs: ReadonlyArray<readonly [number, number]>): Array<{ x: numb
  * and the deadzone card and the designer edit one image. Edits stage upward;
  * the topbar Write commits the side and reads it back.
  */
-function LjLiveCard({ live }: { live: LiveSample | null }): JSX.Element {
+function LjLiveCard({ live }: { live: { lx: number; ly: number; rx: number; ry: number } | null }): JSX.Element {
   const t = useT()
   return (
     <div className="card">
@@ -2160,6 +2160,7 @@ export default function App(): JSX.Element {
   const [ljBusy, setLjBusy] = useState(false)
   const [ljSlot, setLjSlot] = useState<0 | 1 | 2>(0)
   const [ljDraft, setLjDraft] = useState<LjDraft>({ buttons: {}, sticks: {}, trigger: null })
+  const [ljLive, setLjLive] = useState<{ lx: number; ly: number; rx: number; ry: number } | null>(null)
   const [pid, setPid] = useState<number | null>(null)
   const [model, setModel] = useState<ControllerModel | null>(null)
   const [slot, setSlot] = useState<number>(() => {
@@ -2686,6 +2687,34 @@ export default function App(): JSX.Element {
       ([0, 1] as const).some((s) => ljDraft.sticks[s] !== undefined && JSON.stringify(ljDraft.sticks[s]) !== JSON.stringify(ljPadGrid(s))) ||
       (ljDraft.trigger !== null && JSON.stringify(ljDraft.trigger) !== JSON.stringify(ljPadZones)))
 
+  // Live sticks for the Saber Plus come from the system Gamepad API: its own
+  // HID node hands raw readers nothing (stub/needs a vendor command), but
+  // Windows exposes it as a standard gamepad, so the cross moves with no
+  // capture, no admin and no extra driver. Axis order is the standard
+  // left-X/Y, right-X/Y, and 0..255 matches the GameSir cross convention
+  // (up = smaller Y).
+  useEffect(() => {
+    if (!isLj) {
+      setLjLive(null)
+      return
+    }
+    const to255 = (v: number): number => Math.max(0, Math.min(255, Math.round((v + 1) * 127.5)))
+    let raf = 0
+    const poll = (): void => {
+      const pads = Array.from(navigator.getGamepads()).filter((p): p is Gamepad => !!p && p.connected)
+      const pad = pads.find((p) => /controller|gamepad|360|xbox|saber|leadjoy/i.test(p.id)) ?? pads[0] ?? null
+      if (pad) {
+        const a = pad.axes
+        setLjLive({ lx: to255(a[0] ?? 0), ly: to255(a[1] ?? 0), rx: to255(a[2] ?? 0), ry: to255(a[3] ?? 0) })
+      } else {
+        setLjLive(null)
+      }
+      raf = requestAnimationFrame(poll)
+    }
+    raf = requestAnimationFrame(poll)
+    return () => cancelAnimationFrame(raf)
+  }, [isLj])
+
   // Center guard: while measuring, track the worst rest deviation of the
   // current stick; the countdown then proposes a Start % that covers it.
   useEffect(() => {
@@ -2997,7 +3026,7 @@ export default function App(): JSX.Element {
                 return (
                   <div className="two" style={{ alignItems: 'start' }}>
                     <div className="stack" style={{ gap: 16 }}>
-                      <LjLiveCard live={null} />
+                      <LjLiveCard live={ljLive} />
                       <LjZonesCard points={pts} onChange={(next) => stageLjStick(side, next)} />
                       <LjOuterCard points={pts} onChange={(next) => stageLjStick(side, next)} />
                     </div>
