@@ -83,10 +83,10 @@ read-only until their write records are captured.
 - Live write proof DONE 2026-10-15: `ljWriteButtonVerified` rewrote the
   value the pad already held (M1->X), got the `{c:61,e:0}` ack, and read
   back a byte-identical record (`verified=true`, no restore needed).
-- Live stick write proof: `ljWriteStickVerified` (read first, write, ack,
-  read back, restore-on-mismatch) is implemented but NEVER RUN without
-  explicit per-step user confirmation. Proposed first shot: rewrite the
-  right side the pad already holds (25% head) and read it back.
+- Live stick write proof DONE 2026-10-15: `ljWriteStickVerified` rewrote
+  the right side the pad already held (25% head, full image), got the
+  `{c:71,e:0}` ack, and read back a byte-identical image (`verified=true`,
+  independent re-read matches).
 - Trigger writes (record 90/91): one LT-deadzone flip + Save capture still
   needed — the stick session did not touch triggers.
 - Keyboard/mouse target `t` values (out of 1:1 scope; A/B/Y/X are proven).

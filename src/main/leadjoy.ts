@@ -213,6 +213,16 @@ async function readStick(handle: HIDInstance, slot: LjSlot, side: 0 | 1): Promis
   return tuning.d1
 }
 
+/** Read one stick side image (open / read / close). */
+export async function ljReadStickSide(path: string, slot: LjSlot, side: 0 | 1): Promise<LjStickSide> {
+  const handle = openHandle(path)
+  try {
+    return await readStick(handle, slot, side)
+  } finally {
+    closeHandle(handle)
+  }
+}
+
 /** Send one full-side stick write and await its {c:71,e:0} ack. */
 async function writeStick(handle: HIDInstance, slot: LjSlot, side: 0 | 1, d1: LjStickSide): Promise<void> {
   for (const fragment of ljFragmentOut(ljBuildStickWrite(slot, side, d1))) {
