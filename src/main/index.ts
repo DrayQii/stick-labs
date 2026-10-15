@@ -7,6 +7,7 @@ import { join } from 'node:path'
 import { Controller, type DeviceInfo } from './controller'
 import { discover, discoverLive } from './hid'
 import { ljReadButtonTable, ljReadMainSnapshot, ljReadSnapshot, ljWriteButtonVerified, ljWriteStickVerified, ljWriteTriggerVerified } from './leadjoy'
+import type { LjStickPatch } from '../shared/leadjoy'
 import { ljButtonWriteRecord } from '../shared/leadjoy'
 import { steamInfo, exportApexDeadzones, listInstalledGames, exportDeadzonesToGames } from './steam'
 import { PROFILE_LENGTH } from '../shared/protocol'
@@ -128,12 +129,12 @@ handle('leadjoy:writeButton', async (req: { path: string; slot: number; id: numb
   if (slot !== 0 && slot !== 1 && slot !== 2) throw new Error(`leadjoy: slot ${slot} is not Main/Sub1/Sub2`)
   return ljWriteButtonVerified(path, slot, ljButtonWriteRecord(id, target))
 })
-handle('leadjoy:writeStick', async (req: { path: string; slot: number; side: number; cv: number[]; shape?: number }) => {
-  const { path, slot, side, cv, shape } = req ?? {}
+handle('leadjoy:writeStick', async (req: { path: string; slot: number; side: number; patch: Record<string, unknown> }) => {
+  const { path, slot, side, patch } = req ?? {}
   if (typeof path !== 'string' || path.length === 0) throw new Error('leadjoy: refusing write without a device path')
   if (slot !== 0 && slot !== 1 && slot !== 2) throw new Error(`leadjoy: slot ${slot} is not Main/Sub1/Sub2`)
   if (side !== 0 && side !== 1) throw new Error(`leadjoy: side ${side} is not left/right`)
-  return ljWriteStickVerified(path, slot, side, cv, shape)
+  return ljWriteStickVerified(path, slot, side, (patch ?? {}) as LjStickPatch)
 })
 handle('leadjoy:writeTrigger', async (req: { path: string; slot: number; zones: { leftInner: number; leftOuter: number; rightInner: number; rightOuter: number } }) => {
   const { path, slot, zones } = req ?? {}

@@ -1859,6 +1859,7 @@ interface LjDraft {
   buttons: Record<number, number | null>
   sticks: Partial<Record<0 | 1, Array<{ x: number; y: number }>>>
   shapes: Partial<Record<0 | 1, number>>
+  mouse: Partial<Record<0 | 1, { enabled: number; rate: number }>>
   trigger: LjTriggerZones | null
 }
 
@@ -2146,6 +2147,59 @@ function LjTriggerCard({ value, onChange, onReset }: {
   )
 }
 
+/**
+ * LeadJoy "controller rate" — the pad's mouse mapping (enable + sensitivity),
+ * mirroring the GameSir Controller Rate card. It only matters while a stick
+ * answers as a mouse, so the enable toggle ships with it. 50 = stock neutral;
+ * the pad clamps/rejects anything out of range and Write reads back to prove it.
+ */
+function LjControllerRateCard({ value, busy, onChange }: {
+  value: { enabled: number; rate: number }
+  busy: boolean
+  onChange: (next: { enabled: number; rate: number }) => void
+}): JSX.Element {
+  const t = useT()
+  const presets = [50, 60, 70, 80, 90, 100]
+  return (
+    <div className="card">
+      <h3>{t('device.rate')}</h3>
+      <Hint>{t('lj.rateHint')}</Hint>
+      <div className="row spread" style={{ margin: '10px 0' }}>
+        <div>
+          <div style={{ fontSize: 13.5 }}>{t('lj.mouseMapping')}</div>
+          <div style={{ fontSize: 12, color: 'var(--text-3)' }}>{value.enabled ? t('lj.mouseOn') : t('lj.mouseOff')}</div>
+        </div>
+        <button
+          className={`choice-btn${value.enabled ? ' active' : ''}`}
+          disabled={busy}
+          onClick={() => onChange({ ...value, enabled: value.enabled ? 0 : 1 })}
+        >
+          <span className="choice-label">{value.enabled ? t('lj.mouseOn') : t('lj.mouseOff')}</span>
+        </button>
+      </div>
+      <div className="stack" style={{ gap: 12 }}>
+        <div className="row spread">
+          <span className="label">{t('device.rateConst')}</span>
+          <span className="mono">{t('device.stored')}: {value.rate}</span>
+        </div>
+        <div className="row wrap" style={{ gap: 8 }}>
+          {presets.map((r) => (
+            <button
+              key={r}
+              className={`choice-btn${value.rate === r ? ' active' : ''}`}
+              disabled={busy}
+              onClick={() => onChange({ ...value, rate: r })}
+            >
+              <span className="choice-label">{r === 50 ? t('device.none') : String(r)}</span>
+            </button>
+          ))}
+        </div>
+        <Slider label={t('lj.rateFine')} value={value.rate} min={0} max={100} step={1} onChange={(v) => onChange({ ...value, rate: v })} />
+      </div>
+    </div>
+  )
+}
+
 export default function App(): JSX.Element {
   const [candidates, setCandidates] = useState<Candidate[]>([])
   const [connPath, setConnPath] = useState<string | null>(null)
@@ -2168,7 +2222,7 @@ export default function App(): JSX.Element {
   const [ljSnap, setLjSnap] = useState<LjSnapshot | null>(null)
   const [ljBusy, setLjBusy] = useState(false)
   const [ljSlot, setLjSlot] = useState<0 | 1 | 2>(0)
-  const [ljDraft, setLjDraft] = useState<LjDraft>({ buttons: {}, sticks: {}, trigger: null, shapes: {} })
+  const [ljDraft, setLjDraft] = useState<LjDraft>({ buttons: {}, sticks: {}, trigger: null, shapes: {}, mouse: {} })
   const [ljLive, setLjLive] = useState<{ lx: number; ly: number; rx: number; ry: number } | null>(null)
   const [pid, setPid] = useState<number | null>(null)
   const [model, setModel] = useState<ControllerModel | null>(null)
@@ -2341,7 +2395,7 @@ export default function App(): JSX.Element {
   async function loadLeadJoySlot(slot: 0 | 1 | 2, force = false): Promise<void> {
     if (!ljPath || ljBusy) return
     if (!force && ljDirty && !window.confirm(t('lj.discard'))) return
-    setLjDraft({ buttons: {}, sticks: {}, trigger: null, shapes: {} })
+    setLjDraft({ buttons: {}, sticks: {}, trigger: null, shapes: {}, mouse: {} })
     setSavedAt(null)
     setLjBusy(true)
     setErr(null)
@@ -2380,6 +2434,11 @@ export default function App(): JSX.Element {
     setLjDraft((prev) => ({ ...prev, shapes: { ...prev.shapes, [side]: code } }))
   }
 
+  /** Stage the pad's mouse mapping — its "controller rate" (enable + rate). */
+  function stageLjMouse(side: 0 | 1, next: { enabled: number; rate: number }): void {
+    setLjDraft((prev) => ({ ...prev, mouse: { ...prev.mouse, [side]: next } }))
+  }
+
   /**
    * Commit every staged LeadJoy edit: each record is written live and proven
    * with a readback (a mismatch restores the old value and reports). Entries
@@ -2397,23 +2456,29 @@ export default function App(): JSX.Element {
         if (target === ljPadTarget(id)) continue
         await api().leadjoyWriteButton({ path: ljPath, slot: ljSlot, id, target })
       }
-      for (const key of Object.keys(ljDraft.sticks)) {
-        const side = Number(key) as 0 | 1
+      // Curve, gate and mouse mapping all live on one stick image, so send a
+      // single read-modify-write patch per side.
+      const sides = new Set<number>()
+      for (const k of Object.keys(ljDraft.sticks)) sides.add(Number(k))
+      for (const k of Object.keys(ljDraft.shapes)) sides.add(Number(k))
+      for (const k of Object.keys(ljDraft.mouse)) sides.add(Number(k))
+      for (const n of sides) {
+        const side = n as 0 | 1
+        const patch: { cv?: number[]; ci?: number; mm?: number; mse?: number } = {}
         const grid = ljDraft.sticks[side]
-        // A staged gate change for the same side already carries this curve.
-        if (ljDraft.shapes[side] !== undefined && ljDraft.shapes[side] !== ljPadShape(side)) continue
-        if (!grid || JSON.stringify(grid) === JSON.stringify(ljPadGrid(side))) continue
-        const cv = grid.flatMap((p) => [ljPercentToWire(p.x / 10), ljPercentToWire(p.y / 10)])
-        await api().leadjoyWriteStick({ path: ljPath, slot: ljSlot, side, cv })
-      }
-      for (const key of Object.keys(ljDraft.shapes)) {
-        const side = Number(key) as 0 | 1
+        if (grid && JSON.stringify(grid) !== JSON.stringify(ljPadGrid(side))) {
+          patch.cv = grid.flatMap((p) => [ljPercentToWire(p.x / 10), ljPercentToWire(p.y / 10)])
+        }
         const code = ljDraft.shapes[side]
-        if (code === undefined || code === ljPadShape(side)) continue
-        // Shape travels on the same stick image, so send the current curve too.
-        const grid = ljStickPoints(side)
-        const cv = grid.flatMap((p) => [ljPercentToWire(p.x / 10), ljPercentToWire(p.y / 10)])
-        await api().leadjoyWriteStick({ path: ljPath, slot: ljSlot, side, cv, shape: code })
+        if (code !== undefined && code !== ljPadShape(side)) patch.ci = code
+        const mouse = ljDraft.mouse[side]
+        if (mouse) {
+          const pad = ljPadMouse(side)
+          if (mouse.enabled !== pad.enabled) patch.mm = mouse.enabled
+          if (mouse.rate !== pad.rate) patch.mse = mouse.rate
+        }
+        if (patch.cv === undefined && patch.ci === undefined && patch.mm === undefined && patch.mse === undefined) continue
+        await api().leadjoyWriteStick({ path: ljPath, slot: ljSlot, side, patch })
       }
       if (ljDraft.trigger && JSON.stringify(ljDraft.trigger) !== JSON.stringify(ljPadZones)) {
         await api().leadjoyWriteTrigger({ path: ljPath, slot: ljSlot, zones: ljDraft.trigger })
@@ -2457,7 +2522,7 @@ export default function App(): JSX.Element {
         setPid(cand?.productId ?? null)
         setBlob(null)
         setLjSnap(null)
-        setLjDraft({ buttons: {}, sticks: {}, trigger: null, shapes: {} })
+        setLjDraft({ buttons: {}, sticks: {}, trigger: null, shapes: {}, mouse: {} })
         setLjSlot(0)
         setSavedAt(null)
         const saber = pre.id === 'SaberPlus'
@@ -2705,12 +2770,21 @@ export default function App(): JSX.Element {
   }
   const ljStickPoints = (side: 0 | 1): Array<{ x: number; y: number }> => ljDraft.sticks[side] ?? ljPadGrid(side)
   const ljPadShape = (side: 0 | 1): number => ljSnap?.sticks.find((s) => s.side === side)?.shape ?? LJ_SHAPES.Circle
+  const ljPadMouse = (side: 0 | 1): { enabled: number; rate: number } => {
+    const s = ljSnap?.sticks.find((x) => x.side === side)
+    return { enabled: s?.mouse.enabled ? 1 : 0, rate: s?.mouse.rate ?? 50 }
+  }
+  const ljMouse = (side: 0 | 1): { enabled: number; rate: number } => ljDraft.mouse[side] ?? ljPadMouse(side)
   const ljZones = ljDraft.trigger ?? ljPadZones
   const ljDirty =
     isLj &&
     (Object.entries(ljDraft.buttons).some(([id, v]) => v !== ljPadTarget(Number(id))) ||
       ([0, 1] as const).some((s) => ljDraft.sticks[s] !== undefined && JSON.stringify(ljDraft.sticks[s]) !== JSON.stringify(ljPadGrid(s))) ||
       Object.entries(ljDraft.shapes).some(([side, code]) => code !== ljPadShape(Number(side) as 0 | 1)) ||
+      Object.entries(ljDraft.mouse).some(([side, m]) => {
+        const pad = ljPadMouse(Number(side) as 0 | 1)
+        return m.enabled !== pad.enabled || m.rate !== pad.rate
+      }) ||
       (ljDraft.trigger !== null && JSON.stringify(ljDraft.trigger) !== JSON.stringify(ljPadZones)))
 
   // Live sticks for the Saber Plus come from the system Gamepad API: its own
@@ -3084,9 +3158,14 @@ export default function App(): JSX.Element {
                     </div>
                   </div>
                   <div className="stack" style={{ gap: 16 }}>
+                    <LjControllerRateCard
+                      value={ljMouse(which === 0 ? 0 : 1)}
+                      busy={ljBusy}
+                      onChange={(next) => stageLjMouse(which === 0 ? 0 : 1, next)}
+                    />
                     <div className="card">
-                      <h3>{t('device.polling')}</h3>
-                      <Hint>{t('lj.rateLocked')}</Hint>
+                      <h3>{t('device.bits')} — 8-12</h3>
+                      <Hint>{t('lj.noBits')}</Hint>
                     </div>
                   </div>
                 </div>

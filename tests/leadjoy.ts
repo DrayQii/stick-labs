@@ -14,6 +14,7 @@ import {
   ljBuildSnapshot,
   ljButtonQuery,
   ljButtonWriteRecord,
+  ljApplyStickPatch,
   ljBuildStickWrite,
   ljBuildTriggerWrite,
   ljCurveZones,
@@ -334,6 +335,24 @@ for (const bad of [2, -1, 0.5, 'circle', null]) {
 }
 const shapedRect = ljDecodeStream(ljBuildStickWrite(0, 1, { ...d1Right, ci: LJ_SHAPES.RoundedRectangle })) as unknown as { w: { d1: unknown } }
 check('shape write carries the new gate code', ljParseStickSide(shapedRect.w.d1).ci === 0 && d1Right.ci !== 0)
+
+// --- stick patch (validated field-level writes on the record-71 image) --------
+const patched = ljApplyStickPatch(d1Right, { ci: 0, mm: 1, mse: 77 })
+check(
+  'stick patch applies, others pass through',
+  patched.ci === 0 && patched.mm === 1 && patched.mse === 77 && patched.rjc === d1Right.rjc &&
+    JSON.stringify(patched.cv) === JSON.stringify(d1Right.cv) && patched.cpl === d1Right.cpl
+)
+check('stick patch copies rather than mutates', d1Right.ci !== 0 && d1Right.mm !== 1)
+for (const bad of [{ mm: 2 }, { mse: 101 }, { mse: 1.5 }, { xr: -1 }, { ci: 7 }]) {
+  let threw = false
+  try {
+    ljApplyStickPatch(d1Right, bad)
+  } catch {
+    threw = true
+  }
+  check(`stick patch refuses ${JSON.stringify(bad)}`, threw)
+}
 const grid10 = (pts: ReadonlyArray<readonly [number, number]>): Array<[number, number]> =>
   pts.map(([x, y]) => [Math.round(x * 10), Math.round(y * 10)])
 const zRight = ljCurveZones(grid10(right.curvePercent))

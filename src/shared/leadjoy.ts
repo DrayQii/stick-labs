@@ -715,6 +715,49 @@ export function ljValidateShape(code: unknown): LjShapeCode {
   return code
 }
 
+/**
+ * Fields of a stick side image the app may change. Everything not listed is
+ * read from the pad and written back untouched, so unknown fields survive.
+ * `cv` = curve/deadzone, `ci` = gate, `mm`/`mse` = mouse mapping (enable/rate),
+ * `xr`/`yr` = axis reverse, `asf` = anti-shake, `rjc` = release cut.
+ */
+export interface LjStickPatch {
+  cv?: number[]
+  ci?: number
+  mm?: number
+  mse?: number
+  xr?: number
+  yr?: number
+  asf?: number
+  rjc?: number
+}
+
+function ljFlag(v: unknown, what: string): number {
+  if (v !== 0 && v !== 1) throw new Error(`leadjoy: ${what} must be 0 or 1`)
+  return v
+}
+
+function ljRangeInt(v: unknown, what: string, max: number): number {
+  if (typeof v !== 'number' || !Number.isInteger(v) || v < 0 || v > max) {
+    throw new Error(`leadjoy: ${what} must be an int 0..${max}`)
+  }
+  return v
+}
+
+/** Apply a validated patch onto a pad-read side image. Returns a new object. */
+export function ljApplyStickPatch(d1: LjStickSide, patch: LjStickPatch): LjStickSide {
+  const out: LjStickSide = { ...d1, cv: [...d1.cv] }
+  if (patch.cv !== undefined) out.cv = ljValidateCurveWire(patch.cv)
+  if (patch.ci !== undefined) out.ci = ljValidateShape(patch.ci)
+  if (patch.mm !== undefined) out.mm = ljFlag(patch.mm, 'mm')
+  if (patch.rjc !== undefined) out.rjc = ljFlag(patch.rjc, 'rjc')
+  if (patch.xr !== undefined) out.xr = ljFlag(patch.xr, 'xr')
+  if (patch.yr !== undefined) out.yr = ljFlag(patch.yr, 'yr')
+  if (patch.mse !== undefined) out.mse = ljRangeInt(patch.mse, 'mse', 100)
+  if (patch.asf !== undefined) out.asf = ljRangeInt(patch.asf, 'asf', 100)
+  return out
+}
+
 /** Wire back to percent. */
 export function ljWireToPercent(wire: number): number {
   return (wire / 32768) * 100
@@ -1133,6 +1176,8 @@ export interface LjSnapshotStick {
   deadzonePct: number
   center: [number, number]
   shape: number
+  /** Mouse mapping — this pad's "controller rate" (only meaningful in Mouse output). */
+  mouse: { enabled: boolean; rate: number }
   curvePct: Array<readonly [number, number]>
 }
 
@@ -1158,6 +1203,7 @@ function snapshotStick(tuning: LjStickTuning): LjSnapshotStick {
     deadzonePct: tuning.curvePercent[0]?.[0] ?? 0,
     center: tuning.center,
     shape: tuning.shape,
+    mouse: { enabled: tuning.d1.mm === 1, rate: tuning.d1.mse },
     curvePct: tuning.curvePercent
   }
 }
