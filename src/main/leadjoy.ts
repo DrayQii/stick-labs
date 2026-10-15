@@ -9,10 +9,13 @@
  */
 import HIDModule, { type HID as HIDInstance } from 'node-hid'
 import {
+  LJ_REC_BUTTONS_WRITE,
+  LJ_REC_STICK_WRITE,
   LJ_REPORT_LEN,
   ljBoardQuery,
   ljBuildButtonWrite,
   ljBuildSnapshot,
+  ljBuildStickWrite,
   ljButtonQuery,
   ljDecodeStream,
   ljFragmentOut,
@@ -29,7 +32,8 @@ import {
   type LjButtonRecord,
   type LjButtonTable,
   type LjSlot,
-  type LjSnapshot
+  type LjSnapshot,
+  type LjStickSide
 } from '../shared/leadjoy'
 
 const QUERY_TIMEOUT_MS = 10000
@@ -164,10 +168,66 @@ async function writeRecord(handle: HIDInstance, slot: LjSlot, record: LjButtonRe
     const bytes = nextReport(handle)
     if (!bytes) continue
     if (bytes[0] === 0xa5) {
-      ljParseWriteAck(ljParseSingleFrame(bytes))
+      ljParseWriteAck(ljParseSingleFrame(bytes), LJ_REC_BUTTONS_WRITE)
       return
     }
     throw new Error(`leadjoy: unexpected reply to write (class 0x${(bytes[0] ?? 0).toString(16)})`)
+  }
+}
+
+/**
+ * Write one full stick side and prove it landed (implemented, live proof
+ * gated on explicit per-step user confirmation — never call this without it).
+ * Same shape as the button path: read first, write, ack {c:71,e:0}, read
+ * back, restore-on-mismatch with a throwing report either way.
+ */
+export async function ljWriteStickVerified(
+  path: string,
+  slot: LjSlot,
+  side: 0 | 1,
+  d1: LjStickSide
+): Promise<{ verified: boolean; restored: boolean }> {
+  const handle = openHandle(path)
+  try {
+    const before = await readStick(handle, slot, side)
+    await writeStick(handle, slot, side, d1)
+    const landed = await readStick(handle, slot, side)
+    if (JSON.stringify(landed) === JSON.stringify(d1)) return { verified: true, restored: false }
+
+    await writeStick(handle, slot, side, before)
+    const afterRestore = await readStick(handle, slot, side)
+    const restored = JSON.stringify(afterRestore) === JSON.stringify(before)
+    throw new Error(
+      `leadjoy: stick ${side} did not verify on readback (restore ${restored ? 'verified' : 'UNVERIFIED'} — re-read before writing again)`
+    )
+  } finally {
+    closeHandle(handle)
+  }
+}
+
+async function readStick(handle: HIDInstance, slot: LjSlot, side: 0 | 1): Promise<LjStickSide> {
+  const tuning = ljParseStick(ljDecodeStream(await queryStream(handle, ljStickQuery(slot, side))))
+  if (tuning.slot !== slot || tuning.side !== side) {
+    throw new Error(`leadjoy: stick echo mismatch (slot ${tuning.slot}, side ${tuning.side})`)
+  }
+  return tuning.d1
+}
+
+/** Send one full-side stick write and await its {c:71,e:0} ack. */
+async function writeStick(handle: HIDInstance, slot: LjSlot, side: 0 | 1, d1: LjStickSide): Promise<void> {
+  for (const fragment of ljFragmentOut(ljBuildStickWrite(slot, side, d1))) {
+    handle.write([0x00, ...fragment])
+  }
+  const deadline = Date.now() + QUERY_TIMEOUT_MS
+  for (;;) {
+    if (Date.now() > deadline) throw new Error('leadjoy: timed out waiting for the stick write ack')
+    const bytes = nextReport(handle)
+    if (!bytes) continue
+    if (bytes[0] === 0xa5) {
+      ljParseWriteAck(ljParseSingleFrame(bytes), LJ_REC_STICK_WRITE)
+      return
+    }
+    throw new Error(`leadjoy: unexpected reply to stick write (class 0x${(bytes[0] ?? 0).toString(16)})`)
   }
 }
 

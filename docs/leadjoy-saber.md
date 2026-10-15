@@ -54,6 +54,15 @@ order still open (one distinct flip each will settle it).
   No separate save/commit command exists in the capture — flips write
   through live; Save persists locally (pad re-enumerates after, fresh
   session ritual at +21s).
+- Stick writes (`sticks` capture): full-side `{"c":71,
+  "w":{"b":1,"c":slot,"d":side,"d1":{...}}}` (read 70 + 1, same rule),
+  8 fragments each, acked with single-frame `{"c":71,"e":0}` (28 acks for
+  28 writes). d1 layout and key order match reads; action maps use the
+  write order t,v,n,r,sp,mr,ms,ri. Rebuilding the final left/right
+  documents from parsed d1 reproduces the capture byte-exact, fragments
+  included. Session content: right deadzone dragged 30→25% live (head
+  9830→8192), left curve redrawn to a 10% head (3277). Triggers were NOT
+  flipped in this capture — record 90/91 writes are still open.
 - Curves: wire = round(percent/100*32768), 100% clamps 32768 -> 32767.
   Left `[[0,0],[16.6,16.1],...]` <-> `[0,0,5439,5276,...]`; right deadzone
   head `[30,0]` <-> `[9830,0]`. Triggers: Linear mode = 2, dz `[5,95]`.
@@ -74,6 +83,12 @@ read-only until their write records are captured.
 - Live write proof DONE 2026-10-15: `ljWriteButtonVerified` rewrote the
   value the pad already held (M1->X), got the `{c:61,e:0}` ack, and read
   back a byte-identical record (`verified=true`, no restore needed).
+- Live stick write proof: `ljWriteStickVerified` (read first, write, ack,
+  read back, restore-on-mismatch) is implemented but NEVER RUN without
+  explicit per-step user confirmation. Proposed first shot: rewrite the
+  right side the pad already holds (25% head) and read it back.
+- Trigger writes (record 90/91): one LT-deadzone flip + Save capture still
+  needed — the stick session did not touch triggers.
 - Keyboard/mouse target `t` values (out of 1:1 scope; A/B/Y/X are proven).
 - Trigger mode enum beyond Linear=2; shape enum beyond Circle=1.
 - Live input report layout (XInput interface, separate from MI_04).

@@ -13,6 +13,7 @@ import {
   ljBuildSnapshot,
   ljButtonQuery,
   ljButtonWriteRecord,
+  ljBuildStickWrite,
   ljButtonTarget,
   ljChecksum,
   ljDecodeStream,
@@ -26,6 +27,7 @@ import {
   ljParseButtonTable,
   ljParseSingleFrame,
   ljParseStick,
+  ljParseStickSide,
   ljParseTrigger,
   ljParseWriteAck,
   ljPercentToWire,
@@ -237,12 +239,18 @@ check('write fragments byte-exact', hex(wrFrames.flat()) === hex(fixture('wr-25-
 check('write fragments reassemble', hex(ljReassemble(wrFrames).stream) === hex(m2write))
 // The pad acks each write with a single-frame {c:61,e:0}.
 const ackFrame = [...unhex('a50bcc82a1633da1650045'), ...new Array(64 - 11).fill(0)]
-check('write ack parses', JSON.stringify(ljParseWriteAck(ljParseSingleFrame(ackFrame))) === JSON.stringify({ record: 61 }))
+check('write ack parses', JSON.stringify(ljParseWriteAck(ljParseSingleFrame(ackFrame), 61)) === JSON.stringify({ record: 61 }))
 try {
-  ljParseWriteAck({ c: 60, e: 0 })
+  ljParseWriteAck({ c: 60, e: 0 }, 61)
   check('wrong ack rejected', false)
 } catch {
   check('wrong ack rejected', true)
+}
+try {
+  ljParseWriteAck({ c: 61, e: 1 }, 61)
+  check('error ack rejected', false)
+} catch {
+  check('error ack rejected', true)
 }
 // Small documents fragment to a single 0x81 frame and round-trip.
 const tiny = ljMpEncode({ c: 12 })
@@ -274,6 +282,32 @@ check(
   JSON.stringify(ljButtonWriteRecord(1, 2)) ===
     JSON.stringify({ k: 1, a: 0, dn: { t: 2, n: '', mr: 0, ms: 0, r: 0, sp: 0, ri: 0, v: [2, 0, 0, 0] }, up: { t: 0, n: '', mr: 0, ms: 0, r: 0, sp: 0, ri: 0, v: [0, 0, 0, 0] } })
 )
+
+// --- stick writes (curve-flip capture) ----------------------------------------
+interface LjWriteDoc {
+  c: number
+  w: { b: number; c: number; d: number; d1: import('../src/shared/leadjoy.ts').LjValue }
+}
+const wrRight = ljDecodeStream(fixture('stick-wr-right.bin')) as unknown as LjWriteDoc
+const wrLeft = ljDecodeStream(fixture('stick-wr-left.bin')) as unknown as LjWriteDoc
+check(
+  'stick write envelope',
+  wrRight.c === 71 && wrRight.w.b === 1 && wrRight.w.c === 0 && wrRight.w.d === 1 &&
+    wrLeft.c === 71 && wrLeft.w.d === 0
+)
+const d1Right = ljParseStickSide(wrRight.w.d1)
+const d1Left = ljParseStickSide(wrLeft.w.d1)
+check('right deadzone 25% head', d1Right.cv[0] === 8192 && d1Right.cv[1] === 0)
+check('left deadzone 10% head', d1Left.cv[0] === 3277 && d1Left.cv[1] === 0)
+check('stick write rebuild right byte-exact', hex(ljBuildStickWrite(0, 1, d1Right)) === hex(fixture('stick-wr-right.bin')))
+check('stick write rebuild left byte-exact', hex(ljBuildStickWrite(0, 0, d1Left)) === hex(fixture('stick-wr-left.bin')))
+check(
+  'stick fragments byte-exact',
+  hex(ljFragmentOut(fixture('stick-wr-right.bin')).flat()) === hex(fixture('stick-wr-right-frames.bin'))
+)
+const ack71 = [...unhex('a50bcc82a16347a165004f'), ...new Array(64 - 11).fill(0)]
+check('stick ack parses', JSON.stringify(ljParseWriteAck(ljParseSingleFrame(ack71), 71)) === JSON.stringify({ record: 71 }))
+check('percent anchors', ljPercentToWire(25) === 8192 && ljPercentToWire(10) === 3277)
 
 if (failures > 0) {
   console.error(`${failures} FAILURES`)

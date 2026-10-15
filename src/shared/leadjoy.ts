@@ -67,6 +67,8 @@ export const LJ_REC_BUTTONS = 60
 /** Button write record (single-record writes under key `w`). */
 export const LJ_REC_BUTTONS_WRITE = 61
 export const LJ_REC_STICK = 70
+/** Stick write record (full side image under key `w`). */
+export const LJ_REC_STICK_WRITE = 71
 export const LJ_REC_TRIGGER = 90
 export const LJ_REC_GLOBAL = 100
 export const LJ_REC_RUMBLE = 120
@@ -646,11 +648,11 @@ export function ljBuildButtonWrite(slot: LjSlot, record: LjButtonRecord): number
   })
 }
 
-/** Parse a button-write ack; throws unless it is `{c:61,e:0}`. */
-export function ljParseWriteAck(doc: LjValue): { record: number } {
+/** Parse a button-write ack; throws unless it is `{c:expected,e:0}`. */
+export function ljParseWriteAck(doc: LjValue, expected: number): { record: number } {
   const root = asRecord(doc)
   const record = asNumber(root.c, 'ack.c')
-  if (record !== LJ_REC_BUTTONS_WRITE) throw new Error(`leadjoy: write ack for record ${record}`)
+  if (record !== expected) throw new Error(`leadjoy: write ack for record ${record}, expected ${expected}`)
   if (asNumber(root.e, 'ack.e') !== 0) throw new Error('leadjoy: write ack reports an error')
   return { record }
 }
@@ -698,7 +700,129 @@ export interface LjStickTuning {
   curvePercent: Array<readonly [number, number]>
   /** Stick-trigger radii (left/up/right/down). */
   triggerRadius: { left: number; up: number; right: number; down: number }
+  /** Full side image (round-trips through ljBuildStickWrite). */
+  d1: LjStickSide
   raw: LjValue
+}
+
+/** One stick-trigger action (same atoms as button records). */
+export interface LjStickTriple {
+  a: number
+  dn: LjButtonAction
+  up: LjButtonAction
+}
+
+/** Full record-70 side image, in vendor key order. */
+export interface LjStickSide {
+  co: [number, number]
+  ci: number
+  rjc: number
+  mm: number
+  mse: number
+  mom: number
+  xr: number
+  yr: number
+  asf: number
+  ct: number
+  cv: number[]
+  rt: number
+  rc: number
+  cpl: number
+  cpu: number
+  cpr: number
+  cpd: number
+  tkl: LjStickTriple
+  tku: LjStickTriple
+  tkr: LjStickTriple
+  tkd: LjStickTriple
+}
+
+function parseStickTriple(value: LjValue, what: string): LjStickTriple {
+  const m = asRecord(value)
+  return {
+    a: asNumber(m.a, `${what}.a`),
+    dn: parseButtonAction(m.dn, `${what}.dn`),
+    up: parseButtonAction(m.up, `${what}.up`)
+  }
+}
+
+/** Parse a record-70/71 side image (reads and writes share the layout). */
+export function ljParseStickSide(d1: LjValue): LjStickSide {
+  const m = asRecord(d1)
+  const co = asNumberArray(m.co, 'stick.co')
+  const cv = asNumberArray(m.cv, 'stick.cv')
+  if (co.length !== 2) throw new Error('leadjoy: stick.co is not a pair')
+  if (cv.length !== LJ_CURVE_POINTS * 2) {
+    throw new Error(`leadjoy: stick.cv has ${cv.length} values, expected ${LJ_CURVE_POINTS * 2}`)
+  }
+  return {
+    co: [co[0] ?? 0, co[1] ?? 0],
+    ci: asNumber(m.ci, 'stick.ci'),
+    rjc: asNumber(m.rjc, 'stick.rjc'),
+    mm: asNumber(m.mm, 'stick.mm'),
+    mse: asNumber(m.mse, 'stick.mse'),
+    mom: asNumber(m.mom, 'stick.mom'),
+    xr: asNumber(m.xr, 'stick.xr'),
+    yr: asNumber(m.yr, 'stick.yr'),
+    asf: asNumber(m.asf, 'stick.asf'),
+    ct: asNumber(m.ct, 'stick.ct'),
+    cv: [...cv],
+    rt: asNumber(m.rt, 'stick.rt'),
+    rc: asNumber(m.rc, 'stick.rc'),
+    cpl: asNumber(m.cpl, 'stick.cpl'),
+    cpu: asNumber(m.cpu, 'stick.cpu'),
+    cpr: asNumber(m.cpr, 'stick.cpr'),
+    cpd: asNumber(m.cpd, 'stick.cpd'),
+    tkl: parseStickTriple(m.tkl, 'stick.tkl'),
+    tku: parseStickTriple(m.tku, 'stick.tku'),
+    tkr: parseStickTriple(m.tkr, 'stick.tkr'),
+    tkd: parseStickTriple(m.tkd, 'stick.tkd')
+  }
+}
+
+/**
+ * Build one full-side stick write document: record id 71 under key `w`,
+ * same d1 layout and key order as reads (action maps in the write order
+ * t,v,n,r,sp,mr,ms,ri). Byte-exact against the vendor curve-flip capture.
+ * Fragment with ljFragmentOut; the pad acks each write with `{c:71,e:0}`.
+ */
+export function ljBuildStickWrite(slot: LjSlot, side: 0 | 1, d1: LjStickSide): number[] {
+  const triple = (t: LjStickTriple): Record<string, LjValue> => ({
+    a: t.a,
+    dn: { t: t.dn.t, v: [...t.dn.v], n: t.dn.n, r: t.dn.r, sp: t.dn.sp, mr: t.dn.mr, ms: t.dn.ms, ri: t.dn.ri },
+    up: { t: t.up.t, v: [...t.up.v], n: t.up.n, r: t.up.r, sp: t.up.sp, mr: t.up.mr, ms: t.up.ms, ri: t.up.ri }
+  })
+  return ljMpEncode({
+    c: LJ_REC_STICK_WRITE,
+    w: {
+      b: 1,
+      c: slot,
+      d: side,
+      d1: {
+        co: [...d1.co],
+        ci: d1.ci,
+        rjc: d1.rjc,
+        mm: d1.mm,
+        mse: d1.mse,
+        mom: d1.mom,
+        xr: d1.xr,
+        yr: d1.yr,
+        asf: d1.asf,
+        ct: d1.ct,
+        cv: [...d1.cv],
+        rt: d1.rt,
+        rc: d1.rc,
+        cpl: d1.cpl,
+        cpu: d1.cpu,
+        cpr: d1.cpr,
+        cpd: d1.cpd,
+        tkl: triple(d1.tkl),
+        tku: triple(d1.tku),
+        tkr: triple(d1.tkr),
+        tkd: triple(d1.tkd)
+      }
+    }
+  })
 }
 
 /** Parse a reassembled record-70 document (one stick side). */
@@ -706,31 +830,26 @@ export function ljParseStick(doc: LjValue): LjStickTuning {
   const root = asRecord(doc)
   if (asNumber(root.c, 'stick.c') !== LJ_REC_STICK) throw new Error('leadjoy: not a stick record')
   const r = asRecord(root.r)
-  const d1 = asRecord(r.d1)
-  const co = asNumberArray(d1.co, 'stick.co')
-  const cv = asNumberArray(d1.cv, 'stick.cv')
-  if (co.length !== 2) throw new Error('leadjoy: stick.co is not a pair')
-  if (cv.length !== LJ_CURVE_POINTS * 2) {
-    throw new Error(`leadjoy: stick.cv has ${cv.length} values, expected ${LJ_CURVE_POINTS * 2}`)
-  }
+  const side = ljParseStickSide(r.d1)
   const pairs: Array<readonly [number, number]> = []
   for (let i = 0; i < LJ_CURVE_POINTS; i++) {
-    pairs.push([cv[i * 2] ?? 0, cv[i * 2 + 1] ?? 0])
+    pairs.push([side.cv[i * 2] ?? 0, side.cv[i * 2 + 1] ?? 0])
   }
   return {
     board: asNumber(r.b, 'stick.r.b'),
     slot: asNumber(r.c, 'stick.r.c'),
     side: asNumber(r.d, 'stick.r.d'),
-    center: [co[0] ?? 0, co[1] ?? 0],
-    shape: asNumber(d1.ci, 'stick.ci'),
+    center: side.co,
+    shape: side.ci,
     curveWire: pairs,
     curvePercent: pairs.map(([x, y]) => [ljWireToPercent(x), ljWireToPercent(y)] as const),
     triggerRadius: {
-      left: asNumber(d1.cpl, 'stick.cpl'),
-      up: asNumber(d1.cpu, 'stick.cpu'),
-      right: asNumber(d1.cpr, 'stick.cpr'),
-      down: asNumber(d1.cpd, 'stick.cpd')
+      left: side.cpl,
+      up: side.cpu,
+      right: side.cpr,
+      down: side.cpd
     },
+    d1: side,
     raw: doc
   }
 }
