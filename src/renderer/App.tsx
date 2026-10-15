@@ -1507,45 +1507,92 @@ function ProfilesPanel({ connected, activeSlot, locked, modelId, modelLen, dumpL
  * Anything without a drawn glyph (keyboard/mouse/special/unknown)
  * returns null and the text label carries it.
  */
-function KeyIcon({ value, tag, size = 18 }: { value: number; tag?: string; size?: number }): JSX.Element | null {
-  const s = size
-  const wrap = (inner: JSX.Element): JSX.Element => (
+function glyphWrap(s: number, inner: JSX.Element): JSX.Element {
+  return (
     <svg width={s} height={s} viewBox="0 0 20 20" style={{ verticalAlign: 'middle', flexShrink: 0 }}>{inner}</svg>
   )
-  const label = (bg: string, ch: string, fg = '#fff', fs = 10): JSX.Element =>
-    wrap(<><circle cx={10} cy={10} r={8.5} fill={bg} /><text x={10} y={10.5} fontSize={fs} fill={fg} fontWeight={800} textAnchor="middle" dominantBaseline="central">{ch}</text></>)
-  const arrow = (pts: string): JSX.Element =>
-    wrap(<><rect x={2.5} y={2.5} width={15} height={15} rx={4.5} fill="#33333d" /><polygon points={pts} fill="#fff" /></>)
-  const pill = (ch: string, tall: boolean): JSX.Element =>
-    wrap(<><rect x={2} y={tall ? 3 : 6.5} width={16} height={tall ? 14 : 7} rx={3.5} fill={tall ? '#3a3a46' : '#4a4a55'} /><text x={10} y={10.5} fontSize={6} fill="#fff" fontWeight={800} textAnchor="middle" dominantBaseline="central">{ch}</text></>)
-  const paddle = (ch: string): JSX.Element =>
-    wrap(<><rect x={3.5} y={3.5} width={13} height={13} rx={5.5} fill="#4a4a55" stroke="#7a7a88" strokeWidth={1} /><text x={10} y={10.5} fontSize={6} fill="#fff" fontWeight={800} textAnchor="middle" dominantBaseline="central">{ch}</text></>)
+}
+function glyphLabel(s: number, bg: string, ch: string, fg = '#fff', fs = 10): JSX.Element {
+  return glyphWrap(s, <><circle cx={10} cy={10} r={8.5} fill={bg} /><text x={10} y={10.5} fontSize={fs} fill={fg} fontWeight={800} textAnchor="middle" dominantBaseline="central">{ch}</text></>)
+}
+function glyphArrow(s: number, pts: string): JSX.Element {
+  return glyphWrap(s, <><rect x={2.5} y={2.5} width={15} height={15} rx={4.5} fill="#33333d" /><polygon points={pts} fill="#fff" /></>)
+}
+function glyphPill(s: number, ch: string, tall: boolean): JSX.Element {
+  return glyphWrap(s, <><rect x={2} y={tall ? 3 : 6.5} width={16} height={tall ? 14 : 7} rx={3.5} fill={tall ? '#3a3a46' : '#4a4a55'} /><text x={10} y={10.5} fontSize={6} fill="#fff" fontWeight={800} textAnchor="middle" dominantBaseline="central">{ch}</text></>)
+}
+function glyphPaddle(s: number, ch: string): JSX.Element {
+  return glyphWrap(s, <><rect x={3.5} y={3.5} width={13} height={13} rx={5.5} fill="#4a4a55" stroke="#7a7a88" strokeWidth={1} /><text x={10} y={10.5} fontSize={6} fill="#fff" fontWeight={800} textAnchor="middle" dominantBaseline="central">{ch}</text></>)
+}
+const ARROW_UP = '10,5.5 14.5,12 5.5,12'
+const ARROW_DOWN = '10,14.5 14.5,8 5.5,8'
+const ARROW_LEFT = '5.5,10 12,5.5 12,14.5'
+const ARROW_RIGHT = '14.5,10 8,5.5 8,14.5'
+
+function KeyIcon({ value, tag, size = 18 }: { value: number; tag?: string; size?: number }): JSX.Element | null {
+  const s = size
   switch (value) {
-    case 9: return label('#2ca243', 'A')
-    case 10: return label('#e74856', 'B')
-    case 11: return label('#2f7de1', 'X')
-    case 12: return label('#f2b90d', 'Y')
-    case 1: return arrow('10,5.5 14.5,12 5.5,12')
-    case 2: return arrow('10,14.5 14.5,8 5.5,8')
-    case 3: return arrow('5.5,10 12,5.5 12,14.5')
-    case 4: return arrow('14.5,10 8,5.5 8,14.5')
-    case 5: return pill('LB', false)
-    case 6: return pill('RB', false)
-    case 19: return pill('LT', true)
-    case 20: return pill('RT', true)
+    case 9: return glyphLabel(s, '#2ca243', 'A')
+    case 10: return glyphLabel(s, '#e74856', 'B')
+    case 11: return glyphLabel(s, '#2f7de1', 'X')
+    case 12: return glyphLabel(s, '#f2b90d', 'Y')
+    case 1: return glyphArrow(s, ARROW_UP)
+    case 2: return glyphArrow(s, ARROW_DOWN)
+    case 3: return glyphArrow(s, ARROW_LEFT)
+    case 4: return glyphArrow(s, ARROW_RIGHT)
+    case 5: return glyphPill(s, 'LB', false)
+    case 6: return glyphPill(s, 'RB', false)
+    case 19: return glyphPill(s, 'LT', true)
+    case 20: return glyphPill(s, 'RT', true)
     case 7:
     case 8:
-      return wrap(<><circle cx={10} cy={10} r={8} fill="#33333d" /><circle cx={10} cy={10} r={3} fill="#8a8a96" /></>)
+      return glyphWrap(s, <><circle cx={10} cy={10} r={8} fill="#33333d" /><circle cx={10} cy={10} r={3} fill="#8a8a96" /></>)
     case 13:
-      return wrap(<><circle cx={10} cy={10} r={8} fill="none" stroke="#8a8a96" strokeWidth={2} /><circle cx={10} cy={10} r={2.5} fill="#8a8a96" /></>)
+      return glyphWrap(s, <><circle cx={10} cy={10} r={8} fill="none" stroke="#8a8a96" strokeWidth={2} /><circle cx={10} cy={10} r={2.5} fill="#8a8a96" /></>)
     case 14:
-      return wrap(<><rect x={3} y={6} width={9} height={8} rx={1.5} fill="none" stroke="#8a8a96" strokeWidth={1.5} /><rect x={8} y={8.5} width={9} height={8} rx={1.5} fill="#33333d" stroke="#8a8a96" strokeWidth={1.5} /></>)
+      return glyphWrap(s, <><rect x={3} y={6} width={9} height={8} rx={1.5} fill="none" stroke="#8a8a96" strokeWidth={1.5} /><rect x={8} y={8.5} width={9} height={8} rx={1.5} fill="#33333d" stroke="#8a8a96" strokeWidth={1.5} /></>)
     case 15:
-      return wrap(<><rect x={2.5} y={2.5} width={15} height={15} rx={4.5} fill="#33333d" /><path d="M6 7.5h8M6 10h8M6 12.5h8" stroke="#fff" strokeWidth={1.6} strokeLinecap="round" /></>)
+      return glyphWrap(s, <><rect x={2.5} y={2.5} width={15} height={15} rx={4.5} fill="#33333d" /><path d="M6 7.5h8M6 10h8M6 12.5h8" stroke="#fff" strokeWidth={1.6} strokeLinecap="round" /></>)
     case 16:
-      return wrap(<><rect x={2.5} y={6} width={15} height={9} rx={2} fill="#33333d" /><circle cx={10} cy={10.5} r={2.8} fill="none" stroke="#8a8a96" strokeWidth={1.5} /><rect x={8} y={4} width={4} height={2.5} rx={1} fill="#33333d" /></>)
-    case 17: return paddle(tag ?? 'FL1')
-    case 18: return paddle(tag ?? 'FR1')
+      return glyphWrap(s, <><rect x={2.5} y={6} width={15} height={9} rx={2} fill="#33333d" /><circle cx={10} cy={10.5} r={2.8} fill="none" stroke="#8a8a96" strokeWidth={1.5} /><rect x={8} y={4} width={4} height={2.5} rx={1} fill="#33333d" /></>)
+    case 17: return glyphPaddle(s, tag ?? 'FL1')
+    case 18: return glyphPaddle(s, tag ?? 'FR1')
+    default: return null
+  }
+}
+
+/**
+ * Same glyphs for LeadJoy ids (A=1 B=2 X=4 Y=5 … M1=24 M2=25 M3=26 M4=27):
+ * identical look to KeyIcon, correct mapping for the LeadJoy table.
+ */
+function LjKeyIcon({ id, size = 18 }: { id: number; size?: number }): JSX.Element | null {
+  const s = size
+  switch (id) {
+    case 1: return glyphLabel(s, '#2ca243', 'A')
+    case 2: return glyphLabel(s, '#e74856', 'B')
+    case 4: return glyphLabel(s, '#2f7de1', 'X')
+    case 5: return glyphLabel(s, '#f2b90d', 'Y')
+    case 17: return glyphArrow(s, ARROW_UP)
+    case 18: return glyphArrow(s, ARROW_DOWN)
+    case 19: return glyphArrow(s, ARROW_LEFT)
+    case 20: return glyphArrow(s, ARROW_RIGHT)
+    case 7: return glyphPill(s, 'LB', false)
+    case 8: return glyphPill(s, 'RB', false)
+    case 9: return glyphPill(s, 'LT', true)
+    case 10: return glyphPill(s, 'RT', true)
+    case 14:
+    case 15:
+      return glyphWrap(s, <><circle cx={10} cy={10} r={8} fill="#33333d" /><circle cx={10} cy={10} r={3} fill="#8a8a96" /></>)
+    case 11:
+      return glyphWrap(s, <><rect x={3} y={6} width={9} height={8} rx={1.5} fill="none" stroke="#8a8a96" strokeWidth={1.5} /><rect x={8} y={8.5} width={9} height={8} rx={1.5} fill="#33333d" stroke="#8a8a96" strokeWidth={1.5} /></>)
+    case 12:
+      return glyphWrap(s, <><rect x={2.5} y={2.5} width={15} height={15} rx={4.5} fill="#33333d" /><path d="M6 7.5h8M6 10h8M6 12.5h8" stroke="#fff" strokeWidth={1.6} strokeLinecap="round" /></>)
+    case 16:
+      return glyphWrap(s, <><rect x={2.5} y={6} width={15} height={9} rx={2} fill="#33333d" /><circle cx={10} cy={10.5} r={2.8} fill="none" stroke="#8a8a96" strokeWidth={1.5} /><rect x={8} y={4} width={4} height={2.5} rx={1} fill="#33333d" /></>)
+    case 24: return glyphPaddle(s, 'R5')
+    case 25: return glyphPaddle(s, 'L5')
+    case 26: return glyphPaddle(s, 'R4')
+    case 27: return glyphPaddle(s, 'L4')
     default: return null
   }
 }
@@ -1556,13 +1603,19 @@ function KeyIcon({ value, tag, size = 18 }: { value: number; tag?: string; size?
  * table scrolling cannot clip it). Closes on pick, Escape, outside click,
  * scroll or resize. Only one row's popup is open at a time (lifted state).
  */
-function KeySelect({ value, disabled, open, onToggle, onClose, onPick }: {
+function KeySelect({ value, disabled, open, onToggle, onClose, onPick, options, getLabel, renderIcon }: {
   value: number
   disabled?: boolean
   open: boolean
   onToggle: () => void
   onClose: () => void
   onPick: (v: number) => void
+  /** Custom option list — defaults to the GameSir remap targets. */
+  options?: Array<{ value: number; label: string }>
+  /** Label for the current value — defaults to the GameSir key table. */
+  getLabel?: (v: number) => string
+  /** Icon for a value — defaults to the GameSir glyphs. */
+  renderIcon?: (v: number) => JSX.Element | null
 }): JSX.Element {
   const t = useT()
   const btnRef = useRef<HTMLButtonElement | null>(null)
@@ -1606,7 +1659,9 @@ function KeySelect({ value, disabled, open, onToggle, onClose, onPick }: {
       window.removeEventListener('pointerdown', onDown)
     }
   }, [open, onClose])
-  const options = [{ value: 0, label: t('buttons.unmapped') }, ...REMAP_TARGETS.filter((k) => k.value !== 0)]
+  const opts = options ?? [{ value: 0, label: t('buttons.unmapped') }, ...REMAP_TARGETS.filter((k) => k.value !== 0)]
+  const labelFor = getLabel ?? ((v: number) => (v === 0 ? t('buttons.unmapped') : keyLabel(v)))
+  const iconFor = renderIcon ?? ((v: number) => <KeyIcon value={v} />)
   return (
     <span data-keyselect style={{ display: 'inline-block' }}>
       <button
@@ -1618,8 +1673,8 @@ function KeySelect({ value, disabled, open, onToggle, onClose, onPick }: {
         style={{ width: 210, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, cursor: disabled ? 'default' : 'pointer', textAlign: 'left', color: 'var(--text)' }}
       >
         <span className="row" style={{ gap: 7, alignItems: 'center', overflow: 'hidden', whiteSpace: 'nowrap' }}>
-          {value !== 0 && <KeyIcon value={value} />}
-          <span>{value === 0 ? t('buttons.unmapped') : keyLabel(value)}</span>
+          {value !== 0 && iconFor(value)}
+          <span>{labelFor(value)}</span>
         </span>
         <span style={{ color: 'var(--text-3)', fontSize: 11 }}>▾</span>
       </button>
@@ -1642,7 +1697,7 @@ function KeySelect({ value, disabled, open, onToggle, onClose, onPick }: {
             boxShadow: '0 12px 32px rgba(0,0,0,0.55)'
           }}
         >
-          {options.map((o) => (
+          {opts.map((o) => (
             <button
               key={o.value}
               type="button"
@@ -1656,7 +1711,7 @@ function KeySelect({ value, disabled, open, onToggle, onClose, onPick }: {
               onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--bg-3)' }}
               onMouseLeave={(e) => { e.currentTarget.style.background = o.value === value ? 'var(--bg-3)' : 'transparent' }}
             >
-              <KeyIcon value={o.value} />
+              {iconFor(o.value)}
               <span>{o.label}</span>
             </button>
           ))}
@@ -1791,43 +1846,6 @@ function StickCross({ lx, ly, rx, ry }: { lx: number; ly: number; rx: number; ry
     draw(rx, ry, w * 0.73, `R ${rx},${ry}`)
   }, [lx, ly, rx, ry])
   return <canvas ref={ref} className="plot" style={{ height: 190 }} />
-}
-
-function LjButtonRow({ snap, id, phys, busy, onPick }: {
-  snap: LjSnapshot
-  id: number
-  phys: string
-  busy: boolean
-  onPick: (target: number | null) => void
-}): JSX.Element {
-  const t = useT()
-  const row = snap.buttons.find((b) => b.id === id)
-  const nameToId: Record<string, number> = {}
-  for (const b of snap.buttons) nameToId[b.label] = b.id
-  const curId = row?.target == null ? '' : nameToId[row.target] ?? -1
-  const label = phys ? `${phys} · ${row?.label ?? ''}` : (row?.label ?? `ID ${id}`)
-  return (
-    <div className="row" style={{ gap: 8, alignItems: 'center' }}>
-      <span className="mono">{label}</span>
-      {curId === -1 ? (
-        <span className="mono">{row?.target}</span>
-      ) : (
-        <select
-          disabled={busy}
-          value={curId}
-          onChange={(e) => {
-            const v = e.target.value
-            onPick(v === '' ? null : Number(v))
-          }}
-        >
-          <option value="">{t('lj.stock')}</option>
-          {snap.buttons.map((b) => (
-            <option key={b.id} value={b.id}>{b.label}</option>
-          ))}
-        </select>
-      )}
-    </div>
-  )
 }
 
 export default function App(): JSX.Element {
@@ -2591,31 +2609,6 @@ export default function App(): JSX.Element {
                     <div className="mono">LT mode {ljSnap.trigger.left.mode} · {ljSnap.trigger.left.inner}–{ljSnap.trigger.left.outer}%</div>
                     <div className="mono">RT mode {ljSnap.trigger.right.mode} · {ljSnap.trigger.right.inner}–{ljSnap.trigger.right.outer}%</div>
                   </div>
-                  <div>
-                    <strong>{t('lj.buttons')}</strong>
-                    {[24, 25, 26, 27].map((id) => (
-                      <LjButtonRow
-                        key={id}
-                        snap={ljSnap}
-                        id={id}
-                        phys={LJ_PHYSICAL[id] ?? ''}
-                        busy={ljBusy}
-                        onPick={(target) => void writeLeadJoy(id, target)}
-                      />
-                    ))}
-                    {ljSnap.buttons
-                      .filter((b) => b.id !== 24 && b.id !== 25 && b.id !== 26 && b.id !== 27)
-                      .map((b) => (
-                        <LjButtonRow
-                          key={b.id}
-                          snap={ljSnap}
-                          id={b.id}
-                          phys=""
-                          busy={ljBusy}
-                          onPick={(target) => void writeLeadJoy(b.id, target)}
-                        />
-                      ))}
-                  </div>
                 </div>
               )}
             </div>
@@ -3124,6 +3117,78 @@ export default function App(): JSX.Element {
               </table>
             </div>
             </>
+          )}
+          {tab === 'buttons' && model?.id === 'SaberPlus' && ljPath && (
+            <div className="card" style={{ marginTop: 16 }}>
+              <h3>{t('buttons.title')}</h3>
+              <Hint>{t('lj.bindHint')}</Hint>
+              <div className="row" style={{ marginTop: 8 }}>
+                {(['Main', 'Sub1', 'Sub2'] as const).map((name, i) => (
+                  <button
+                    key={name}
+                    className={`choice-btn${i === ljSlot ? ' active' : ''}`}
+                    disabled={ljBusy}
+                    onClick={() => void readLeadJoy(i as 0 | 1 | 2)}
+                  >
+                    <span className="choice-label">{name}</span>
+                  </button>
+                ))}
+                {!ljSnap && (
+                  <button className="btn sm primary" disabled={ljBusy} onClick={() => void readLeadJoy(ljSlot)}>
+                    {ljBusy ? t('lj.reading') : t('lj.read')}
+                  </button>
+                )}
+              </div>
+              {ljSnap && (
+              <table className="tbl" style={{ marginTop: 8 }}>
+                <thead><tr><th>{t('buttons.source')}</th><th>{t('buttons.target')}</th><th>{t('buttons.effective')}</th></tr></thead>
+                <tbody>
+                  {(() => {
+                    const nameToId: Record<string, number> = {}
+                    for (const b of ljSnap.buttons) nameToId[b.label] = b.id
+                    const ljOptions = [{ value: 0, label: t('buttons.unmapped') }, ...ljSnap.buttons.map((b) => ({ value: b.id, label: b.label }))]
+                    const ljLabel = (v: number): string => {
+                      if (v === 0) return t('buttons.unmapped')
+                      return ljSnap.buttons.find((b) => b.id === v)?.label ?? `#${v}`
+                    }
+                    const rows = [
+                      ...[24, 25, 26, 27].map((id) => ({ id, phys: LJ_PHYSICAL[id] ?? '' })),
+                      ...ljSnap.buttons.filter((b) => b.id !== 24 && b.id !== 25 && b.id !== 26 && b.id !== 27).map((b) => ({ id: b.id, phys: '' }))
+                    ]
+                    return rows.map((row) => {
+                      const snap = ljSnap.buttons.find((b) => b.id === row.id)
+                      const targetName = snap?.target ?? null
+                      const current = targetName == null ? 0 : nameToId[targetName] ?? -1
+                      const sourceName = row.phys ? `${row.phys} · ${snap?.label ?? ''}` : (snap?.label ?? `ID ${row.id}`)
+                      return (
+                        <tr key={row.id}>
+                          <td><span className="row" style={{ gap: 7, alignItems: 'center' }}><LjKeyIcon id={row.id} />{sourceName}</span></td>
+                          <td>
+                            {current === -1 ? (
+                              <span className="mono">{targetName}</span>
+                            ) : (
+                              <KeySelect
+                                value={current}
+                                disabled={ljBusy}
+                                open={bindOpen === `lj-${row.id}`}
+                                onToggle={() => setBindOpen(bindOpen === `lj-${row.id}` ? null : `lj-${row.id}`)}
+                                onClose={() => setBindOpen(null)}
+                                onPick={(v) => void writeLeadJoy(row.id, v === 0 ? null : v)}
+                                options={ljOptions}
+                                getLabel={ljLabel}
+                                renderIcon={(v) => <LjKeyIcon id={v} />}
+                              />
+                            )}
+                          </td>
+                          <td><span className="row" style={{ gap: 7, alignItems: 'center' }}>{current !== 0 && current !== -1 && <LjKeyIcon id={current} />}{current === 0 ? '—' : (targetName ?? '')}</span></td>
+                        </tr>
+                      )
+                    })
+                  })()}
+                </tbody>
+              </table>
+              )}
+            </div>
           )}
           {tab === 'profiles' && (
             <ProfilesPanel connected={connected} activeSlot={info?.currentProfile ?? null} locked={locked} modelId={modelId} modelLen={modelLen} dumpLength={model?.dumpLength ?? 0} modelName={model?.marketingName ?? null} />
