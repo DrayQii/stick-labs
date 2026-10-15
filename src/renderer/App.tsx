@@ -2194,7 +2194,6 @@ function LjControllerRateCard({ value, busy, onChange }: {
             </button>
           ))}
         </div>
-        <Slider label={t('lj.rateFine')} value={value.rate} min={0} max={100} step={1} onChange={(v) => onChange({ ...value, rate: v })} />
       </div>
     </div>
   )
@@ -3145,29 +3144,12 @@ export default function App(): JSX.Element {
                 )
               })()}
               {ljSnap && tab === 'device' && (
-                <div className="two" style={{ alignItems: 'start' }}>
-                  <div className="stack" style={{ gap: 16 }}>
-                    <div className="card">
-                      <h3>{model?.marketingName}</h3>
-                      <Hint>{t('lj.deviceHint')}</Hint>
-                      <div className="stack" style={{ gap: 6, marginTop: 8, fontSize: 13 }}>
-                        <span className="mono">{t('lj.version')} {ljSnap.version} · {t('lj.board')} {ljSnap.board}</span>
-                        <span className="mono">{t('lj.slot')} {(['Main', 'Sub1', 'Sub2'] as const)[ljSlot]}</span>
-                        <span className="mono">{t('lj.center')} L {ljSnap.sticks[0]?.center.join(',')} · R {ljSnap.sticks[1]?.center.join(',')}</span>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="stack" style={{ gap: 16 }}>
-                    <LjControllerRateCard
-                      value={ljMouse(which === 0 ? 0 : 1)}
-                      busy={ljBusy}
-                      onChange={(next) => stageLjMouse(which === 0 ? 0 : 1, next)}
-                    />
-                    <div className="card">
-                      <h3>{t('device.bits')} — 8-12</h3>
-                      <Hint>{t('lj.noBits')}</Hint>
-                    </div>
-                  </div>
+                <div className="stack" style={{ gap: 16 }}>
+                  <LjControllerRateCard
+                    value={ljMouse(which === 0 ? 0 : 1)}
+                    busy={ljBusy}
+                    onChange={(next) => stageLjMouse(which === 0 ? 0 : 1, next)}
+                  />
                 </div>
               )}
               {ljSnap && tab === 'buttons' && (
