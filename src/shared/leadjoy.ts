@@ -705,6 +705,125 @@ export function ljWireToPercent(wire: number): number {
   return (wire / 32768) * 100
 }
 
+// ---------------------------------------------------------------------------
+// Stick zones — the GameSir deadzone card, expressed on the LJ 8-point curve.
+//
+// The GPU-style byte fields do not exist on this pad: the whole response is the
+// 8 (in,out) pairs. The GameSir card's four numbers therefore land on the curve
+// endpoints, which is where they already live on the wire:
+//   START      -> point 1 input   (deadzone: output 0 below this)
+//   ANTI-START -> point 1 output  (anti-deadzone floor)
+//   END        -> point 8 input   (input above this = full output)
+//   ANTI-END   -> point 8 output  (output ceiling)
+// All values are on the 0.1% grid used by the renderer (0..1000).
+// ---------------------------------------------------------------------------
+
+export const LJ_ZONE_MAX = 1000
+
+export interface LjStickZones {
+  start: number
+  antiStart: number
+  end: number
+  antiEnd: number
+}
+
+function normZone(v: unknown, what: string): number {
+  if (typeof v !== 'number' || !Number.isFinite(v)) {
+    throw new Error(`leadjoy: zone ${what} (${String(v)}) is not a number`)
+  }
+  return Math.max(0, Math.min(LJ_ZONE_MAX, Math.round(v)))
+}
+
+/** Clamp + order a zone set; throws when start sits past end. */
+export function ljNormZones(zones: LjStickZones): LjStickZones {
+  const z = {
+    start: normZone(zones.start, 'start'),
+    antiStart: normZone(zones.antiStart, 'antiStart'),
+    end: normZone(zones.end, 'end'),
+    antiEnd: normZone(zones.antiEnd, 'antiEnd')
+  }
+  if (z.start > z.end) throw new Error(`leadjoy: zone start (${z.start}) is past end (${z.end})`)
+  return z
+}
+
+/** Read the four zones out of a curve given on the 0.1% grid. */
+export function ljCurveZones(curve: ReadonlyArray<readonly [number, number]>): LjStickZones {
+  if (curve.length !== LJ_CURVE_POINTS) {
+    throw new Error(`leadjoy: curve has ${curve.length} points, expected ${LJ_CURVE_POINTS}`)
+  }
+  const first = curve[0]
+  const last = curve[curve.length - 1]
+  return { start: first[0], antiStart: first[1], end: last[0], antiEnd: last[1] }
+}
+
+/** Apply zones to a curve, keeping the interior inputs ordered inside them. */
+export function ljFitZones(
+  curve: ReadonlyArray<readonly [number, number]>,
+  zones: LjStickZones
+): Array<[number, number]> {
+  if (curve.length !== LJ_CURVE_POINTS) {
+    throw new Error(`leadjoy: curve has ${curve.length} points, expected ${LJ_CURVE_POINTS}`)
+  }
+  const z = ljNormZones(zones)
+  const out: Array<[number, number]> = curve.map((p) => [p[0], p[1]])
+  out[0] = [z.start, z.antiStart]
+  out[out.length - 1] = [z.end, z.antiEnd]
+  for (let i = 1; i < out.length - 1; i++) {
+    out[i][0] = Math.max(out[i - 1][0], Math.min(z.end, out[i][0]))
+  }
+  return out
+}
+
+/** Straight response between the zones' floor and ceiling (8 points). */
+export function ljLinearCurve(zones: LjStickZones): Array<[number, number]> {
+  const z = ljNormZones(zones)
+  const out: Array<[number, number]> = []
+  for (let i = 0; i < LJ_CURVE_POINTS; i++) {
+    const u = i / (LJ_CURVE_POINTS - 1)
+    out.push([Math.round(z.start + u * (z.end - z.start)), Math.round(z.antiStart + u * (z.antiEnd - z.antiStart))])
+  }
+  return out
+}
+
+/**
+ * Sample a 0..255 designer curve onto the 8 points, keeping the zones: input
+ * runs from `start` to `end`, output from the floor to the ceiling.
+ */
+export function ljSampleDesign(
+  design: ReadonlyArray<{ x: number; y: number }>,
+  zones: LjStickZones
+): Array<[number, number]> {
+  const z = ljNormZones(zones)
+  const pts = [...design]
+    .filter((p) => Number.isFinite(p?.x) && Number.isFinite(p?.y))
+    .map((p) => ({ x: Math.max(0, Math.min(255, p.x)), y: Math.max(0, Math.min(255, p.y)) }))
+    .sort((a, b) => a.x - b.x)
+  if (pts.length < 2) return ljLinearCurve(z)
+  const at = (x: number): number => {
+    if (x <= pts[0].x) return pts[0].y
+    for (let i = 1; i < pts.length; i++) {
+      if (x <= pts[i].x) {
+        const a = pts[i - 1]
+        const b = pts[i]
+        const t = (x - a.x) / (b.x - a.x)
+        return a.y + t * (b.y - a.y)
+      }
+    }
+    return pts[pts.length - 1].y
+  }
+  const out: Array<[number, number]> = []
+  for (let i = 0; i < LJ_CURVE_POINTS; i++) {
+    const u = i / (LJ_CURVE_POINTS - 1)
+    const dx = u * 255
+    const dy = at(dx)
+    out.push([
+      Math.round(z.start + u * (z.end - z.start)),
+      Math.round(z.antiStart + (dy / 255) * (z.antiEnd - z.antiStart))
+    ])
+  }
+  return out
+}
+
 export interface LjStickTuning {
   board: number
   slot: number

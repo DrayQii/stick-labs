@@ -75,11 +75,19 @@ reproduces the captured Sub1 document byte-for-byte (`tests/leadjoy.ts`).
 In-app control ships through the **same UI as the GameSir pads**: connecting
 the Saber Plus marks it connected and reads Main immediately, slots live in
 the topbar (Main/Sub1/Sub2, same spot as P1–P4), and edits stage until the
-topbar Write commits them. Buttons (all 22 ids, 1:1 remaps), stick curves /
+topbar Write commits them. The Sticks tab mirrors the GameSir Sticks tab card
+for card — live cross, dead zone + anti-deadzone, outer threshold, custom
+curve designer, shape. Buttons (all 22 ids, 1:1 remaps), stick curves /
 deadzones and trigger deadzones are all writable, each record written live,
 acked and read back (`leadjoy:writeButton` / `writeStick` / `writeTrigger`);
 a mismatch restores the old value. Records that are not decoded for this pad
 (report-rate, resolution) stay untouched and say so in the Device tab.
+
+This pad has no separate deadzone/anti bytes, so the GameSir card's four
+numbers land on the curve endpoints: START/ANTI-START are point 1 (in/out),
+END/ANTI-END are point 8 (in/out) — `ljCurveZones` / `ljFitZones` /
+`ljLinearCurve` / `ljSampleDesign` in `src/shared/leadjoy.ts`, pinned in
+`tests/leadjoy.ts`.
 
 ## Open (needs captures)
 
@@ -95,4 +103,13 @@ a mismatch restores the old value. Records that are not decoded for this pad
   rewrite the next time the pad is on the bench (user-confirmed step).
 - Trigger mode enum beyond Linear=2; shape enum beyond Circle=1.
 - Keyboard/mouse target `t` values (out of 1:1 scope; A/B/Y/X are proven).
-- Live input report layout (XInput interface, separate from MI_04).
+- Live input: the pad's vendor interface 0 (class 0xFF/0x5D/0x01, EP 0x81 IN,
+  32-byte reports per its config descriptor) is exposed by Windows as HID node
+  `IG_01` (usage 0x0001/0x0005), but node-hid reads NOTHING from it — event
+  API, async `read()`, and blocking `readSync()`, both exclusive and shared,
+  all silent for 40 s with both sticks moved (live hardware, 2026-10-15), and
+  the 0xFF80 config interface pushes no unsolicited frames either. The Sticks
+  tab's live cross therefore stays neutral for this pad. Next step: an
+  unfiltered USBPcap root-hub capture (`USBPcapCMD -A`) while circling the
+  sticks — the existing `stickss`/`triggers` captures were filtered to the
+  config endpoint, so they prove nothing about the input path.

@@ -15,6 +15,11 @@ import {
   ljButtonWriteRecord,
   ljBuildStickWrite,
   ljBuildTriggerWrite,
+  ljCurveZones,
+  ljFitZones,
+  ljLinearCurve,
+  ljNormZones,
+  ljSampleDesign,
   ljButtonTarget,
   ljChecksum,
   ljDecodeStream,
@@ -312,6 +317,32 @@ check(
 const ack71 = [...unhex('a50bcc82a16347a165004f'), ...new Array(64 - 11).fill(0)]
 check('stick ack parses', JSON.stringify(ljParseWriteAck(ljParseSingleFrame(ack71), 71)) === JSON.stringify({ record: 71 }))
 check('percent anchors', ljPercentToWire(25) === 8192 && ljPercentToWire(10) === 3277)
+
+// --- stick zones (deadzone / anti-deadzone / outer on the 8-point curve) ------
+const grid10 = (pts: ReadonlyArray<readonly [number, number]>): Array<[number, number]> =>
+  pts.map(([x, y]) => [Math.round(x * 10), Math.round(y * 10)])
+const zRight = ljCurveZones(grid10(right.curvePercent))
+check('zones read off the pad curve', zRight.start === 300 && zRight.antiStart === 0 && zRight.end === 1000 && zRight.antiEnd === 1000)
+const fitted = ljFitZones(grid10(right.curvePercent), { start: 450, antiStart: 60, end: 950, antiEnd: 990 })
+check('zone fit lands on both endpoints', fitted[0][0] === 450 && fitted[0][1] === 60 && fitted[7][0] === 950 && fitted[7][1] === 990)
+check('zone fit keeps inputs ordered', fitted.every((p, i) => i === 0 || p[0] >= fitted[i - 1][0]))
+check('zone fit leaves the pad curve alone', JSON.stringify(ljFitZones(grid10(right.curvePercent), zRight)) === JSON.stringify(grid10(right.curvePercent)))
+const lin = ljLinearCurve({ start: 100, antiStart: 0, end: 1000, antiEnd: 1000 })
+check('linear spans the zones', lin[0][0] === 100 && lin[0][1] === 0 && lin[7][0] === 1000 && lin[7][1] === 1000)
+check('linear is monotonic', lin.every((p, i) => i === 0 || (p[0] > lin[i - 1][0] && p[1] > lin[i - 1][1])))
+const design = [{ x: 0, y: 0 }, { x: 128, y: 100 }, { x: 255, y: 255 }]
+const sampled = ljSampleDesign(design, { start: 200, antiStart: 0, end: 1000, antiEnd: 1000 })
+check('design sample pins zone endpoints', sampled[0][0] === 200 && sampled[0][1] === 0 && sampled[7][0] === 1000 && sampled[7][1] === 1000)
+check('design sample keeps inputs ordered', sampled.every((p, i) => i === 0 || p[0] > sampled[i - 1][0]))
+check('design sample honours a floor', ljSampleDesign(design, { start: 0, antiStart: 400, end: 1000, antiEnd: 1000 })[0][1] === 400)
+let zoneThrew = false
+try {
+  ljNormZones({ start: 900, antiStart: 0, end: 100, antiEnd: 1000 })
+} catch {
+  zoneThrew = true
+}
+check('zones refuse start past end', zoneThrew)
+check('zones clamp negatives', ljNormZones({ start: -5, antiStart: 0, end: 1000, antiEnd: 1000 }).start === 0)
 
 // --- trigger writes (deadzone-flip capture) -----------------------------------
 const trigWr = ljDecodeStream(fixture('trig-wr-main.bin')) as unknown as {

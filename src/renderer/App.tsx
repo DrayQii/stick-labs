@@ -23,7 +23,7 @@ import { createPortal } from 'react-dom'
 import { LANGS, LangContext, tr, useLangState, useT } from './i18n'
 import { THEMES, ThemeContext, useThemeState } from './theme'
 import type { DeepPollResult } from '@shared/deeppoll'
-import { LJ_PHYSICAL, ljPercentToWire, type LjSnapshot, type LjTriggerZones } from '@shared/leadjoy'
+import { LJ_PHYSICAL, ljCurveZones, ljFitZones, ljLinearCurve, ljPercentToWire, ljSampleDesign, type LjSnapshot, type LjStickZones, type LjTriggerZones } from '@shared/leadjoy'
 
 
 /**
@@ -1861,77 +1861,176 @@ interface LjDraft {
   trigger: LjTriggerZones | null
 }
 
+/** Convert the renderer's 0.1% point grid to/from the shared pair form. */
+const toPairs = (pts: ReadonlyArray<{ x: number; y: number }>): Array<[number, number]> => pts.map((p) => [p.x, p.y])
+const toPts = (pairs: ReadonlyArray<readonly [number, number]>): Array<{ x: number; y: number }> =>
+  pairs.map(([x, y]) => ({ x, y }))
+
 /**
- * LeadJoy stick cards — the same two-card shape as the GameSir Sticks tab:
- * deadzone on the left, 8-point curve on the right. Edits stage upward; the
- * topbar Write commits the whole side image and the pad proves it with
- * readback. Point 1 output is locked at 0 (the vendor deadzone-floor
- * invariant).
+ * LeadJoy sticks — the GameSir Sticks tab wired to the record-71 curve image.
+ * This pad has no separate deadzone/anti bytes, so the four zone numbers live
+ * on the curve endpoints (point 1 = start/anti-start, point 8 = end/anti-end)
+ * and the deadzone card and the designer edit one image. Edits stage upward;
+ * the topbar Write commits the side and reads it back.
  */
-function LjDeadzoneCard({ snap, side, points, onChange, onReset }: {
-  snap: LjSnapshot
-  side: 0 | 1
-  points: Array<{ x: number; y: number }>
-  onChange: (next: Array<{ x: number; y: number }>) => void
-  onReset: () => void
-}): JSX.Element | null {
+function LjLiveCard({ live }: { live: LiveSample | null }): JSX.Element {
   const t = useT()
-  const stick = snap.sticks.find((s) => s.side === side)
-  if (!stick || points.length !== 8) return null
-  const deadzone = points[0]?.x ?? 0
-  const setDeadzone = (pct10: number): void => {
-    const next = points.map((p) => ({ ...p }))
-    const hi = next[1]?.x ?? 1000
-    next[0] = { x: Math.max(0, Math.min(hi, Math.round(pct10))), y: 0 }
-    onChange(next)
-  }
   return (
     <div className="card">
-      <h3>{t('sticks.deadzone')} — {stick.sideName} {(deadzone / 10).toFixed(1)}%</h3>
-      <Hint>{t('lj.dzHint')}</Hint>
-      <div className="stack" style={{ gap: 12, marginTop: 8 }}>
-        <Slider label={t('sticks.start')} value={deadzone} min={0} max={1000} step={1} format={(v) => `${(v / 10).toFixed(1)}%`} onChange={setDeadzone} />
-      </div>
-      <div className="row wrap" style={{ gap: 8, marginTop: 10 }}>
-        <label className="row" style={{ gap: 6, fontSize: 12 }}>
-          <span className="label">{t('sticks.nStart')}</span>
-          <input
-            className="input"
-            style={{ width: 76 }}
-            type="number"
-            min={0}
-            max={100}
-            step={0.1}
-            value={Number((deadzone / 10).toFixed(1))}
-            onChange={(e) => {
-              const v = Number(e.target.value)
-              if (!Number.isFinite(v)) return
-              setDeadzone(Math.max(0, Math.min(100, v)) * 10)
-            }}
-          />
-          <span style={{ color: 'var(--text-3)' }}>%</span>
-        </label>
-        <button className="btn sm ghost" onClick={onReset}>{t('lj.reset')}</button>
-      </div>
-      <div className="note" style={{ marginTop: 8 }}>
-        {t('lj.center')} <span className="mono">{stick.center[0]},{stick.center[1]}</span>
+      <h3>{t('sticks.live')}</h3>
+      <Hint>{t('lj.liveHint')}</Hint>
+      <StickCross lx={live?.lx ?? 128} ly={live?.ly ?? 128} rx={live?.rx ?? 128} ry={live?.ry ?? 128} />
+      <div className="row spread">
+        <span className="mono">L {live?.lx ?? '—'},{live?.ly ?? '—'}</span>
+        <span className="mono">R {live?.rx ?? '—'},{live?.ry ?? '—'}</span>
       </div>
     </div>
   )
 }
 
-function LjCurveCard({ snap, side, points, onChange, onReset }: {
+function LjZonesCard({ points, onChange }: {
+  points: Array<{ x: number; y: number }>
+  onChange: (next: Array<{ x: number; y: number }>) => void
+}): JSX.Element | null {
+  const t = useT()
+  if (points.length !== 8) return null
+  const z = ljCurveZones(toPairs(points))
+  const apply = (patch: Partial<LjStickZones>): void => onChange(toPts(ljFitZones(toPairs(points), { ...z, ...patch })))
+  const slider = (key: keyof LjStickZones, label: string): JSX.Element => (
+    <Slider label={label} value={z[key]} min={0} max={1000} step={1} format={(v) => `${(v / 10).toFixed(1)}%`} onChange={(v) => apply({ [key]: v })} />
+  )
+  const box = (key: keyof LjStickZones, label: string): JSX.Element => (
+    <label className="row" style={{ gap: 6, fontSize: 12 }}>
+      <span className="label">{label}</span>
+      <input
+        className="input"
+        style={{ width: 76 }}
+        type="number"
+        min={0}
+        max={100}
+        step={0.1}
+        value={Number((z[key] / 10).toFixed(1))}
+        onChange={(e) => {
+          const v = Number(e.target.value)
+          if (!Number.isFinite(v)) return
+          apply({ [key]: Math.round(Math.max(0, Math.min(100, v)) * 10) })
+        }}
+      />
+      <span style={{ color: 'var(--text-3)' }}>%</span>
+    </label>
+  )
+  return (
+    <div className="card">
+      <h3>{t('sticks.deadzone')} — {t('sticks.steps01')}</h3>
+      <Hint>{t('lj.zoneHint')}</Hint>
+      <div className="stack" style={{ gap: 12, marginTop: 8 }}>
+        {slider('start', t('sticks.start'))}
+        {slider('end', t('sticks.end'))}
+        {slider('antiStart', t('sticks.antiStart'))}
+        {slider('antiEnd', t('sticks.antiEnd'))}
+      </div>
+      <div className="row wrap" style={{ gap: 8, marginTop: 10 }}>
+        {box('start', t('sticks.nStart'))}
+        {box('end', t('sticks.nEnd'))}
+        {box('antiStart', t('sticks.nAntiStart'))}
+        {box('antiEnd', t('sticks.nAntiEnd'))}
+      </div>
+      <div className="row wrap" style={{ gap: 8, marginTop: 10 }}>
+        <button className="btn sm" onClick={() => onChange(toPts(ljLinearCurve({ ...z, antiStart: 0, antiEnd: 1000 })))}>{t('sticks.physics')}</button>
+        <button className="choice-btn" onClick={() => apply({ start: 50, end: 1000, antiStart: 0, antiEnd: 1000 })}><span className="choice-label">{t('sticks.factory')}</span></button>
+        <button className="choice-btn" title={t('sticks.tAim')} onClick={() => apply({ end: 800 })}><span className="choice-label">{t('sticks.aimEnd')}</span></button>
+        <button className="choice-btn" title={t('sticks.tFlick')} onClick={() => apply({ end: 650 })}><span className="choice-label">{t('sticks.flickEnd')}</span></button>
+        <button className="choice-btn" title={t('sticks.tSnap')} onClick={() => apply({ antiStart: 80 })}><span className="choice-label">{t('sticks.antiSnap')}</span></button>
+        <button className="choice-btn" title={t('sticks.tMax')} onClick={() => apply({ antiStart: 150 })}><span className="choice-label">{t('sticks.antiMax')}</span></button>
+        <button className="choice-btn" title={t('sticks.tOff')} onClick={() => apply({ antiStart: 0, antiEnd: 1000 })}><span className="choice-label">{t('sticks.antiOff')}</span></button>
+      </div>
+    </div>
+  )
+}
+
+function LjOuterCard({ points, onChange }: {
+  points: Array<{ x: number; y: number }>
+  onChange: (next: Array<{ x: number; y: number }>) => void
+}): JSX.Element | null {
+  const t = useT()
+  if (points.length !== 8) return null
+  const z = ljCurveZones(toPairs(points))
+  const unlimited = z.end === 1000 && z.antiEnd === 1000
+  const apply = (patch: Partial<LjStickZones>): void => onChange(toPts(ljFitZones(toPairs(points), { ...z, ...patch })))
+  return (
+    <div className="card">
+      <h3>{t('sticks.outer')} — {unlimited ? t('sticks.noLimitTitle') : t('sticks.custom')}</h3>
+      <Hint>{t('lj.outerHint')}</Hint>
+      <div className="row spread" style={{ margin: '10px 0' }}>
+        <div>
+          <div style={{ fontSize: 13.5 }}>{t('sticks.noLimitTitle')}</div>
+          <div style={{ fontSize: 12, color: 'var(--text-3)' }}>{unlimited ? t('sticks.outerActive') : t('sticks.outerOff')}</div>
+        </div>
+        <button
+          className={`choice-btn${unlimited ? ' active' : ''}`}
+          onClick={() => (unlimited ? apply({ end: 900, antiEnd: 1000 }) : apply({ end: 1000, antiEnd: 1000 }))}
+        >
+          <span className="choice-label">{unlimited ? t('sticks.infiniteOn') : t('sticks.setInfinite')}</span>
+        </button>
+      </div>
+    </div>
+  )
+}
+
+function LjShapeCard({ shape }: { shape: number }): JSX.Element {
+  const t = useT()
+  const opts = [
+    { key: 'circle', label: t('sticks.shapeRound'), hint: t('sticks.shapeHintRound'), active: shape === 1, writable: true },
+    { key: 'square', label: t('sticks.shapeSquare'), hint: t('lj.shapeLocked'), active: false, writable: false },
+    { key: 'raw', label: t('sticks.shapeRaw'), hint: t('lj.shapeLocked'), active: false, writable: false }
+  ]
+  return (
+    <div className="card">
+      <h3>{t('sticks.shape')}</h3>
+      <Hint>{t('lj.shapeHint')}</Hint>
+      <div className="stack" style={{ gap: 8 }}>
+        {opts.map((o) => (
+          <button key={o.key} className={`choice-btn${o.active ? ' active' : ''}`} title={o.hint} disabled={!o.writable}>
+            <span className="choice-label">{o.label}</span>
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function LjCurveCard({ snap, side, points, onChange, onReset, onCopyToOther }: {
   snap: LjSnapshot
   side: 0 | 1
   points: Array<{ x: number; y: number }>
   onChange: (next: Array<{ x: number; y: number }>) => void
   onReset: () => void
+  onCopyToOther: () => void
 }): JSX.Element | null {
   const t = useT()
   const stick = snap.sticks.find((s) => s.side === side)
+  const [presets, setPresets] = useState<Array<{ name: string; pts: Array<{ x: number; y: number }> }>>(() => {
+    try {
+      const raw = window.localStorage.getItem('sticklabs.ljcurves.v1')
+      const parsed = raw ? (JSON.parse(raw) as Array<{ name: string; pts: Array<{ x: number; y: number }> }>) : []
+      return Array.isArray(parsed)
+        ? parsed.filter((p) => typeof p?.name === 'string' && Array.isArray(p?.pts)).slice(0, 20)
+        : []
+    } catch {
+      return []
+    }
+  })
+  useEffect(() => {
+    try {
+      window.localStorage.setItem('sticklabs.ljcurves.v1', JSON.stringify(presets))
+    } catch {
+      /* storage full/blocked — presets stay session-only */
+    }
+  }, [presets])
   if (!stick || points.length !== 8) return null
-  const pad = stick.curvePct.map(([x, y]) => ({ x: Math.round(x * 10), y: Math.round(y * 10) }))
-  const dirty = JSON.stringify(points) !== JSON.stringify(pad)
+  const padPts = stick.curvePct.map(([x, y]) => ({ x: Math.round(x * 10), y: Math.round(y * 10) }))
+  const dirty = JSON.stringify(points) !== JSON.stringify(padPts)
+  const zones = ljCurveZones(toPairs(points))
   const setPoint = (i: number, axis: 'x' | 'y', v: number): void => {
     if (!Number.isFinite(v)) return
     const next = points.map((p) => ({ ...p }))
@@ -1939,7 +2038,6 @@ function LjCurveCard({ snap, side, points, onChange, onReset }: {
       const lo = i > 0 ? next[i - 1].x : 0
       const hi = i < next.length - 1 ? next[i + 1].x : 1000
       next[i].x = Math.max(lo, Math.min(hi, Math.round(v * 10)))
-      if (i === 0) next[i].y = 0
     } else {
       next[i].y = Math.max(0, Math.min(1000, Math.round(v * 10)))
     }
@@ -1949,18 +2047,46 @@ function LjCurveCard({ snap, side, points, onChange, onReset }: {
     <div className="card">
       <h3>{t('sticks.curve')} — 8 {t('sticks.points')}</h3>
       <Hint>{t('lj.stickHint')}</Hint>
-      <CurvePlot
-        points={points}
-        max={1000}
-        overlay={pad}
-        onChange={(next) => {
-          const fixed = next.map((p) => ({ ...p }))
-          if (fixed[0]) fixed[0] = { x: fixed[0].x, y: 0 }
-          onChange(fixed)
-        }}
-      />
-      <div className="row" style={{ gap: 8, margin: '8px 0' }}>
-        <div style={{ flex: 1 }} />
+      <CurvePlot points={points} max={1000} overlay={padPts} onChange={(next) => onChange(next.map((p) => ({ ...p })))} />
+      <div className="row wrap" style={{ gap: 8, margin: '8px 0' }}>
+        {Object.entries(AIM_CURVES).map(([key, c]) => (
+          <button key={key} className="choice-btn" title={c.hint} onClick={() => onChange(toPts(ljSampleDesign(c.pts, zones)))}>
+            <span className="choice-label">{c.label}</span>
+          </button>
+        ))}
+      </div>
+      <div className="row wrap" style={{ gap: 8, margin: '8px 0', alignItems: 'center' }}>
+        <button
+          className="btn sm"
+          title={t('sticks.saveTitle')}
+          onClick={() => {
+            const name = window.prompt('Name this curve:')
+            if (!name || !name.trim()) return
+            const clean = name.trim().slice(0, 24)
+            setPresets((prev) => {
+              const next = prev.filter((p) => p.name !== clean)
+              next.unshift({ name: clean, pts: points.map((p) => ({ ...p })) })
+              return next.slice(0, 20)
+            })
+          }}
+        >
+          {t('sticks.saveCurrent')}
+        </button>
+        {presets.map((p) => (
+          <span key={p.name} className="row" style={{ gap: 4, alignItems: 'center' }}>
+            <button className="btn sm ghost" title={`Apply ${p.name}`} onClick={() => onChange(p.pts.map((q) => ({ ...q })))}>
+              {p.name}
+            </button>
+            <button className="btn sm ghost" title={`Delete ${p.name}`} onClick={() => setPresets((prev) => prev.filter((q) => q.name !== p.name))}>
+              ×
+            </button>
+          </span>
+        ))}
+      </div>
+      <div className="row wrap" style={{ gap: 8 }}>
+        <button className="btn sm" disabled title={t('lj.fixedPoints')}>{t('sticks.addPoint')} (8/8)</button>
+        <button className="btn sm ghost" title={t('lj.copyOther')} onClick={onCopyToOther}>{t('sticks.copyCurve')}</button>
+        <button className="btn sm ghost" onClick={() => onChange(toPts(ljLinearCurve(zones)))}>{t('sticks.resetCurve')}</button>
         <button className="btn sm ghost" disabled={!dirty} onClick={onReset}>{t('sticks.reload')}</button>
       </div>
       <table className="tbl" style={{ marginTop: 8 }}>
@@ -1970,11 +2096,14 @@ function LjCurveCard({ snap, side, points, onChange, onReset }: {
             <tr key={i}>
               <td className="mono">{i + 1}</td>
               <td><input className="input" type="number" min={0} max={100} step={0.1} value={Number((p.x / 10).toFixed(1))} onChange={(e) => setPoint(i, 'x', Number(e.target.value))} /></td>
-              <td><input className="input" type="number" min={0} max={100} step={0.1} disabled={i === 0} value={Number((p.y / 10).toFixed(1))} onChange={(e) => setPoint(i, 'y', Number(e.target.value))} /></td>
+              <td><input className="input" type="number" min={0} max={100} step={0.1} value={Number((p.y / 10).toFixed(1))} onChange={(e) => setPoint(i, 'y', Number(e.target.value))} /></td>
             </tr>
           ))}
         </tbody>
       </table>
+      <div className="note" style={{ marginTop: 8 }}>
+        {t('sticks.hwPreview')} <span className="mono">{points.map((p) => `${ljPercentToWire(p.x / 10)}/${ljPercentToWire(p.y / 10)}`).join(' · ')}</span>
+      </div>
     </div>
   )
 }
@@ -2861,28 +2990,31 @@ export default function App(): JSX.Element {
                 <span className="pill">{model?.marketingName} · {(['Main', 'Sub1', 'Sub2'] as const)[ljSlot]}</span>
               </div>
               {!ljSnap && <div className="msg"><h3>{ljBusy ? t('lj.reading') : t('msg.loading')}</h3></div>}
-              {ljSnap && tab === 'sticks' && (
-                <div className="two" style={{ alignItems: 'start' }}>
-                  <div className="stack" style={{ gap: 16 }}>
-                    <LjDeadzoneCard
-                      snap={ljSnap}
-                      side={which === 0 ? 0 : 1}
-                      points={ljStickPoints(which === 0 ? 0 : 1)}
-                      onChange={(next) => stageLjStick(which === 0 ? 0 : 1, next)}
-                      onReset={() => stageLjStick(which === 0 ? 0 : 1, null)}
-                    />
+              {ljSnap && tab === 'sticks' && (() => {
+                const side = (which === 0 ? 0 : 1) as 0 | 1
+                const other = (side === 0 ? 1 : 0) as 0 | 1
+                const pts = ljStickPoints(side)
+                return (
+                  <div className="two" style={{ alignItems: 'start' }}>
+                    <div className="stack" style={{ gap: 16 }}>
+                      <LjLiveCard live={null} />
+                      <LjZonesCard points={pts} onChange={(next) => stageLjStick(side, next)} />
+                      <LjOuterCard points={pts} onChange={(next) => stageLjStick(side, next)} />
+                    </div>
+                    <div className="stack" style={{ gap: 16 }}>
+                      <LjCurveCard
+                        snap={ljSnap}
+                        side={side}
+                        points={pts}
+                        onChange={(next) => stageLjStick(side, next)}
+                        onReset={() => stageLjStick(side, null)}
+                        onCopyToOther={() => stageLjStick(other, pts.map((p) => ({ ...p })))}
+                      />
+                      <LjShapeCard shape={ljSnap.sticks.find((s) => s.side === side)?.shape ?? 1} />
+                    </div>
                   </div>
-                  <div className="stack" style={{ gap: 16 }}>
-                    <LjCurveCard
-                      snap={ljSnap}
-                      side={which === 0 ? 0 : 1}
-                      points={ljStickPoints(which === 0 ? 0 : 1)}
-                      onChange={(next) => stageLjStick(which === 0 ? 0 : 1, next)}
-                      onReset={() => stageLjStick(which === 0 ? 0 : 1, null)}
-                    />
-                  </div>
-                </div>
-              )}
+                )
+              })()}
               {ljSnap && tab === 'device' && (
                 <div className="two" style={{ alignItems: 'start' }}>
                   <div className="stack" style={{ gap: 16 }}>
