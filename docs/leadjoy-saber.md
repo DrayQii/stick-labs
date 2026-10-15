@@ -120,6 +120,45 @@ button-like axis triggers/actions).
 (unlisted fields pass through untouched), so a `cv`-only or `mse`-only change
 never disturbs the rest of the image.
 
+## Sub1/Sub2 are shift layers, not switchable profiles (2026-10-15)
+
+The pad stores three full config sets (`main`/`sub1`/`sub2`, vendor JSON naming)
+in records 60/70/90/100/120 through the `c` slot field. The slot is honoured:
+a record-60 read for slot 0/1/2 comes back as `{"c":60,"e":0,"r":{"b":1,"c":<slot>,
+…}}`, byte-different per slot (verified live: slot 0 held the four keyboard/mouse
+binds, slots 1 and 2 were all-Origin).
+
+Record 51 is the board header and carries the sub-layer gate:
+
+```
+{"c":51,"e":0,"r":{"b":1,"d2":{"a":1,"n":"DEFAULT_BOARD",
+  "cfg":[{"c":1,"ko":1,"at":0,"k":[]},{"c":2,"ko":1,"at":0,"k":[]}]}}}
+```
+
+Vendor names (its own `DEFAULT_BOARD.json`): `a` = `activated`, `n` = `name`,
+`cfg[].c` = sub index (1/2), `ko` = `subN_keep_original`, `at` =
+`subN_action_type` (0 = `Responsive`; `Toggle` is the other vendor value),
+`k` = `subN_trigger_keys` (`subN_trigger_key_logic` = `And`/`Or` rides the same
+family).
+
+**An empty `k` means the sub layer is unreachable** — the pad applies sub1/sub2
+only while their trigger keys are held. So binds written into Sub1/Sub2 look
+dead while main's keep working: that is the configured state, not a failed
+write. Making them usable needs a write for the sub config (record 51 family)
+whose shape is not captured yet.
+
+Read-only id probes (no writes sent): 50 answers `r:1` (vendor
+`GetProfileCount`); 51 answers the board map; **52 answers nothing and the pad
+re-enumerates right after** — the same flush the vendor app's Save causes — so
+52 belongs to the board-write family, but its payload shape is unproven. The
+vendor DLL's id table (`device_manager_lib.dll`, file offset `0x2045f8`) lists
+the neighbours: 17/18, 30/31, 40–49, 50–56, 60/61, 70/71, 90/91, 132–135,
+170–175, 190–192, 220–222/224.
+
+The vendor UI's own strings (`ConfigTabs`: `Main`/`Sub1`/`Sub2`, analytics
+`page_view_sub_keymaps` with `config_slot`) show the sub tabs are the same
+keymap editor; the activation fields are named only in the DLL/JSON.
+
 ## No-admin RE sources (use these first)
 
 - `%LOCALAPPDATA%\Packages\ShenzhenDynamicFingertipN.leadjoy-pc-app_bx86y63yhsmre\LocalCache\Local\Leadjoy\logs\debug.log`
@@ -144,6 +183,10 @@ tab says so rather than faking a control.
 
 ## Open (needs captures)
 
+- Sub-layer gate write (record 51/52 family): `cfg[].k` (trigger keys), `ko`,
+  `at` for sub1/sub2 — needs either a capture of the vendor app setting a sub
+  trigger key, or an admin USBPcap/ETW session. Until then Sub1/Sub2 stay
+  editable-but-inert on the pad.
 
 - Live write proof DONE 2026-10-15: `ljWriteButtonVerified` rewrote the
   value the pad already held (M1->X), got the `{c:61,e:0}` ack, and read
