@@ -71,8 +71,10 @@ interface LabApi {
   /** MARIUS board — read-only preview scaffold. No write path exists. */
   /** Kernel USB poll check (elevated ETW trace, UAC prompts once per run). */
   deeppoll(vid: number, pid: number, seconds?: number): Promise<DeepPollResult>
-  /** LeadJoy Saber Plus: read-only Main-slot snapshot (no writes exist). */
+  /** LeadJoy Saber Plus: read-only Main-slot snapshot (sticks stay locked). */
   leadjoyReadMain(path: string): Promise<LjSnapshot>
+  /** LeadJoy extra-button 1:1 remap (verified write, A/B/X/Y/stock only). */
+  leadjoyWriteButton(req: { path: string; id: number; target: number | null }): Promise<{ verified: boolean; restored: boolean }>
   on(channel: string, fn: (payload: never) => void): () => void
 }
 

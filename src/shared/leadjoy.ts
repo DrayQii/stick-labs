@@ -470,6 +470,36 @@ export const LJ_PHYSICAL: Readonly<Record<number, string>> = {
   27: 'L4'
 }
 
+/** Tournament 1:1 remap targets: stock (null) or A/B/X/Y. */
+export const LJ_REMAP_TARGETS: ReadonlyArray<number> = [1, 2, 4, 5]
+
+function ljOriginAction(): LjButtonAction {
+  return { t: 0, n: '', mr: 0, ms: 0, r: 0, sp: 0, ri: 0, v: [0, 0, 0, 0] }
+}
+
+/**
+ * Build a tournament-safe extras write record: R5/L5/R4/L4 only, target
+ * stock (null) or A/B/X/Y. Anything else throws — the main handler and any
+ * future caller share this gate, never just the UI.
+ */
+export function ljButtonWriteRecord(id: number, target: number | null): LjButtonRecord {
+  if (!Object.prototype.hasOwnProperty.call(LJ_PHYSICAL, id)) {
+    throw new Error(`leadjoy: button id ${id} is not a proven extra (R5/L5/R4/L4 only)`)
+  }
+  if (target !== null && !LJ_REMAP_TARGETS.includes(target)) {
+    throw new Error(`leadjoy: target ${target} is outside tournament 1:1 (A/B/X/Y/stock only)`)
+  }
+  return {
+    k: id,
+    a: 0,
+    dn:
+      target === null
+        ? ljOriginAction()
+        : { t: LJ_MAP_GAMEPAD, n: '', mr: 0, ms: 0, r: 0, sp: 0, ri: 0, v: [target, 0, 0, 0] },
+    up: ljOriginAction()
+  }
+}
+
 /** Remap targets reuse the source-id space (proven: X = 4). */
 export function ljButtonTargetName(code: number): string {
   return LJ_BUTTON_NAMES[code] ?? `ID ${code}`

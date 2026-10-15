@@ -227,6 +227,7 @@ const STR: Dict = {
   'msg.unknownModel': { en: 'Unknown model', zh: '未知型号', ja: '不明な機種', ru: 'Неизвестная модель' },
   'lj.read': { en: 'Read pad (preview)', zh: '读取手柄（预览）', ja: 'パッドを読み取る（プレビュー）', ru: 'Прочитать геймпад (превью)' },
   'lj.reading': { en: 'Reading pad…', zh: '正在读取手柄…', ja: 'パッド読み取り中…', ru: 'Чтение геймпада…' },
+  'lj.writing': { en: 'Writing…', zh: '正在写入…', ja: '書き込み中…', ru: 'Запись…' },
   'lj.version': { en: 'Version', zh: '版本', ja: 'バージョン', ru: 'Версия' },
   'lj.board': { en: 'Board', zh: '配置板', ja: 'ボード', ru: 'Плата' },
   'lj.mainSlot': { en: 'Main slot', zh: '主槽位', ja: 'メインスロット', ru: 'Главный слот' },

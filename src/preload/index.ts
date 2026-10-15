@@ -39,6 +39,8 @@ const api = {
   deeppoll: (vid: number, pid: number, seconds?: number) =>
     call<DeepPollResult>('diag:deeppoll', vid, pid, seconds),
   leadjoyReadMain: (path: string) => call<LjSnapshot>('leadjoy:readMain', path),
+  leadjoyWriteButton: (req: { path: string; id: number; target: number | null }) =>
+    call<{ verified: boolean; restored: boolean }>('leadjoy:writeButton', req),
   on: (channel: string, fn: (payload: any) => void): (() => void) => {
     const listener = (_e: unknown, payload: unknown): void => fn(payload)
     ipcRenderer.on(channel, listener)

@@ -6,7 +6,8 @@ import { app, BrowserWindow, dialog, ipcMain, session, shell } from 'electron'
 import { join } from 'node:path'
 import { Controller, type DeviceInfo } from './controller'
 import { discover, discoverLive } from './hid'
-import { ljReadMainSnapshot } from './leadjoy'
+import { ljReadButtonTable, ljReadMainSnapshot, ljWriteButtonVerified } from './leadjoy'
+import { ljButtonWriteRecord } from '../shared/leadjoy'
 import { steamInfo, exportApexDeadzones, listInstalledGames, exportDeadzonesToGames } from './steam'
 import { PROFILE_LENGTH } from '../shared/protocol'
 import { runDeepPoll } from './deeppoll'
@@ -110,6 +111,17 @@ function handle(channel: string, fn: (...args: any[]) => unknown): void {
 
 handle('device:discover', () => discoverLive())
 handle('leadjoy:readMain', (path: string) => ljReadMainSnapshot(path))
+/**
+ * LeadJoy extra-button remap (tournament-safe 1:1 only). Target is a button
+ * id (A=1 B=2 X=4 Y=5) or null for stock/Origin; anything else is refused
+ * here, not just in the UI. Proven path: single-record 61/w write + ack +
+ * readback (docs/leadjoy-saber.md).
+ */
+handle('leadjoy:writeButton', async (req: { path: string; id: number; target: number | null }) => {
+  const { path, id, target } = req ?? {}
+  if (typeof path !== 'string' || path.length === 0) throw new Error('leadjoy: refusing write without a device path')
+  return ljWriteButtonVerified(path, 0, ljButtonWriteRecord(id, target))
+})
 handle('device:connect', async (path: string): Promise<DeviceInfo> => {
   sessionEpoch++
   const info = await controller.connect(path)

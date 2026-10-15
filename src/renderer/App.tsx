@@ -23,7 +23,7 @@ import { createPortal } from 'react-dom'
 import { LANGS, LangContext, tr, useLangState, useT } from './i18n'
 import { THEMES, ThemeContext, useThemeState } from './theme'
 import type { DeepPollResult } from '@shared/deeppoll'
-import type { LjSnapshot } from '@shared/leadjoy'
+import { LJ_PHYSICAL, type LjSnapshot } from '@shared/leadjoy'
 
 
 /**
@@ -1992,6 +1992,23 @@ export default function App(): JSX.Element {
     }
   }
 
+  /** Tournament 1:1 extras remap (Stock/A/B/X/Y only — main refuses the rest). */
+  async function writeLeadJoy(id: number, target: number | null): Promise<void> {
+    if (!ljPath || ljBusy) return
+    setLjBusy(true)
+    setErr(null)
+    setMsg(t('lj.writing'))
+    try {
+      await api().leadjoyWriteButton({ path: ljPath, id, target })
+      setLjSnap(await api().leadjoyReadMain(ljPath))
+      setMsg(t('msg.saved'))
+    } catch (e) {
+      setErr((e as Error).message)
+    } finally {
+      setLjBusy(false)
+    }
+  }
+
   async function connect(path: string): Promise<void> {
     setErr(null)
     try {
@@ -2524,9 +2541,34 @@ export default function App(): JSX.Element {
                   </div>
                   <div>
                     <strong>{t('lj.buttons')}</strong>
-                    {ljSnap.buttons.filter((b) => b.target !== null).map((b) => (
-                      <div key={b.id} className="mono">{b.label} → {b.target}</div>
-                    ))}
+                    {[24, 25, 26, 27].map((id) => {
+                      const row = ljSnap.buttons.find((b) => b.id === id)
+                      const phys = LJ_PHYSICAL[id] ?? row?.label ?? `ID ${id}`
+                      const curId = row?.target == null ? '' : ({ A: 1, B: 2, X: 4, Y: 5 } as Record<string, number>)[row.target] ?? -1
+                      return (
+                        <div key={id} className="row" style={{ gap: 8, alignItems: 'center' }}>
+                          <span className="mono">{phys} · {row?.label ?? ''}</span>
+                          {curId === -1 ? (
+                            <span className="mono">{row?.target}</span>
+                          ) : (
+                            <select
+                              disabled={ljBusy}
+                              value={curId}
+                              onChange={(e) => {
+                                const v = e.target.value
+                                void writeLeadJoy(id, v === '' ? null : Number(v))
+                              }}
+                            >
+                              <option value="">{t('lj.stock')}</option>
+                              <option value="1">A</option>
+                              <option value="2">B</option>
+                              <option value="4">X</option>
+                              <option value="5">Y</option>
+                            </select>
+                          )}
+                        </div>
+                      )
+                    })}
                     <div>{ljSnap.buttons.filter((b) => b.target === null).length} {t('lj.stock')}</div>
                   </div>
                 </div>

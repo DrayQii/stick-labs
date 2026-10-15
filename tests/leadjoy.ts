@@ -12,6 +12,7 @@ import {
   ljBuildButtonWrite,
   ljBuildSnapshot,
   ljButtonQuery,
+  ljButtonWriteRecord,
   ljButtonTarget,
   ljChecksum,
   ljDecodeStream,
@@ -250,6 +251,24 @@ check(
   'single fragment round-trips',
   tinyFrames.length === 1 && (tinyFrames[0]?.[3] ?? 0) === 0x81 && hex(ljReassemble(tinyFrames).stream) === hex(tiny)
 )
+
+// --- tournament gate ----------------------------------------------------------
+check(
+  'gate builds R4->A',
+  JSON.stringify(ljButtonWriteRecord(26, 1).dn) === JSON.stringify({ t: 2, n: '', mr: 0, ms: 0, r: 0, sp: 0, ri: 0, v: [1, 0, 0, 0] })
+)
+check(
+  'gate builds stock',
+  ljButtonWriteRecord(25, null).dn.t === LJ_MAP_ORIGIN && ljButtonWriteRecord(25, null).up.v.every((v) => v === 0)
+)
+for (const [id, target] of [[1, 4], [99, null], [24, 3], [24, 6], [26, 0]] as Array<[number, number | null]>) {
+  try {
+    ljButtonWriteRecord(id, target)
+    check(`gate refuses id=${id} target=${target}`, false)
+  } catch {
+    check(`gate refuses id=${id} target=${target}`, true)
+  }
+}
 
 if (failures > 0) {
   console.error(`${failures} FAILURES`)
