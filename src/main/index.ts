@@ -6,7 +6,7 @@ import { app, BrowserWindow, dialog, ipcMain, session, shell } from 'electron'
 import { join } from 'node:path'
 import { Controller, type DeviceInfo } from './controller'
 import { discover, discoverLive } from './hid'
-import { ljReadButtonTable, ljReadMainSnapshot, ljWriteButtonVerified } from './leadjoy'
+import { ljReadButtonTable, ljReadMainSnapshot, ljReadSnapshot, ljWriteButtonVerified } from './leadjoy'
 import { ljButtonWriteRecord } from '../shared/leadjoy'
 import { steamInfo, exportApexDeadzones, listInstalledGames, exportDeadzonesToGames } from './steam'
 import { PROFILE_LENGTH } from '../shared/protocol'
@@ -111,16 +111,22 @@ function handle(channel: string, fn: (...args: any[]) => unknown): void {
 
 handle('device:discover', () => discoverLive())
 handle('leadjoy:readMain', (path: string) => ljReadMainSnapshot(path))
+handle('leadjoy:readSlot', (req: { path: string; slot: number }) => {
+  if (typeof req?.path !== 'string' || req.path.length === 0) throw new Error('leadjoy: refusing read without a device path')
+  if (req.slot !== 0 && req.slot !== 1 && req.slot !== 2) throw new Error(`leadjoy: slot ${req.slot} is not Main/Sub1/Sub2`)
+  return ljReadSnapshot(req.path, req.slot)
+})
 /**
  * LeadJoy extra-button remap (tournament-safe 1:1 only). Target is a button
  * id (A=1 B=2 X=4 Y=5) or null for stock/Origin; anything else is refused
  * here, not just in the UI. Proven path: single-record 61/w write + ack +
  * readback (docs/leadjoy-saber.md).
  */
-handle('leadjoy:writeButton', async (req: { path: string; id: number; target: number | null }) => {
-  const { path, id, target } = req ?? {}
+handle('leadjoy:writeButton', async (req: { path: string; slot: number; id: number; target: number | null }) => {
+  const { path, slot, id, target } = req ?? {}
   if (typeof path !== 'string' || path.length === 0) throw new Error('leadjoy: refusing write without a device path')
-  return ljWriteButtonVerified(path, 0, ljButtonWriteRecord(id, target))
+  if (slot !== 0 && slot !== 1 && slot !== 2) throw new Error(`leadjoy: slot ${slot} is not Main/Sub1/Sub2`)
+  return ljWriteButtonVerified(path, slot, ljButtonWriteRecord(id, target))
 })
 handle('device:connect', async (path: string): Promise<DeviceInfo> => {
   sessionEpoch++

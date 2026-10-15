@@ -261,7 +261,7 @@ check(
   'gate builds stock',
   ljButtonWriteRecord(25, null).dn.t === LJ_MAP_ORIGIN && ljButtonWriteRecord(25, null).up.v.every((v) => v === 0)
 )
-for (const [id, target] of [[1, 4], [99, null], [24, 3], [24, 6], [26, 0]] as Array<[number, number | null]>) {
+for (const [id, target] of [[99, null], [24, 99], [1, 0], [26, 256], [0, null]] as Array<[number, number | null]>) {
   try {
     ljButtonWriteRecord(id, target)
     check(`gate refuses id=${id} target=${target}`, false)
@@ -269,6 +269,11 @@ for (const [id, target] of [[1, 4], [99, null], [24, 3], [24, 6], [26, 0]] as Ar
     check(`gate refuses id=${id} target=${target}`, true)
   }
 }
+check(
+  'gate builds A->B',
+  JSON.stringify(ljButtonWriteRecord(1, 2)) ===
+    JSON.stringify({ k: 1, a: 0, dn: { t: 2, n: '', mr: 0, ms: 0, r: 0, sp: 0, ri: 0, v: [2, 0, 0, 0] }, up: { t: 0, n: '', mr: 0, ms: 0, r: 0, sp: 0, ri: 0, v: [0, 0, 0, 0] } })
+)
 
 if (failures > 0) {
   console.error(`${failures} FAILURES`)

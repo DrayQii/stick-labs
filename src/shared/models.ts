@@ -76,7 +76,7 @@ export const MODELS: ReadonlyArray<ControllerModel> = [
     profileLength: 0,
     dumpLength: 0,
     support: 'detect-only',
-    supportNote: 'Reads proven from this app\u2019s own handle (framing + checksum + buttons/sticks/triggers/rumble maps decoded byte-exact, fixtures/leadjoy/). Tuning stays locked until a vendor save-flush capture proves the write bytes.'
+    supportNote: 'Reads proven from this app\u2019s own handle (framing + checksum + buttons/sticks/triggers/rumble maps decoded byte-exact, fixtures/leadjoy/). Button 1:1 remaps are live with verified writes; stick/trigger tuning stays locked until their write records are captured.'
   },
   {
     id: 'G7SE',

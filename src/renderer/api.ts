@@ -73,8 +73,10 @@ interface LabApi {
   deeppoll(vid: number, pid: number, seconds?: number): Promise<DeepPollResult>
   /** LeadJoy Saber Plus: read-only Main-slot snapshot (sticks stay locked). */
   leadjoyReadMain(path: string): Promise<LjSnapshot>
-  /** LeadJoy extra-button 1:1 remap (verified write, A/B/X/Y/stock only). */
-  leadjoyWriteButton(req: { path: string; id: number; target: number | null }): Promise<{ verified: boolean; restored: boolean }>
+  /** LeadJoy slot snapshot (Main 0 / Sub1 1 / Sub2 2). */
+  leadjoyReadSlot(req: { path: string; slot: number }): Promise<LjSnapshot>
+  /** LeadJoy button 1:1 remap (verified write, table ids/stock only). */
+  leadjoyWriteButton(req: { path: string; slot: number; id: number; target: number | null }): Promise<{ verified: boolean; restored: boolean }>
   on(channel: string, fn: (payload: never) => void): () => void
 }
 

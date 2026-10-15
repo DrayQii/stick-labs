@@ -28,7 +28,9 @@
  * - 61: button WRITE, single-record {b, c:slot, d1:[{k,a,dn,up}]} under key
  *   `w`, fragmented OUT like reads; the pad acks each write with a
  *   single-frame {c:61,e:0}. Write action maps serialize t,v,n,r,sp,mr,ms,ri
- *   (reads come back t,n,mr,ms,r,sp,ri,v).
+ *   (reads come back t,n,mr,ms,r,sp,ri,v). Source and target may be any of
+ *   the 22 table ids — framing, ack, and per-write readback are identical
+ *   for all of them (proven live on M1).
  * - 70: per-stick tuning {b, c:slot, d, d1:{co:[x,y] center, ci, cv:[16x]
  *   EightPoint curve as [in0,out0..in7,out7] in 0..32767 (percent*327.68,
  *   32768 clamps to 32767), cpl/cpu/cpr/cpd stick-trigger radii, ...}}.
@@ -393,6 +395,11 @@ export const LJ_BUTTON_QUERY_IDS: ReadonlyArray<number> = [
   26, 27, 24, 25, 1, 2, 4, 5, 14, 15, 17, 18, 19, 20, 7, 8, 9, 10, 11, 16, 12, 3
 ]
 
+/** All 22 remappable button ids, ascending (the pad's answer order). */
+export const LJ_ALL_BUTTON_IDS: ReadonlyArray<number> = [
+  1, 2, 3, 4, 5, 7, 8, 9, 10, 11, 12, 14, 15, 16, 17, 18, 19, 20, 24, 25, 26, 27
+]
+
 /** Button table query for one slot. */
 export function ljButtonQuery(slot: LjSlot): number[] {
   return ljFrameOut({ c: LJ_REC_BUTTONS, g: { b: 1, c: slot, k: [...LJ_BUTTON_QUERY_IDS] } })
@@ -470,24 +477,27 @@ export const LJ_PHYSICAL: Readonly<Record<number, string>> = {
   27: 'L4'
 }
 
-/** Tournament 1:1 remap targets: stock (null) or A/B/X/Y. */
-export const LJ_REMAP_TARGETS: ReadonlyArray<number> = [1, 2, 4, 5]
+/** Tournament 1:1 remap targets: stock (null) or any button id. */
+export const LJ_REMAP_TARGETS: ReadonlyArray<number> = LJ_ALL_BUTTON_IDS
 
 function ljOriginAction(): LjButtonAction {
   return { t: 0, n: '', mr: 0, ms: 0, r: 0, sp: 0, ri: 0, v: [0, 0, 0, 0] }
 }
 
 /**
- * Build a tournament-safe extras write record: R5/L5/R4/L4 only, target
- * stock (null) or A/B/X/Y. Anything else throws — the main handler and any
+ * Build a tournament-safe 1:1 write record: any of the 22 table ids as
+ * source, stock (null) or any table id as target. The framing, ack, and
+ * per-write readback are identical for every id (proven live on M1), so no
+ * id is special — but anything outside the table, and any map_to besides
+ * Origin (t=0) / GamepadButton (t=2), throws. The main handler and any
  * future caller share this gate, never just the UI.
  */
 export function ljButtonWriteRecord(id: number, target: number | null): LjButtonRecord {
-  if (!Object.prototype.hasOwnProperty.call(LJ_PHYSICAL, id)) {
-    throw new Error(`leadjoy: button id ${id} is not a proven extra (R5/L5/R4/L4 only)`)
+  if (!LJ_ALL_BUTTON_IDS.includes(id)) {
+    throw new Error(`leadjoy: button id ${id} is outside the 22-id table`)
   }
-  if (target !== null && !LJ_REMAP_TARGETS.includes(target)) {
-    throw new Error(`leadjoy: target ${target} is outside tournament 1:1 (A/B/X/Y/stock only)`)
+  if (target !== null && !LJ_ALL_BUTTON_IDS.includes(target)) {
+    throw new Error(`leadjoy: target ${target} is outside tournament 1:1 (table ids/stock only)`)
   }
   return {
     k: id,

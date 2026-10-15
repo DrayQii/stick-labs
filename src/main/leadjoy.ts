@@ -44,19 +44,19 @@ function toArray(raw: unknown): number[] {
 }
 
 /**
- * Read one Main-slot snapshot: version, board, buttons, both sticks,
- * triggers. Opens the interface, runs the vendor navigation reads, closes.
+ * Read one slot snapshot: version, board, buttons, both sticks, triggers.
+ * Opens the interface, runs the vendor navigation reads, closes.
  * Throws when the handle is held (close the LeadJoy app) or a query times out.
  */
-export async function ljReadMainSnapshot(path: string): Promise<LjSnapshot> {
+export async function ljReadSnapshot(path: string, slot: LjSlot): Promise<LjSnapshot> {
   const handle = openHandle(path)
   try {
     const version = ljDecodeStream(await queryStream(handle, ljVersionQuery()))
     const board = ljDecodeStream(await queryStream(handle, ljBoardQuery()))
-    const table = await readButtonTable(handle, 0)
-    const left = ljDecodeStream(await queryStream(handle, ljStickQuery(0, 0)))
-    const right = ljDecodeStream(await queryStream(handle, ljStickQuery(0, 1)))
-    const trigger = ljDecodeStream(await queryStream(handle, ljTriggerQuery(0)))
+    const table = await readButtonTable(handle, slot)
+    const left = ljDecodeStream(await queryStream(handle, ljStickQuery(slot, 0)))
+    const right = ljDecodeStream(await queryStream(handle, ljStickQuery(slot, 1)))
+    const trigger = ljDecodeStream(await queryStream(handle, ljTriggerQuery(slot)))
     return ljBuildSnapshot(
       version,
       ljParseBoard(board),
@@ -68,6 +68,11 @@ export async function ljReadMainSnapshot(path: string): Promise<LjSnapshot> {
   } finally {
     closeHandle(handle)
   }
+}
+
+/** Main-slot snapshot (the pad's default active slot). */
+export function ljReadMainSnapshot(path: string): Promise<LjSnapshot> {
+  return ljReadSnapshot(path, 0)
 }
 
 export interface LjButtonWriteResult {

@@ -65,7 +65,9 @@ reproduces the captured Sub1 document byte-for-byte (`tests/leadjoy.ts`).
 
 In-app reads ship: `src/main/leadjoy.ts` runs the vendor navigation queries
 through the shared builders and returns a read-only snapshot, shown on the
-Saber Plus card (preview only — no editors, no writes).
+Saber Plus card. Buttons are fully writable 1:1 (all 22 ids × Main/Sub1/Sub2,
+verified writes through `leadjoy:writeButton`); sticks/triggers stay
+read-only until their write records are captured.
 
 ## Open (needs captures)
 

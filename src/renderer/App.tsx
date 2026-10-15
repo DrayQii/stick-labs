@@ -1793,6 +1793,43 @@ function StickCross({ lx, ly, rx, ry }: { lx: number; ly: number; rx: number; ry
   return <canvas ref={ref} className="plot" style={{ height: 190 }} />
 }
 
+function LjButtonRow({ snap, id, phys, busy, onPick }: {
+  snap: LjSnapshot
+  id: number
+  phys: string
+  busy: boolean
+  onPick: (target: number | null) => void
+}): JSX.Element {
+  const t = useT()
+  const row = snap.buttons.find((b) => b.id === id)
+  const nameToId: Record<string, number> = {}
+  for (const b of snap.buttons) nameToId[b.label] = b.id
+  const curId = row?.target == null ? '' : nameToId[row.target] ?? -1
+  const label = phys ? `${phys} · ${row?.label ?? ''}` : (row?.label ?? `ID ${id}`)
+  return (
+    <div className="row" style={{ gap: 8, alignItems: 'center' }}>
+      <span className="mono">{label}</span>
+      {curId === -1 ? (
+        <span className="mono">{row?.target}</span>
+      ) : (
+        <select
+          disabled={busy}
+          value={curId}
+          onChange={(e) => {
+            const v = e.target.value
+            onPick(v === '' ? null : Number(v))
+          }}
+        >
+          <option value="">{t('lj.stock')}</option>
+          {snap.buttons.map((b) => (
+            <option key={b.id} value={b.id}>{b.label}</option>
+          ))}
+        </select>
+      )}
+    </div>
+  )
+}
+
 export default function App(): JSX.Element {
   const [candidates, setCandidates] = useState<Candidate[]>([])
   const [connPath, setConnPath] = useState<string | null>(null)
@@ -1808,10 +1845,11 @@ export default function App(): JSX.Element {
   ).filter((c) => !(c.productId === 0x0575 && hasDirectPad))
   const [connected, setConnected] = useState(false)
   const [info, setInfo] = useState<DeviceInfo | null>(null)
-  // LeadJoy Saber Plus read-only preview (no GameSir handshake, no writes).
+  // LeadJoy Saber Plus (no GameSir handshake; buttons writable 1:1, sticks locked).
   const [ljPath, setLjPath] = useState<string | null>(null)
   const [ljSnap, setLjSnap] = useState<LjSnapshot | null>(null)
   const [ljBusy, setLjBusy] = useState(false)
+  const [ljSlot, setLjSlot] = useState<0 | 1 | 2>(0)
   const [pid, setPid] = useState<number | null>(null)
   const [model, setModel] = useState<ControllerModel | null>(null)
   const [slot, setSlot] = useState<number>(() => {
@@ -1979,12 +2017,13 @@ export default function App(): JSX.Element {
     void api().version().then(setAppVersion).catch(() => undefined)
   }, [])
 
-  async function readLeadJoy(): Promise<void> {
+  async function readLeadJoy(slot: 0 | 1 | 2): Promise<void> {
     if (!ljPath || ljBusy) return
     setLjBusy(true)
     setErr(null)
     try {
-      setLjSnap(await api().leadjoyReadMain(ljPath))
+      setLjSlot(slot)
+      setLjSnap(await api().leadjoyReadSlot({ path: ljPath, slot }))
     } catch (e) {
       setErr((e as Error).message)
     } finally {
@@ -1992,15 +2031,15 @@ export default function App(): JSX.Element {
     }
   }
 
-  /** Tournament 1:1 extras remap (Stock/A/B/X/Y only — main refuses the rest). */
+  /** Tournament 1:1 remap (stock or any table id — main refuses the rest). */
   async function writeLeadJoy(id: number, target: number | null): Promise<void> {
     if (!ljPath || ljBusy) return
     setLjBusy(true)
     setErr(null)
     setMsg(t('lj.writing'))
     try {
-      await api().leadjoyWriteButton({ path: ljPath, id, target })
-      setLjSnap(await api().leadjoyReadMain(ljPath))
+      await api().leadjoyWriteButton({ path: ljPath, slot: ljSlot, id, target })
+      setLjSnap(await api().leadjoyReadSlot({ path: ljPath, slot: ljSlot }))
       setMsg(t('msg.saved'))
     } catch (e) {
       setErr((e as Error).message)
@@ -2031,6 +2070,7 @@ export default function App(): JSX.Element {
         setPid(cand?.productId ?? null)
         setBlob(null)
         setLjSnap(null)
+        setLjSlot(0)
         setLjPath(pre.id === 'SaberPlus' ? path : null)
         setMsg(`${pre.marketingName} detected — ${pre.supportNote}`)
         return
@@ -2040,6 +2080,7 @@ export default function App(): JSX.Element {
       setConnected(true)
       setLjPath(null)
       setLjSnap(null)
+      setLjSlot(0)
       setInfo(res)
       setPid(cand?.productId ?? null)
       const m = identifyModel(cand?.product, cand?.productId) ?? null
@@ -2415,6 +2456,7 @@ export default function App(): JSX.Element {
                 setBlob(null)
                 setLjPath(null)
                 setLjSnap(null)
+                setLjSlot(0)
                 setDirty(false)
               }}
             >
@@ -2515,10 +2557,20 @@ export default function App(): JSX.Element {
           )}
           {!connected && model?.id === 'SaberPlus' && ljPath && (
             <div className="card" style={{ marginTop: 12 }}>
-              <h3>{model.marketingName} — {t('lj.mainSlot')}</h3>
+              <h3>{model.marketingName} — {(['Main', 'Sub1', 'Sub2'] as const)[ljSlot]}</h3>
               <p>{t('lj.lockedNote')}</p>
               <div className="row">
-                <button className="btn sm primary" disabled={ljBusy} onClick={() => void readLeadJoy()}>
+                {(['Main', 'Sub1', 'Sub2'] as const).map((name, i) => (
+                  <button
+                    key={name}
+                    className={`choice-btn${i === ljSlot ? ' active' : ''}`}
+                    disabled={ljBusy}
+                    onClick={() => void readLeadJoy(i as 0 | 1 | 2)}
+                  >
+                    <span className="choice-label">{name}</span>
+                  </button>
+                ))}
+                <button className="btn sm primary" disabled={ljBusy} onClick={() => void readLeadJoy(ljSlot)}>
                   {ljBusy ? t('lj.reading') : t('lj.read')}
                 </button>
               </div>
@@ -2541,35 +2593,28 @@ export default function App(): JSX.Element {
                   </div>
                   <div>
                     <strong>{t('lj.buttons')}</strong>
-                    {[24, 25, 26, 27].map((id) => {
-                      const row = ljSnap.buttons.find((b) => b.id === id)
-                      const phys = LJ_PHYSICAL[id] ?? row?.label ?? `ID ${id}`
-                      const curId = row?.target == null ? '' : ({ A: 1, B: 2, X: 4, Y: 5 } as Record<string, number>)[row.target] ?? -1
-                      return (
-                        <div key={id} className="row" style={{ gap: 8, alignItems: 'center' }}>
-                          <span className="mono">{phys} · {row?.label ?? ''}</span>
-                          {curId === -1 ? (
-                            <span className="mono">{row?.target}</span>
-                          ) : (
-                            <select
-                              disabled={ljBusy}
-                              value={curId}
-                              onChange={(e) => {
-                                const v = e.target.value
-                                void writeLeadJoy(id, v === '' ? null : Number(v))
-                              }}
-                            >
-                              <option value="">{t('lj.stock')}</option>
-                              <option value="1">A</option>
-                              <option value="2">B</option>
-                              <option value="4">X</option>
-                              <option value="5">Y</option>
-                            </select>
-                          )}
-                        </div>
-                      )
-                    })}
-                    <div>{ljSnap.buttons.filter((b) => b.target === null).length} {t('lj.stock')}</div>
+                    {[24, 25, 26, 27].map((id) => (
+                      <LjButtonRow
+                        key={id}
+                        snap={ljSnap}
+                        id={id}
+                        phys={LJ_PHYSICAL[id] ?? ''}
+                        busy={ljBusy}
+                        onPick={(target) => void writeLeadJoy(id, target)}
+                      />
+                    ))}
+                    {ljSnap.buttons
+                      .filter((b) => b.id !== 24 && b.id !== 25 && b.id !== 26 && b.id !== 27)
+                      .map((b) => (
+                        <LjButtonRow
+                          key={b.id}
+                          snap={ljSnap}
+                          id={b.id}
+                          phys=""
+                          busy={ljBusy}
+                          onPick={(target) => void writeLeadJoy(b.id, target)}
+                        />
+                      ))}
                   </div>
                 </div>
               )}
