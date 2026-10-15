@@ -105,11 +105,15 @@ END/ANTI-END are point 8 (in/out) — `ljCurveZones` / `ljFitZones` /
 - Keyboard/mouse target `t` values (out of 1:1 scope; A/B/Y/X are proven).
 - Live input: the pad's vendor interface 0 (class 0xFF/0x5D/0x01, EP 0x81 IN,
   32-byte reports per its config descriptor) is exposed by Windows as HID node
-  `IG_01` (usage 0x0001/0x0005), but node-hid reads NOTHING from it — event
-  API, async `read()`, and blocking `readSync()`, both exclusive and shared,
-  all silent for 40 s with both sticks moved (live hardware, 2026-10-15), and
-  the 0xFF80 config interface pushes no unsolicited frames either. The Sticks
-  tab's live cross therefore stays neutral for this pad. Next step: an
-  unfiltered USBPcap root-hub capture (`USBPcapCMD -A`) while circling the
-  sticks — the existing `stickss`/`triggers` captures were filtered to the
-  config endpoint, so they prove nothing about the input path.
+  `IG_01` (usage 0x0001/0x0005), but hidapi reads NOTHING from it — event API,
+  async `read()`, and blocking `readSync()`, both hidraw and libusb backends,
+  exclusive and shared, all silent for 40 s with both sticks moved (live
+  hardware, 2026-10-15); the 0xFF80 config interface pushes no unsolicited
+  frames either. USBPcapCMD cannot settle it here either: it needs admin
+  (writes a 24-byte header and exits as a normal user) and elevation shows no
+  prompt in this environment. The Sticks tab's live cross is therefore driven
+  by the **system Gamepad API** (`navigator.getGamepads()` in the renderer) —
+  Windows exposes the pad as a standard Xbox-compatible gamepad, so it needs no
+  capture, driver or admin. Raw endpoint-level decoding of the 32-byte stream
+  stays open for a future unfiltered `USBPcapCMD -A` capture, but nothing in
+  the app depends on it.
