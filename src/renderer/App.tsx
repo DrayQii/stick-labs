@@ -3090,7 +3090,7 @@ export default function App(): JSX.Element {
           </div>
           )}
         </header>
-        <div className={`content${showFxCard ? ' content-fill' : ''}`}>
+        <div className="content">
           {showSafety && (
             <div className="card" style={{ marginBottom: 16, borderColor: 'var(--warn)' }}>
               <h3>{t('safety.title')}</h3>
@@ -3127,12 +3127,12 @@ export default function App(): JSX.Element {
             <div className="msg"><h3>{t('msg.connect')}</h3><p>{t('msg.models')} {t('msg.connectBody')}</p></div>
           )}
           {showFxCard && (
-            <>
+            <div className="msg fx-panel">
               {fxDInputCandidates.map((c) => (
                 <FlydigiCard key={c.path} mode="DInput" busy={fx.busy} onConnect={() => void connect(c.path)} />
               ))}
               {fxXInputDetected && <FlydigiCard mode="XInput" busy={fx.busy} onConnect={() => void connectFlydigi(null)} />}
-            </>
+            </div>
           )}
           {isLj && (
             <>
