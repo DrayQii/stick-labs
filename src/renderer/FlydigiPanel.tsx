@@ -7,7 +7,7 @@
  * back on mismatch.
  */
 import { useState } from 'react'
-import { FX_CURVE_CUSTOM, FX_CURVE_DEFAULT, FX_CURVE_DEFAULT_POINTS, fxDeadzonePoints, fxTriggerRange, type FxCurve, type FxSnapshot, type FxTriggerRaw, type FxVibration } from '@shared/flydigi-xinput'
+import { FX_KEY_DEFAULT, FX_KEY_NAMES, FX_KEY_ORDER, FX_CURVE_CUSTOM, FX_CURVE_DEFAULT, FX_CURVE_DEFAULT_POINTS, fxDeadzonePoints, fxTriggerRange, type FxCurve, type FxSnapshot, type FxTriggerRaw, type FxVibration } from '@shared/flydigi-xinput'
 import { api } from './api'
 
 const sc = (b: number): number => (b > 127 ? b - 256 : b)
@@ -81,6 +81,7 @@ export default function FlydigiPanel(): JSX.Element {
   const [vib, setVib] = useState<FxVibration | null>(null)
   const [left, setLeft] = useState(0)
   const [right, setRight] = useState(0)
+  const [keyEdits, setKeyEdits] = useState<Record<number, number>>({})
   const [triggers, setTriggers] = useState<{ left: FxTriggerRaw; right: FxTriggerRaw } | null>(null)
   const [curves, setCurves] = useState<{ left: FxCurve; right: FxCurve } | null>(null)
   const [save, setSave] = useState(true)
@@ -94,6 +95,7 @@ export default function FlydigiPanel(): JSX.Element {
     setRight(Math.max(0, sc(s.sticks.right.center)))
     setCurves(s.curves)
     setTriggers(s.triggers)
+    setKeyEdits({})
   }
 
   async function load(cfgId?: number): Promise<void> {
@@ -135,6 +137,7 @@ export default function FlydigiPanel(): JSX.Element {
         rightCenter: right & 0xff,
         leftCurve: curves.left,
         rightCurve: curves.right,
+        keys: keyEdits,
         leftTrigger: triggers.left,
         rightTrigger: triggers.right,
         save
@@ -219,6 +222,51 @@ export default function FlydigiPanel(): JSX.Element {
             <CurveEditor title="Left stick curve" curve={curves.left} onChange={(c) => setCurves({ ...curves, left: c })} />
             <CurveEditor title="Right stick curve" curve={curves.right} onChange={(c) => setCurves({ ...curves, right: c })} />
             </details>
+          </div>
+
+          <div>
+            <h4>Buttons</h4>
+            <div className="hint" style={{ margin: '4px 0 8px' }}>
+              Pick what each button sends. &quot;Default&quot; means no remap. Changes are written with Apply. Turbo and macro entries are shown but must be edited in Space Station.
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(190px, 1fr))', gap: 8 }}>
+              {FX_KEY_ORDER.map((id) => {
+                const cur = snap.keys.find((k) => k.id === id)!
+                const value = keyEdits[id] ?? cur.target
+                const locked = cur.kind !== 'key'
+                return (
+                  <label key={id} style={{ display: 'block' }}>
+                    <div className="row spread">
+                      <span className="label">{FX_KEY_NAMES[id]}</span>
+                      {id in keyEdits && <span className="mono">edited</span>}
+                    </div>
+                    <select
+                      className="input"
+                      style={{ width: '100%' }}
+                      disabled={locked}
+                      value={locked ? 'locked' : value}
+                      onChange={(e) => {
+                        const v = Number(e.target.value)
+                        setKeyEdits((prev) => {
+                          const next = { ...prev }
+                          if (v === cur.target) delete next[id]
+                          else next[id] = v
+                          return next
+                        })
+                      }}
+                    >
+                      {locked && <option value="locked">{cur.kind === 'turbo' ? 'Turbo (Space Station)' : 'Macro (Space Station)'}</option>}
+                      <option value={FX_KEY_DEFAULT}>Default ({FX_KEY_NAMES[id]})</option>
+                      {FX_KEY_ORDER.map((t) => (
+                        <option key={t} value={t}>
+                          {FX_KEY_NAMES[t]}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                )
+              })}
+            </div>
           </div>
 
           <div>

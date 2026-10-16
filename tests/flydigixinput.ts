@@ -17,7 +17,10 @@ import {
   fxReadConfigId,
   fxWriteStart,
   fxDecodeCurves,
+  fxDecodeKeys,
   fxDecodeSticks,
+  fxSetKeyTarget,
+  FX_KEY_DEFAULT,
   fxDecodeTriggers,
   fxDecodeVibration,
   fxDiffPacks,
@@ -137,6 +140,18 @@ const rec = (t: { type: number; zero: number; p1x: number; p1y: number; p2x: num
 check('trigger start 20 / end 255 matches Space Station', rec(fxTriggerRange(trig.left, 20, 255)) === '00 14 14 14 ff ff ff', rec(fxTriggerRange(trig.left, 20, 255)))
 check('trigger start 0 / end 110 matches Space Station', rec(fxTriggerRange(trig.left, 0, 110)) === '00 00 00 00 6e 6e 6e', rec(fxTriggerRange(trig.left, 0, 110)))
 check('trigger end byte lands at 129', tEdit[129] === 231 && tEdit.slice(0, 129).every((v, i) => v === blob[i]) && tEdit.slice(130).every((v, i) => v === blob[130 + i]))
+
+// --- button remaps, against Space Station's logged writes (A -> B, then B -> A) ---
+const keys0 = fxDecodeKeys(blob)
+check('fixture: A and B unremapped, M1->A, M2->B', keys0.find((k) => k.id === 4)!.target === FX_KEY_DEFAULT && keys0.find((k) => k.id === 18)!.target === 4 && keys0.find((k) => k.id === 19)!.target === 5)
+const aToB = fxSetKeyTarget(blob, 4, 5)
+const aToBpack = fxDiffPacks(blob, aToB)
+check('A->B is one pack (2) matching Space Station', aToBpack.length === 1 && aToBpack[0].startPack === 2 && hex(aToBpack[0].packs[0]) === '00 00 ff 00 00 05 00 00 ff 00', hex(aToBpack[0]?.packs[0] ?? new Uint8Array(0)))
+const swapped = fxSetKeyTarget(aToB, 5, 4)
+const swapPack = fxDiffPacks(blob, swapped)
+check('then B->A matches Space Station', swapPack.length === 1 && hex(swapPack[0].packs[0]) === '00 00 ff 00 00 05 00 00 04 00', hex(swapPack[0].packs[0]))
+check('clearing a remap restores the default entry', hex(fxSetKeyTarget(aToB, 4, FX_KEY_DEFAULT)) === hex(blob))
+check('non-Direwolf key refused', (() => { try { fxSetKeyTarget(blob, 30, 4); return false } catch { return true } })())
 
 // Ack parsing / blob assembly from real reply shapes.
 const rep = (cmd: number, data: number[]): Uint8Array => {

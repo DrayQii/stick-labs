@@ -143,6 +143,12 @@ handle('flydigix:write', (patch: FxPatch) => {
   for (const t of [patch.leftTrigger, patch.rightTrigger]) {
     if (t && !Object.values(t).every(byte)) throw new Error('flydigi: trigger values must be bytes 0..255')
   }
+  if (patch.keys !== undefined) {
+    if (typeof patch.keys !== 'object' || patch.keys === null) throw new Error('flydigi: keys must be an object')
+    for (const [id, target] of Object.entries(patch.keys)) {
+      if (!byte(Number(id)) || !byte(target)) throw new Error('flydigi: key ids and targets must be bytes 0..255')
+    }
+  }
   const v = patch.vibration
   if (v && ![v.left?.min, v.left?.max, v.left?.scale, v.right?.min, v.right?.max, v.right?.scale].every(byte)) {
     throw new Error('flydigi: vibration values must be 0..255')

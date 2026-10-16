@@ -166,3 +166,14 @@ the slider values are the bytes (plain 0..255), `zero` = Start, `end` = End, and
 writes point 1 = (Start, Start), point 2 = (End, End); `type` stays 0. E.g. start 20 / end
 255 gives `00 14 14 14 ff ff ff`, start 0 / end 110 gives `00 00 00 00 6e 6e 6e`.
 
+Button remaps (key table at blob 13, 32 entries x 3 bytes, indexed by Space Station's
+ControllerKey id: Up 0, Right 1, Down 2, Left 3, A 4, B 5, Select 6, X 7, Y 8, Start 9,
+LB 10, RB 11, LT 12, RT 13, L3 14, R3 15, M1 18, M2 19, Menu 24, Home 27). Entry =
+`target, enableType, frequency`: target 0xFF = default, 32 = macro, frequency > 0 = turbo.
+Verified from a Space Station swap on config id 0 (A->B then B->A): the packs it wrote
+were `00 00 ff 00 00 05 00 00 ff 00` and `... 05 00 00 04 00` (pack 2), i.e. entry
+`05 00 00` for A and `04 00 00` for B. Stick Labs writes plain remaps as `[target, 0, 0]`.
+
+Mode note: launching Space Station flips a DInput-mode pad (04B4:2412) back to XInput
+(045E:028E), so the plain-HID transport only lasts while Space Station is not running.
+

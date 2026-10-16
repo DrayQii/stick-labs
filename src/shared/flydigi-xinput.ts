@@ -370,6 +370,70 @@ export function fxSetTrigger(blob: Uint8Array, side: 0 | 1, t: FxTriggerRaw): Ui
   return out
 }
 
+// --- button remaps (key table: 32 entries x 3 bytes at offset 13) ---
+
+/** Space Station's ControllerKey ids for the keys a Direwolf has (the table is indexed by key id). */
+export const FX_KEY_NAMES: Readonly<Record<number, string>> = {
+  0: 'D-pad Up',
+  1: 'D-pad Right',
+  2: 'D-pad Down',
+  3: 'D-pad Left',
+  4: 'A',
+  5: 'B',
+  6: 'Select',
+  7: 'X',
+  8: 'Y',
+  9: 'Start',
+  10: 'LB',
+  11: 'RB',
+  12: 'LT',
+  13: 'RT',
+  14: 'L3',
+  15: 'R3',
+  18: 'M1',
+  19: 'M2',
+  24: 'Menu',
+  27: 'Home'
+}
+/** Keys in a sensible display order. */
+export const FX_KEY_ORDER: readonly number[] = [4, 5, 7, 8, 10, 11, 12, 13, 6, 9, 24, 27, 0, 1, 2, 3, 14, 15, 18, 19]
+export const FX_KEY_DEFAULT = 0xff
+const FX_KEY_MACRO = 32
+
+export interface FxKeyEntry {
+  /** Key id this entry belongs to. */
+  id: number
+  /** 'key' = plain remap (target = FX_KEY_DEFAULT when unremapped); turbo/macro are shown but not edited. */
+  kind: 'key' | 'turbo' | 'macro'
+  target: number
+}
+
+export function fxDecodeKeys(blob: Uint8Array): FxKeyEntry[] {
+  return FX_KEY_ORDER.map((id) => {
+    const o = FX_OFF.keys + id * 3
+    const [t, , freq] = [blob[o], blob[o + 1], blob[o + 2]]
+    const kind = t === FX_KEY_MACRO ? 'macro' : freq > 0 ? 'turbo' : 'key'
+    return { id, kind, target: t > FX_KEY_MACRO && t !== FX_KEY_DEFAULT ? FX_KEY_DEFAULT : t }
+  })
+}
+
+/**
+ * Point key `id` at `target` (FX_KEY_DEFAULT clears the remap). Writes the entry
+ * as `[target, 0, 0]`, which is what Space Station writes for a plain remap
+ * (A->B gave `05 00 00`). Turbo and macro entries are refused.
+ */
+export function fxSetKeyTarget(blob: Uint8Array, id: number, target: number): Uint8Array {
+  if (!(id in FX_KEY_NAMES)) throw new Error(`fx: key ${id} is not a Direwolf key`)
+  if (target !== FX_KEY_DEFAULT && !(target in FX_KEY_NAMES)) throw new Error(`fx: key ${id} cannot be mapped to ${target}`)
+  const o = FX_OFF.keys + id * 3
+  if (blob[o] === FX_KEY_MACRO || blob[o + 2] > 0) throw new Error(`fx: ${FX_KEY_NAMES[id]} has a turbo/macro entry; edit it in Space Station`)
+  const out = blob.slice()
+  out[o] = target & 0xff
+  out[o + 1] = 0
+  out[o + 2] = 0
+  return out
+}
+
 // --- session-level shapes shared with the renderer ---
 
 export interface FxSnapshot {
@@ -385,6 +449,7 @@ export interface FxSnapshot {
   sticks: { left: FxStickRaw; right: FxStickRaw }
   curves: { left: FxCurve; right: FxCurve }
   triggers: { left: FxTriggerRaw; right: FxTriggerRaw }
+  keys: FxKeyEntry[]
 }
 
 export interface FxPatch {
@@ -397,6 +462,8 @@ export interface FxPatch {
   rightCurve?: FxCurve
   leftTrigger?: FxTriggerRaw
   rightTrigger?: FxTriggerRaw
+  /** key id -> target key id (255 = default); only the keys listed are changed. */
+  keys?: Record<number, number>
   /** Persist with the 0x50 save after a verified write (survives a replug). */
   save?: boolean
 }
