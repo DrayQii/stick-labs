@@ -5,7 +5,7 @@
  * Station closed (docs/flydigi.md). Every write is read back by the main
  * process and rolled back on mismatch.
  */
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { FX_KEY_DEFAULT, FX_KEY_NAMES, FX_KEY_ORDER, FX_CURVE_CUSTOM, FX_CURVE_DEFAULT, FX_CURVE_DEFAULT_POINTS, fxDeadzonePoints, fxTriggerRange, type FxCurve, type FxSnapshot, type FxTriggerRaw, type FxVibration } from '@shared/flydigi-xinput'
 import { api } from './api'
 
@@ -85,6 +85,24 @@ export default function FlydigiPanel(props: { onClose?: () => void }): JSX.Eleme
   const [curves, setCurves] = useState<{ left: FxCurve; right: FxCurve } | null>(null)
   const [save, setSave] = useState(true)
   const [busy, setBusy] = useState(false)
+  const [mode, setMode] = useState<'dinput' | 'xinput' | 'none' | null>(null)
+
+  // Follow the pad's real mode (it changes on replug, mode switches and when Space Station launches).
+  useEffect(() => {
+    let alive = true
+    const poll = (): void => {
+      api()
+        .flydigiXMode()
+        .then((m) => alive && setMode(m))
+        .catch(() => undefined)
+    }
+    poll()
+    const t = setInterval(poll, 2000)
+    return () => {
+      alive = false
+      clearInterval(t)
+    }
+  }, [])
   const [msg, setMsg] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null)
 
   const adopt = (s: FxSnapshot): void => {
@@ -197,9 +215,16 @@ export default function FlydigiPanel(props: { onClose?: () => void }): JSX.Eleme
         <button className="btn" disabled={busy} onClick={() => void load(snap?.cfgId)}>
           {snap ? 'Re-read' : 'Read pad'}
         </button>
-        <button className="btn ghost" disabled={busy} onClick={() => void toXInput()} title="Send the pad back to XInput mode so games see an Xbox controller">
-          Switch to XInput
-        </button>
+        {mode === 'dinput' && (
+          <button className="btn ghost" disabled={busy} onClick={() => void toXInput()} title="Send the pad back to XInput mode so games see an Xbox controller">
+            Switch to XInput
+          </button>
+        )}
+        {mode && (
+          <span className="mono" style={{ alignSelf: 'center' }}>
+            {mode === 'dinput' ? 'DInput mode' : mode === 'xinput' ? 'XInput mode' : 'pad not found'}
+          </span>
+        )}
         {snap && (
           <>
             <div className="row" style={{ gap: 6 }}>

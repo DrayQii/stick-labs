@@ -105,6 +105,12 @@ function xinputDirewolfPresent(): boolean {
   }
 }
 
+/** Which mode the Direwolf is in right now: 'dinput' (04B4:2412 vendor interface), 'xinput', or 'none'. */
+export function fxHidMode(): 'dinput' | 'xinput' | 'none' {
+  if (dinputPath()) return 'dinput'
+  return xinputDirewolfPresent() ? 'xinput' : 'none'
+}
+
 function spaceStationRunning(): boolean {
   try {
     const r = spawnSync('tasklist', ['/FO', 'CSV', '/NH'], { encoding: 'utf8', windowsHide: true })
