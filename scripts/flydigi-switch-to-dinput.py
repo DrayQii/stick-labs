@@ -70,6 +70,8 @@ dll.WriteData2Usb.restype = ctypes.c_bool
 
 cb = CB(lambda p, ctx: True)  # we only send; keep a reference so it is not collected
 res = dll.InitXboxMonitorRes(sys_path.encode(), False, cb, 0)
+if res == 5:
+    finish(False, "access denied starting the Xbox 360 filter driver: this helper must run as administrator.")
 if res != 0:
     finish(False, "the Xbox 360 filter driver did not start (code %d). Close Flydigi Space Station and its service." % res)
 time.sleep(1.0)
