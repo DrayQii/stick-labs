@@ -126,6 +126,11 @@ handle('flydigix:write', (patch: FxPatch) => {
   if (!patch || typeof patch !== 'object') throw new Error('flydigi: empty patch')
   if (patch.leftCenter !== undefined && !byte(patch.leftCenter)) throw new Error('flydigi: leftCenter must be 0..255')
   if (patch.rightCenter !== undefined && !byte(patch.rightCenter)) throw new Error('flydigi: rightCenter must be 0..255')
+  for (const c of [patch.leftCurve, patch.rightCurve]) {
+    if (c && !(Array.isArray(c.points) && c.points.length === 9 && [...c.points, c.type, c.circularity, c.edge].every(byte))) {
+      throw new Error('flydigi: a curve needs 9 points and type/circularity/edge as bytes 0..255')
+    }
+  }
   const v = patch.vibration
   if (v && ![v.left?.min, v.left?.max, v.left?.scale, v.right?.min, v.right?.max, v.right?.scale].every(byte)) {
     throw new Error('flydigi: vibration values must be 0..255')

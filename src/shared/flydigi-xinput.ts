@@ -36,7 +36,8 @@ export const FX_OFF = {
   triggers: 123, // 14 bytes, to 137
   motion: 137, // 8 bytes, to 145
   vibration: 145, // 9 bytes, to 154
-  dataVersion: 225 // u16 LE
+  dataVersion: 225, // u16 LE
+  curves: 790 // V3.1 extra: 2 x 12 bytes (type, 9 points, circularity, edge), to 814
 } as const
 
 function frame(cmd: number, ...args: number[]): Uint8Array {
@@ -218,6 +219,45 @@ export function fxSetStickCenter(blob: Uint8Array, side: 0 | 1, center: number):
   return out
 }
 
+/** Sensitivity type byte: 0 = Default ramp, 3 = Custom (the 9 points apply). 1/2 are Quick/Slow presets, not decoded. */
+export const FX_CURVE_DEFAULT = 0
+export const FX_CURVE_CUSTOM = 3
+/** The stock ramp Space Station leaves on an untouched stick (right stick of the real read). */
+export const FX_CURVE_DEFAULT_POINTS: readonly number[] = [50, 63, 75, 88, 100, 113, 125, 138, 150]
+export const FX_CURVE_POINTS = 9
+
+export interface FxCurve {
+  type: number
+  /** Nine output samples across the input range (bytes; the stock ramp runs 50..150). */
+  points: number[]
+  /** 1 = Circular (proven on the left stick); 0 = Rectangle. */
+  circularity: number
+  /** Raw edge byte, preserved; not decoded. */
+  edge: number
+}
+
+export function fxDecodeCurves(blob: Uint8Array): { left: FxCurve; right: FxCurve } {
+  const rec = (o: number): FxCurve => ({
+    type: blob[o],
+    points: Array.from(blob.subarray(o + 1, o + 1 + FX_CURVE_POINTS)),
+    circularity: blob[o + 10],
+    edge: blob[o + 11]
+  })
+  return { left: rec(FX_OFF.curves), right: rec(FX_OFF.curves + 12) }
+}
+
+/** Returns a copy of `blob` with one stick's curve record replaced. */
+export function fxSetCurve(blob: Uint8Array, side: 0 | 1, curve: FxCurve): Uint8Array {
+  if (curve.points.length !== FX_CURVE_POINTS) throw new Error(`fx: a curve has ${FX_CURVE_POINTS} points`)
+  const out = blob.slice()
+  const o = FX_OFF.curves + side * 12
+  out[o] = curve.type & 0xff
+  curve.points.forEach((v, i) => (out[o + 1 + i] = v & 0xff))
+  out[o + 10] = curve.circularity & 0xff
+  out[o + 11] = curve.edge & 0xff
+  return out
+}
+
 // --- session-level shapes shared with the renderer ---
 
 export interface FxSnapshot {
@@ -225,12 +265,15 @@ export interface FxSnapshot {
   dataVersion: number
   vibration: FxVibration
   sticks: { left: FxStickRaw; right: FxStickRaw }
+  curves: { left: FxCurve; right: FxCurve }
 }
 
 export interface FxPatch {
   vibration?: FxVibration
   leftCenter?: number
   rightCenter?: number
+  leftCurve?: FxCurve
+  rightCurve?: FxCurve
   /** Persist with the 0x50 save after a verified write (survives a replug). */
   save?: boolean
 }

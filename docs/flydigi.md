@@ -117,6 +117,16 @@ Proven on a Direwolf 4 (2026-10-16, via `XboxComm64.dll` `InitXboxMonitorRes` /
   the original back restored a byte-identical blob. `0x50 03` (save) was not
   sent in this test.
 
+Stick curves (blob 790..814, V3.1 extra; verified against a real read):
+per stick 12 bytes: `type` (0 Default, 3 Custom; 1/2 presets not decoded),
+nine curve points, `circularity` (1 Circular, 0 Rectangle), `edge` (raw).
+Left stick at 790, right at 802. Space Station computes the points itself from
+its deadzone setting and writes them with the main joystick record's `center`
+byte (109+1 / 116+1): on this pad centre 13 gave a 35..150 linear ramp,
+centre -13 gave 63..150, the untouched stock ramp is 50..150. The exact
+formula from the deadzone slider to centre/start is not decoded; Stick Labs
+edits the raw points and centre.
+
 Decompiled sources stay out of the repo.
 
 Capture notes: USBPcap's `usb.idVendor` field only exists in the descriptor

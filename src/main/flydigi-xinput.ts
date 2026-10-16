@@ -19,6 +19,7 @@ import {
   fxAssembleBlob,
   fxCfgIdFromAck,
   fxDataVersion,
+  fxDecodeCurves,
   fxDecodeSticks,
   fxDecodeVibration,
   fxDiffPacks,
@@ -29,6 +30,7 @@ import {
   fxRunFrames,
   fxSave,
   fxSaveAcked,
+  fxSetCurve,
   fxSetStickCenter,
   type FxAck,
   type FxPatch,
@@ -170,7 +172,7 @@ async function writeBlob(cfgId: number, from: Uint8Array, to: Uint8Array): Promi
 }
 
 function snapshot(cfgId: number, blob: Uint8Array): FxSnapshot {
-  return { cfgId, dataVersion: fxDataVersion(blob), vibration: fxDecodeVibration(blob), sticks: fxDecodeSticks(blob) }
+  return { cfgId, dataVersion: fxDataVersion(blob), vibration: fxDecodeVibration(blob), sticks: fxDecodeSticks(blob), curves: fxDecodeCurves(blob) }
 }
 
 /** Serialise sessions: the pad answers one command at a time. */
@@ -207,6 +209,8 @@ export function fxXInputWrite(patch: FxPatch): Promise<{ verified: boolean; rest
     if (patch.vibration) want = fxEncodeVibration(want, patch.vibration)
     if (patch.leftCenter !== undefined) want = fxSetStickCenter(want, 0, patch.leftCenter)
     if (patch.rightCenter !== undefined) want = fxSetStickCenter(want, 1, patch.rightCenter)
+    if (patch.leftCurve) want = fxSetCurve(want, 0, patch.leftCurve)
+    if (patch.rightCurve) want = fxSetCurve(want, 1, patch.rightCurve)
     const changedPacks = fxDiffPacks(before, want).reduce((n, r) => n + r.packs.length, 0)
     if (changedPacks === 0) return { verified: true, restored: false, saved: false, changedPacks }
 

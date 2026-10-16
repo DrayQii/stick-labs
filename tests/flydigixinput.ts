@@ -7,6 +7,10 @@ import {
   FX_BLOB_LEN,
   fxAssembleBlob,
   fxDataVersion,
+  FX_CURVE_CUSTOM,
+  FX_CURVE_DEFAULT,
+  FX_CURVE_DEFAULT_POINTS,
+  fxDecodeCurves,
   fxDecodeSticks,
   fxDecodeVibration,
   fxDiffPacks,
@@ -16,6 +20,7 @@ import {
   fxRunFrames,
   fxSave,
   fxSaveAcked,
+  fxSetCurve,
   fxSetStickCenter,
   type FxAck
 } from '../src/shared/flydigi-xinput.ts'
@@ -56,6 +61,16 @@ check('stick centre change is one pack (11)', dz.length === 1 && dz[0].startPack
 // Two separated edits -> two runs.
 const two = fxDiffPacks(blob, fxSetStickCenter(fxEncodeVibration(blob, { ...vib, left: { ...vib.left, scale: 1 } }), 0, 5))
 check('separate edits make separate runs', two.length === 2 && two[0].startPack === 11 && two[1].startPack === 14)
+
+// --- stick curves (offset 790), against the real read ---
+const curves = fxDecodeCurves(blob)
+check('left curve: Custom, 35..150, circular', curves.left.type === FX_CURVE_CUSTOM && curves.left.points.join() === '35,49,64,78,92,106,121,135,150' && curves.left.circularity === 1)
+check('right curve: Default stock ramp', curves.right.type === FX_CURVE_DEFAULT && curves.right.points.join() === FX_CURVE_DEFAULT_POINTS.join())
+check('curve set round-trips', hex(fxSetCurve(fxSetCurve(blob, 0, curves.left), 1, curves.right)) === hex(blob))
+const bumped = fxSetCurve(blob, 1, { ...curves.right, type: FX_CURVE_CUSTOM, points: curves.right.points.map((p) => p + 1) })
+const cdiff = fxDiffPacks(blob, bumped)
+check('right curve edit spans packs 80..81', cdiff.length === 1 && cdiff[0].startPack === 80 && cdiff[0].packs.length === 2, JSON.stringify(cdiff.map((r) => [r.startPack, r.packs.length])))
+check('curve edit leaves the rest of the blob alone', bumped.slice(0, 802).every((v, i) => v === blob[i]) && bumped.slice(815).every((v, i) => v === blob[815 + i]))
 
 // Ack parsing / blob assembly from real reply shapes.
 const rep = (cmd: number, data: number[]): Uint8Array => {
