@@ -23,6 +23,7 @@ import { createPortal } from 'react-dom'
 import { LANGS, LangContext, tr, useLangState, useT } from './i18n'
 import { THEMES, ThemeContext, useThemeState } from './theme'
 import type { DeepPollResult } from '@shared/deeppoll'
+import FlydigiPanel from './FlydigiPanel'
 import { LJ_HID_KEYS, LJ_MOUSE_BUTTONS, LJ_MAP_GAMEPAD, LJ_MAP_KEYBOARD, LJ_MAP_MOUSE, LJ_SHAPES, LJ_PHYSICAL, ljCurveZones, ljFitZones, ljLinearCurve, ljPercentToWire, ljSampleDesign, ljTargetLabel, type LjButtonTarget, type LjSnapshot, type LjStickZones, type LjTriggerZones } from '@shared/leadjoy'
 
 
@@ -2270,7 +2271,7 @@ export default function App(): JSX.Element {
   const [busy, setBusy] = useState(false)
   const [loadId, setLoadId] = useState(0)
   const [savedAt, setSavedAt] = useState<{ slot: number; at: number } | null>(null)
-  const [tab, setTab] = useState<'sticks' | 'device' | 'buttons' | 'profiles' | 'lab' | 'calibrate' | 'language' | 'theme'>('sticks')
+  const [tab, setTab] = useState<'sticks' | 'device' | 'buttons' | 'profiles' | 'lab' | 'calibrate' | 'language' | 'theme' | 'flydigi'>('sticks')
   const [measuring, setMeasuring] = useState<{ left: number; suggestion: { dev: number; pct10: number } | null } | null>(null)
   const wanderRef = useRef(0)
   const modelLenRef = useRef(PROFILE_LENGTH)
@@ -2970,6 +2971,12 @@ export default function App(): JSX.Element {
             </button>
             <button type="button" className={`nav-item${tab === 'lab' ? ' active' : ''}`} onClick={() => setTab('lab')}>
               {t('nav.lab')}
+            </button>
+          </div>
+          <div className="nav-group">
+            <h4>Flydigi</h4>
+            <button type="button" className={`nav-item${tab === 'flydigi' ? ' active' : ''}`} onClick={() => setTab('flydigi')}>
+              Direwolf 4
             </button>
           </div>
           <div className="nav-group">
@@ -3773,6 +3780,7 @@ export default function App(): JSX.Element {
               <div className="msg"><h3>{t('cal.connectTitle')}</h3><p>{t('cal.connectBody')}</p></div>
             )
           )}
+          {tab === 'flydigi' && <FlydigiPanel />}
           {tab === 'language' && (
             <LanguagePanel />
           )}

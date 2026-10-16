@@ -2,6 +2,7 @@ import { contextBridge, ipcRenderer } from 'electron'
 import type { DeepPollResult } from '../shared/deeppoll'
 import type { LjButtonTarget, LjSnapshot, LjStickPatch } from '../shared/leadjoy'
 import type { FdIdentifyResult } from '../shared/flydigi'
+import type { FxSnapshot, FxPatch } from '../shared/flydigi-xinput'
 
 async function call<T>(channel: string, ...args: unknown[]): Promise<T> {
   const result = (await ipcRenderer.invoke(channel, ...args)) as {
@@ -40,6 +41,9 @@ const api = {
   deeppoll: (vid: number, pid: number, seconds?: number) =>
     call<DeepPollResult>('diag:deeppoll', vid, pid, seconds),
   flydigiIdentify: (path: string) => call<FdIdentifyResult>('flydigi:identify', path),
+  flydigiXRead: () => call<FxSnapshot>('flydigix:read'),
+  flydigiXWrite: (patch: FxPatch) =>
+    call<{ verified: boolean; restored: boolean; saved: boolean; changedPacks: number }>('flydigix:write', patch),
   leadjoyReadMain: (path: string) => call<LjSnapshot>('leadjoy:readMain', path),
   leadjoyReadSlot: (req: { path: string; slot: number }) => call<LjSnapshot>('leadjoy:readSlot', req),
   leadjoyWriteButton: (req: { path: string; slot: number; id: number; target: LjButtonTarget | null }) =>
