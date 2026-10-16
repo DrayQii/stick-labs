@@ -7,7 +7,7 @@
  * back on mismatch.
  */
 import { useState } from 'react'
-import { FX_CURVE_CUSTOM, FX_CURVE_DEFAULT, FX_CURVE_DEFAULT_POINTS, fxDeadzonePoints, type FxCurve, type FxSnapshot, type FxVibration } from '@shared/flydigi-xinput'
+import { FX_CURVE_CUSTOM, FX_CURVE_DEFAULT, FX_CURVE_DEFAULT_POINTS, fxDeadzonePoints, type FxCurve, type FxSnapshot, type FxTriggerRaw, type FxVibration } from '@shared/flydigi-xinput'
 import { api } from './api'
 
 const sc = (b: number): number => (b > 127 ? b - 256 : b)
@@ -81,6 +81,7 @@ export default function FlydigiPanel(): JSX.Element {
   const [vib, setVib] = useState<FxVibration | null>(null)
   const [left, setLeft] = useState(0)
   const [right, setRight] = useState(0)
+  const [triggers, setTriggers] = useState<{ left: FxTriggerRaw; right: FxTriggerRaw } | null>(null)
   const [curves, setCurves] = useState<{ left: FxCurve; right: FxCurve } | null>(null)
   const [save, setSave] = useState(true)
   const [busy, setBusy] = useState(false)
@@ -92,6 +93,7 @@ export default function FlydigiPanel(): JSX.Element {
     setLeft(Math.max(0, sc(s.sticks.left.center)))
     setRight(Math.max(0, sc(s.sticks.right.center)))
     setCurves(s.curves)
+    setTriggers(s.triggers)
   }
 
   async function load(cfgId?: number): Promise<void> {
@@ -122,7 +124,7 @@ export default function FlydigiPanel(): JSX.Element {
   }
 
   async function apply(): Promise<void> {
-    if (!snap || !vib || !curves) return
+    if (!snap || !vib || !curves || !triggers) return
     setBusy(true)
     setMsg(null)
     try {
@@ -133,6 +135,8 @@ export default function FlydigiPanel(): JSX.Element {
         rightCenter: right & 0xff,
         leftCurve: curves.left,
         rightCurve: curves.right,
+        leftTrigger: triggers.left,
+        rightTrigger: triggers.right,
         save
       })
       if (!r.verified) {
@@ -200,7 +204,7 @@ export default function FlydigiPanel(): JSX.Element {
         </div>
       )}
 
-      {snap && vib && curves && (
+      {snap && vib && curves && triggers && (
         <div className="stack" style={{ gap: 14, marginTop: 16 }}>
           <div>
             <h4>Sticks</h4>
@@ -215,6 +219,20 @@ export default function FlydigiPanel(): JSX.Element {
             <CurveEditor title="Left stick curve" curve={curves.left} onChange={(c) => setCurves({ ...curves, left: c })} />
             <CurveEditor title="Right stick curve" curve={curves.right} onChange={(c) => setCurves({ ...curves, right: c })} />
             </details>
+          </div>
+
+          <div>
+            <h4>Triggers</h4>
+            <div className="hint" style={{ margin: '4px 0 8px' }}>
+              Raw bytes from the pad&apos;s trigger record: <i>Start</i> is where output begins, <i>End</i> where it reaches full (0&nbsp;to&nbsp;255; full range is 0 to 255). The scale against Space Station&apos;s sliders is not decoded yet, and the trigger curve points are left untouched.
+            </div>
+            {(['left', 'right'] as const).map((side) => (
+              <div key={side} className="stack" style={{ gap: 6, marginBottom: 10 }}>
+                <span className="label">{side === 'left' ? 'Left trigger (LT)' : 'Right trigger (RT)'}</span>
+                <Num label="Start" value={triggers[side].zero} min={0} max={255} onChange={(v) => setTriggers({ ...triggers, [side]: { ...triggers[side], zero: v } })} />
+                <Num label="End" value={triggers[side].end} min={0} max={255} onChange={(v) => setTriggers({ ...triggers, [side]: { ...triggers[side], end: v } })} />
+              </div>
+            ))}
           </div>
 
           <div>

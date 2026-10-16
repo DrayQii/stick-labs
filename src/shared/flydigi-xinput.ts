@@ -324,6 +324,42 @@ export function fxSetCurve(blob: Uint8Array, side: 0 | 1, curve: FxCurve): Uint8
   return out
 }
 
+/**
+ * Raw per-trigger record (7 bytes at 123 / 130): type, zero (inner start), the two
+ * curve points and end (outer limit). Names are Space Station's; the scale of
+ * zero/end against its sliders is not decoded yet, so they are kept as raw bytes.
+ */
+export interface FxTriggerRaw {
+  type: number
+  zero: number
+  p1x: number
+  p1y: number
+  p2x: number
+  p2y: number
+  end: number
+}
+
+export function fxDecodeTriggers(blob: Uint8Array): { left: FxTriggerRaw; right: FxTriggerRaw } {
+  const rec = (o: number): FxTriggerRaw => ({
+    type: blob[o],
+    zero: blob[o + 1],
+    p1x: blob[o + 2],
+    p1y: blob[o + 3],
+    p2x: blob[o + 4],
+    p2y: blob[o + 5],
+    end: blob[o + 6]
+  })
+  return { left: rec(FX_OFF.triggers), right: rec(FX_OFF.triggers + 7) }
+}
+
+/** Returns a copy of `blob` with one trigger's record replaced. */
+export function fxSetTrigger(blob: Uint8Array, side: 0 | 1, t: FxTriggerRaw): Uint8Array {
+  const out = blob.slice()
+  const o = FX_OFF.triggers + side * 7
+  out.set([t.type, t.zero, t.p1x, t.p1y, t.p2x, t.p2y, t.end].map((v) => v & 0xff), o)
+  return out
+}
+
 // --- session-level shapes shared with the renderer ---
 
 export interface FxSnapshot {
@@ -338,6 +374,7 @@ export interface FxSnapshot {
   vibration: FxVibration
   sticks: { left: FxStickRaw; right: FxStickRaw }
   curves: { left: FxCurve; right: FxCurve }
+  triggers: { left: FxTriggerRaw; right: FxTriggerRaw }
 }
 
 export interface FxPatch {
@@ -348,6 +385,8 @@ export interface FxPatch {
   rightCenter?: number
   leftCurve?: FxCurve
   rightCurve?: FxCurve
+  leftTrigger?: FxTriggerRaw
+  rightTrigger?: FxTriggerRaw
   /** Persist with the 0x50 save after a verified write (survives a replug). */
   save?: boolean
 }

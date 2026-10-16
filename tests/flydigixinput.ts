@@ -18,6 +18,7 @@ import {
   fxWriteStart,
   fxDecodeCurves,
   fxDecodeSticks,
+  fxDecodeTriggers,
   fxDecodeVibration,
   fxDiffPacks,
   fxEncodeVibration,
@@ -28,6 +29,7 @@ import {
   fxSaveAcked,
   fxSetCurve,
   fxSetStickCenter,
+  fxSetTrigger,
   type FxAck
 } from '../src/shared/flydigi-xinput.ts'
 
@@ -121,6 +123,15 @@ for (let i = 0; i < 84; i++) {
 }
 const dBlob = fxAssembleBlob(dAcks)
 check('84 DInput pack replies reassemble the blob', !!dBlob && hex(dBlob) === hex(blob))
+
+// --- triggers (offset 123) ---
+const trig = fxDecodeTriggers(blob)
+check('fixture triggers decode (type 0, full range)', trig.left.type === 0 && trig.left.end === 0xff && trig.right.end === 0xff && trig.left.p2x === 0xff, JSON.stringify(trig.left))
+check('trigger set round-trips', hex(fxSetTrigger(fxSetTrigger(blob, 0, trig.left), 1, trig.right)) === hex(blob))
+const tEdit = fxSetTrigger(blob, 0, { ...trig.left, end: 231 })
+const tDiff = fxDiffPacks(blob, tEdit)
+check('left trigger end 231 is one pack (12)', tDiff.length === 1 && tDiff[0].startPack === 12 && tDiff[0].packs[0][9 - 0] !== undefined, JSON.stringify(tDiff.map((r) => r.startPack)))
+check('trigger end byte lands at 129', tEdit[129] === 231 && tEdit.slice(0, 129).every((v, i) => v === blob[i]) && tEdit.slice(130).every((v, i) => v === blob[130 + i]))
 
 // Ack parsing / blob assembly from real reply shapes.
 const rep = (cmd: number, data: number[]): Uint8Array => {

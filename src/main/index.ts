@@ -140,6 +140,9 @@ handle('flydigix:write', (patch: FxPatch) => {
       throw new Error('flydigi: a curve needs 9 points and type/circularity/edge as bytes 0..255')
     }
   }
+  for (const t of [patch.leftTrigger, patch.rightTrigger]) {
+    if (t && !Object.values(t).every(byte)) throw new Error('flydigi: trigger values must be bytes 0..255')
+  }
   const v = patch.vibration
   if (v && ![v.left?.min, v.left?.max, v.left?.scale, v.right?.min, v.right?.max, v.right?.scale].every(byte)) {
     throw new Error('flydigi: vibration values must be 0..255')
