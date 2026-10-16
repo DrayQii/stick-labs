@@ -278,7 +278,7 @@ export default function FlydigiPanel(props: { onClose?: () => void }): JSX.Eleme
         )}
       </div>
 
-      {mode && mode !== 'none' && (
+      {snap && mode && mode !== 'none' && (
         <div style={{ marginTop: 14 }}>
           <h4>Polling rate</h4>
           <div className="hint" style={{ margin: '4px 0 8px' }}>
@@ -298,6 +298,7 @@ export default function FlydigiPanel(props: { onClose?: () => void }): JSX.Eleme
         </div>
       )}
 
+      {snap && (
       <div style={{ marginTop: 14 }}>
         <h4>Live input</h4>
         <div className="hint" style={{ margin: '4px 0 8px' }}>
@@ -305,6 +306,7 @@ export default function FlydigiPanel(props: { onClose?: () => void }): JSX.Eleme
         </div>
         <FlydigiLiveView />
       </div>
+      )}
 
       {msg && (
         <div className="hint" style={{ marginTop: 10, color: msg.kind === 'err' ? 'var(--bad, #e66)' : 'var(--good, #6c6)' }}>
