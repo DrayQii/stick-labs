@@ -1,4 +1,4 @@
-# Stick Labs — stick tuner (G7 Pro 8K · Tarantula detect · G7 SE locked)
+# Stick Labs — stick tuner (G7 Pro 8K · Flydigi Direwolf 4 · Tarantula detect · G7 SE locked)
 
 Stick-only Electron companion. No remap / macros / lighting / motion code.
 
@@ -15,6 +15,63 @@ Stick-only Electron companion. No remap / macros / lighting / motion code.
 
 Hardware truth: the ADC maxes at **12-bit (4096 levels)**. Raw wires outside
 `0–4` (resolution) / `1–21` 
+## Flydigi Direwolf 4
+
+The Direwolf 4 is tuned over plain HID, with no driver and no Space Station
+running. Details, byte layouts and open questions: [`docs/flydigi.md`](docs/flydigi.md).
+
+### What you can do
+
+| Tab | Controls |
+|---|---|
+| Sticks | live stick view, Center and Edge sliders (-100..100), per-stick response-curve designer (9 points) |
+| Buttons | remaps, turbo (Press / Click + repeat frequency) |
+| Device | triggers (start / end), gyro (mapping, activation key, dead zone, sensitivity, Racer), vibration, polling rate, pad mode |
+| Profiles | the four config slots (P1..P4 in the top bar), save to pad, backups and restore |
+
+Every edit is staged in the app and applied with **Write to controller**.
+
+### How it works
+
+- **Find the pad.** In DInput mode it shows as USB `04B4:2412`; its vendor
+  interface (2, usage page `0xFFA0`) takes Flydigi's `05 ..` command reports.
+  Close Flydigi Space Station first, because launching it flips the pad back to
+  XInput (`045E:028E`).
+- **Handshake.** The identify handshake (check-architecture, get-info,
+  get-status) is read-only and mirrors SDL's Flydigi driver. Nothing is written
+  until you press Write.
+- **Config blob.** The pad stores each config slot as one 840-byte blob split
+  into 10-byte packs: keys, sticks, triggers, gyro, vibration, curves. The app
+  reads a slot, edits the decoded fields, and sends only the packs that changed.
+- **Verified writes.** Each write is read back and compared. On a mismatch the
+  previous blob is restored. Every write and restore first saves the slot to
+  `flydigi-backups/` in the app data folder.
+- **XInput mode.** If the pad is in XInput mode, connecting switches it to
+  DInput through a small elevated helper (`scripts/flydigi-xinput-helper.py`,
+  one UAC prompt, Space Station must be installed but not running). The
+  **Switch to XInput** button puts it back for games. The polling rate is only
+  exposed in XInput mode, so changing it runs the same helper (about 20 s).
+
+### Connect a controller card
+
+The Direwolf has its own card in the **Connect a controller** panel, with the
+product photo, a **Mode** cell (`DInput` or `XInput`) and a **Battery** cell. In
+XInput mode the card reads **Switch and connect**.
+
+Battery comes from byte 11 of the get-info reply: the high nibble is the charge
+state (0 battery, 1 charging, 2 charged) and the low nibble is the level in 20%
+steps. The top of that scale is not verified on hardware yet. If the level can't
+be read, the card shows `N/A` and the raw reply.
+
+### Status
+
+Reads, verified writes, save, make-active, deadzone, vibration, triggers and
+button remaps are proven on a Direwolf 4. Turbo, gyro, the Center/Edge curve
+model, backups and the integrated connect flow match Space Station's logged
+bytes but are not yet tried on the pad. Calibration does not exist on this pad.
+
+Checks that need no pad: `node scripts/test.mjs tests/flydigixinput.ts`.
+
 ## Run
 
 ```powershell
