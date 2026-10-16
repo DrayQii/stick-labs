@@ -315,15 +315,23 @@ export interface FxCurve {
 }
 
 /**
- * Curve points Space Station writes for a stick deadzone of `d` (its slider,
- * 0..100; the same value goes in the main record's centre byte). The ramp ends
- * at 150 and rises 12.5 per ninth, steepened by 1/(1 - d/100) and clamped at 0;
- * 100 is flat 50. Fitted to Space Station's log (d = 0, 5, 10, 20, 50, 100, 13):
- * exact for 0/10/20/50/100, within 1 on a few points at 5 and 13 (its rounding).
+ * Curve points Space Station writes for a stick deadzone of `d` (its centre slider, -100..100;
+ * the same value goes in the main record's centre byte as a signed byte). For d >= 0 the ramp ends
+ * at 150 and rises 12.5 per ninth, steepened by 1/(1 - d/100) and clamped at 0; 100 is flat 50.
+ * Fitted to Space Station's log (d = 0, 5, 10, 20, 50, 100, 13): exact for 0/10/20/50/100, within 1
+ * on a few points at 5 and 13 (its rounding).
+ *
+ * Negative values (the slider's "Offset" side) were seen once: -13 gave points 63..150. Only those
+ * two ends are known, so a negative d lifts the first point to 50 + |d| and runs straight to 150;
+ * the in-between points are an assumption (Space Station's ramps are linear in the index).
  */
 export function fxDeadzonePoints(d: number): number[] {
   if (d >= 100) return Array(FX_CURVE_POINTS).fill(50)
-  const k = 1 - Math.max(0, d) / 100
+  if (d < 0) {
+    const lo = 50 + Math.min(100, -d)
+    return Array.from({ length: FX_CURVE_POINTS }, (_, i) => Math.round(lo + ((150 - lo) * i) / (FX_CURVE_POINTS - 1)))
+  }
+  const k = 1 - d / 100
   return Array.from({ length: FX_CURVE_POINTS }, (_, i) => Math.max(0, Math.min(255, Math.round(150 - (12.5 * (8 - i)) / k))))
 }
 

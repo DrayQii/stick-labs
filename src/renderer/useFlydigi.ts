@@ -61,8 +61,8 @@ export function useFlydigi(onLost: () => void) {
   useEffect(refreshBackups, [refreshBackups])
 
   const adopt = (s: FxSnapshot): void => {
-    const l = Math.max(0, sc(s.sticks.left.center))
-    const r = Math.max(0, sc(s.sticks.right.center))
+    const l = sc(s.sticks.left.center)
+    const r = sc(s.sticks.right.center)
     setSnap(s)
     setVib(s.vibration)
     setLeft(l)

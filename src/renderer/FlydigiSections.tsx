@@ -44,10 +44,10 @@ export function FxSticks({ fx }: { fx: Flydigi }): JSX.Element | null {
           <div className="card" style={{ marginTop: 16 }}>
             <h3>Sticks</h3>
             <div className="hint" style={{ margin: '4px 0 8px' }}>
-              Same number as Space Station&apos;s deadzone slider. It sets the stick&apos;s centre byte and regenerates the curve exactly as Space Station does (within 1 on a few points). Fine-tune the curve below if you want something else; moving the deadzone again regenerates it.
+              Same number as Space Station&apos;s Center slider (-100 Offset to 100 Dead zone). It sets the stick&apos;s centre byte and regenerates the curve exactly as Space Station does (within 1 on a few points; negative values are only partly confirmed). Fine-tune the curve below if you want something else; moving the deadzone again regenerates it.
             </div>
-            <Num label="Left stick deadzone" value={left} min={0} max={100} onChange={(d) => setDeadzone('left', d)} />
-            <Num label="Right stick deadzone" value={right} min={0} max={100} onChange={(d) => setDeadzone('right', d)} />
+            <Num label="Left stick deadzone" value={left} min={-100} max={100} onChange={(d) => setDeadzone('left', d)} />
+            <Num label="Right stick deadzone" value={right} min={-100} max={100} onChange={(d) => setDeadzone('right', d)} />
             <div style={{ height: 10 }} />
             <h4 style={{ marginTop: 12 }}>Response curves</h4>
             <div className="hint" style={{ margin: '4px 0 8px' }}>

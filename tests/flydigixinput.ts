@@ -108,6 +108,7 @@ for (const [d, want] of Object.entries(dzObs)) {
   const maxErr = Math.max(...got.map((v, i) => Math.abs(v - want[i])))
   check(`deadzone ${d} -> curve (max error ${maxErr})`, maxErr <= 1, got.join())
 }
+check('deadzone -13 matches the one logged negative: ends 63 and 150', (() => { const g = fxDeadzonePoints(-13); return g[0] === 63 && g[8] === 150 && g.every((v, i) => i === 0 || v >= g[i - 1]) })())
 check('deadzone 0, 10, 20, 50, 100 are exact', [0, 10, 20, 50, 100].every((d) => fxDeadzonePoints(d).join() === dzObs[d].join()))
 
 // --- DInput transport translation, against replies captured from the pad in 04B4:2412 mode ---
