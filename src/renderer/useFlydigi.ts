@@ -7,7 +7,7 @@
  * the main process and rolled back on mismatch.
  */
 import { useCallback, useEffect, useState } from 'react'
-import { FX_CURVE_CUSTOM, fxDeadzonePoints, fxHzFromReportRate, type FxCurve, type FxSnapshot, type FxTriggerRaw, type FxVibration } from '@shared/flydigi-xinput'
+import { FX_CURVE_CUSTOM, fxDeadzonePoints, fxHzFromReportRate, type FxCurve, type FxSnapshot, type FxTriggerRaw, type FxTurbo, type FxVibration } from '@shared/flydigi-xinput'
 import { api } from './api'
 
 export type FxMsg = { kind: 'ok' | 'err'; text: string }
@@ -25,6 +25,7 @@ export function useFlydigi(onLost: () => void) {
   const [left, setLeft] = useState(0)
   const [right, setRight] = useState(0)
   const [keyEdits, setKeyEdits] = useState<Record<number, number>>({})
+  const [turboEdits, setTurboEdits] = useState<Record<number, FxTurbo | null>>({})
   const [triggers, setTriggers] = useState<{ left: FxTriggerRaw; right: FxTriggerRaw } | null>(null)
   const [curves, setCurves] = useState<{ left: FxCurve; right: FxCurve } | null>(null)
   const [base, setBase] = useState('')
@@ -70,10 +71,11 @@ export function useFlydigi(onLost: () => void) {
     setCurves(s.curves)
     setTriggers(s.triggers)
     setKeyEdits({})
+    setTurboEdits({})
     setBase(sig(s.vibration, l, r, s.curves, s.triggers))
   }
 
-  const dirty = !!snap && (sig(vib, left, right, curves, triggers) !== base || Object.keys(keyEdits).length > 0)
+  const dirty = !!snap && (sig(vib, left, right, curves, triggers) !== base || Object.keys(keyEdits).length > 0 || Object.keys(turboEdits).length > 0)
 
   /** Read a slot (the active one when omitted). Returns whether it worked; marks the pad connected on success. */
   async function load(cfgId?: number): Promise<boolean> {
@@ -99,6 +101,7 @@ export function useFlydigi(onLost: () => void) {
     setCurves(null)
     setTriggers(null)
     setKeyEdits({})
+    setTurboEdits({})
     setMsg(null)
   }
 
@@ -221,6 +224,7 @@ export function useFlydigi(onLost: () => void) {
         leftCurve: curves.left,
         rightCurve: curves.right,
         keys: keyEdits,
+        turbo: turboEdits,
         leftTrigger: triggers.left,
         rightTrigger: triggers.right,
         save
@@ -259,7 +263,7 @@ export function useFlydigi(onLost: () => void) {
     setVib((v) => (v ? { ...v, [side]: { ...v[side], ...patch } } : v))
 
   return {
-    sc, active, snap, vib, setVib, left, right, keyEdits, setKeyEdits, triggers, setTriggers, curves, setCurves,
+    sc, active, snap, vib, setVib, left, right, keyEdits, setKeyEdits, turboEdits, setTurboEdits, triggers, setTriggers, curves, setCurves,
     save, setSave, busy, rate, mode, msg, setMsg, backups, dirty,
     load, disconnect, toXInput, pollingRate, activate, selectSlot, backupNow, restore, apply, setDeadzone, setEdge, setMotor
   }

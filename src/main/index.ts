@@ -156,6 +156,13 @@ handle('flydigix:write', (patch: FxPatch) => {
       if (!byte(Number(id)) || !byte(target)) throw new Error('flydigi: key ids and targets must be bytes 0..255')
     }
   }
+  if (patch.turbo !== undefined) {
+    if (typeof patch.turbo !== 'object' || patch.turbo === null) throw new Error('flydigi: turbo must be an object')
+    for (const [id, t] of Object.entries(patch.turbo)) {
+      if (!byte(Number(id))) throw new Error('flydigi: turbo key ids must be bytes 0..255')
+      if (t !== null && !(Number.isInteger(t?.type) && Number.isInteger(t?.frequency))) throw new Error('flydigi: a turbo needs an integer type and frequency')
+    }
+  }
   const v = patch.vibration
   if (v && ![v.left?.min, v.left?.max, v.left?.scale, v.right?.min, v.right?.max, v.right?.scale].every(byte)) {
     throw new Error('flydigi: vibration values must be 0..255')

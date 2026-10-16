@@ -153,8 +153,9 @@ every setting as JSON (`IpcCommandEnum_UpdateConfig`), which is how the followin
   extended past its ends and clamped to raw 0..150. Start: centre >= 0 crosses 0% at input c%, centre < 0
   starts at |c|%. End: edge <= 0 ends at 100% + e% at full travel, edge > 0 reaches 100% at input 100% - e%.
   `fxDeadzonePoints(c, e)` reproduces every logged combination within 1 (tests/flydigixinput.ts).
-- Turbo is a key entry `[target, enableType, frequency]`: A turbo on press at 8 wrote `04 01 08`
-  (enableType Click = 0, Press = 1; frequencies seen: 15, 8).
+- Turbo is a key entry `[key, enableType, frequency]`: A on Press at 8 wrote `04 01 08`, R3 on Click at 15
+  wrote `0f 02 0f` (Press = 1, Click = 2; frequencies seen: 8, 15, the allowed range is not confirmed).
+  Turning turbo off writes the plain default entry `ff 00 00`. The Buttons tab edits it.
 - Motion block (blob 137..144): `[mode/mapping, enableKey, enableType, deadZone, sensitivity, ?, ?, ff]`;
   deadZone and sensitivity match the log values (8 / 25 -> 17 / 30), enableKey is a key id (13 RT, 12 LT).
   Not decoded further yet.

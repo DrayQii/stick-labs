@@ -26,6 +26,9 @@ import {
   fxDecodeKeys,
   fxDecodeSticks,
   fxSetKeyTarget,
+  fxSetKeyTurbo,
+  FX_TURBO_CLICK,
+  FX_TURBO_PRESS,
   FX_KEY_DEFAULT,
   fxDecodeTriggers,
   fxDecodeVibration,
@@ -122,6 +125,25 @@ for (const [c, e, want] of ceObs) {
   const got = fxDeadzonePoints(c, e)
   const maxErr = Math.max(...got.map((v, i) => Math.abs(v - want[i])))
   check(`centre ${c} / edge ${e} -> curve (max error ${maxErr})`, maxErr <= 1, got.join())
+}
+// Turbo entries (Space Station wire bytes: A Press 8 -> 04 01 08, R3 Click 15 -> 0f 02 0f)
+{
+  const base = new Uint8Array(840).fill(0xff)
+  const a = fxSetKeyTurbo(base, 4, { type: FX_TURBO_PRESS, frequency: 8 })
+  check('turbo A press 8 writes 04 01 08', a[25] === 0x04 && a[26] === 0x01 && a[27] === 0x08)
+  const r3 = fxSetKeyTurbo(base, 15, { type: FX_TURBO_CLICK, frequency: 15 })
+  check('turbo R3 click 15 writes 0f 02 0f', r3[58] === 0x0f && r3[59] === 0x02 && r3[60] === 0x0f)
+  const dec = fxDecodeKeys(a).find((k) => k.id === 4)!
+  check('turbo entry decodes back', dec.kind === 'turbo' && dec.enableType === FX_TURBO_PRESS && dec.frequency === 8)
+  check('turbo off writes the default entry', fxSetKeyTarget(a, 4, 0xff).slice(25, 28).join() === '255,0,0')
+  check('turbo only touches its own entry', fxDiffPacks(base, a).reduce((n, r) => n + r.packs.length, 0) <= 2)
+  let refused = false
+  try {
+    fxSetKeyTurbo(a, 4, { type: FX_TURBO_PRESS, frequency: 0 })
+  } catch {
+    refused = true
+  }
+  check('turbo frequency 0 is refused', refused)
 }
 check('edge byte is signed: -30 -> 0xe2', ((-30) & 0xff) === 0xe2)
 check('deadzone 0, 10, 20, 50, 100 are exact', [0, 10, 20, 50, 100].every((d) => fxDeadzonePoints(d).join() === dzObs[d].join()))

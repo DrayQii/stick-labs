@@ -2,7 +2,7 @@
  * Flydigi Direwolf 4 tab content for the main app: one section per tab (Sticks, Buttons, Device,
  * Profiles). State and actions come from useFlydigi; the topbar owns slots and Write.
  */
-import { FX_REPORT_RATES, fxHzFromReportRate, FX_KEY_DEFAULT, FX_KEY_NAMES, FX_KEY_ORDER, fxTriggerRange } from '@shared/flydigi-xinput'
+import { FX_REPORT_RATES, fxHzFromReportRate, FX_KEY_DEFAULT, FX_KEY_NAMES, FX_KEY_ORDER, FX_TURBO_CLICK, FX_TURBO_MAX, FX_TURBO_MIN, FX_TURBO_PRESS, fxTriggerRange, type FxTurbo } from '@shared/flydigi-xinput'
 import FlydigiCurveDesigner from './FlydigiCurveDesigner'
 import FlydigiLiveView from './FlydigiLiveView'
 import type { Flydigi } from './useFlydigi'
@@ -78,42 +78,65 @@ export function FxSticks({ fx }: { fx: Flydigi }): JSX.Element | null {
 }
 
 export function FxButtons({ fx }: { fx: Flydigi }): JSX.Element | null {
-  const { snap, keyEdits, setKeyEdits } = fx
+  const { snap, keyEdits, setKeyEdits, turboEdits, setTurboEdits } = fx
   if (!snap) return null
   return (
     <>
           <div className="card" style={{ marginTop: 16 }}>
             <h3>Buttons</h3>
             <div className="hint" style={{ margin: '4px 0 8px' }}>
-              Pick what each button sends. &quot;Default&quot; means no remap. Changes are written with Write to controller. Turbo and macro entries are shown but must be edited in Space Station.
+              Pick what each button sends. &quot;Default&quot; means no remap. Turbo makes a button repeat itself: Press repeats while you hold it, Click toggles repeating on each press (Space Station&apos;s names); the number is its frequency (Space Station used 8 and 15). Changes are written with Write to controller. Macro buttons are shown but must be edited in Space Station.
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(190px, 1fr))', gap: 8 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(210px, 1fr))', gap: 8 }}>
               {FX_KEY_ORDER.map((id) => {
                 const cur = snap.keys.find((k) => k.id === id)!
-                const value = keyEdits[id] ?? cur.target
-                const locked = cur.kind !== 'key'
+                const orig: FxTurbo | null = cur.kind === 'turbo' ? { type: cur.enableType, frequency: cur.frequency } : null
+                const turbo = id in turboEdits ? turboEdits[id] : orig
+                const macro = cur.kind === 'macro'
+                const base = cur.kind === 'key' ? cur.target : FX_KEY_DEFAULT
+                const value = id in keyEdits ? keyEdits[id] : id in turboEdits && turboEdits[id] === null ? FX_KEY_DEFAULT : base
+                const edited = id in keyEdits || id in turboEdits
+                const setTurbo = (next: FxTurbo | null): void => {
+                  setKeyEdits((prev) => {
+                    const k = { ...prev }
+                    delete k[id]
+                    return k
+                  })
+                  setTurboEdits((prev) => {
+                    const t = { ...prev }
+                    if (JSON.stringify(next) === JSON.stringify(orig)) delete t[id]
+                    else t[id] = next
+                    return t
+                  })
+                }
                 return (
-                  <label key={id} style={{ display: 'block' }}>
+                  <div key={id} className="stack" style={{ gap: 4 }}>
                     <div className="row spread">
                       <span className="label">{FX_KEY_NAMES[id]}</span>
-                      {id in keyEdits && <span className="mono">edited</span>}
+                      {edited && <span className="mono">edited</span>}
                     </div>
                     <select
                       className="input"
                       style={{ width: '100%' }}
-                      disabled={locked}
-                      value={locked ? 'locked' : value}
+                      disabled={macro || turbo !== null}
+                      value={macro ? 'macro' : turbo !== null ? 'turbo' : value}
                       onChange={(e) => {
                         const v = Number(e.target.value)
+                        setTurboEdits((prev) => {
+                          const t = { ...prev }
+                          delete t[id]
+                          return t
+                        })
                         setKeyEdits((prev) => {
                           const next = { ...prev }
-                          if (v === cur.target) delete next[id]
+                          if (cur.kind === 'key' && v === cur.target) delete next[id]
                           else next[id] = v
                           return next
                         })
                       }}
                     >
-                      {locked && <option value="locked">{cur.kind === 'turbo' ? 'Turbo (Space Station)' : 'Macro (Space Station)'}</option>}
+                      {macro && <option value="macro">Macro (Space Station)</option>}
+                      {turbo !== null && <option value="turbo">Turbo: repeats {FX_KEY_NAMES[id]}</option>}
                       <option value={FX_KEY_DEFAULT}>Default ({FX_KEY_NAMES[id]})</option>
                       {FX_KEY_ORDER.map((t) => (
                         <option key={t} value={t}>
@@ -121,7 +144,38 @@ export function FxButtons({ fx }: { fx: Flydigi }): JSX.Element | null {
                         </option>
                       ))}
                     </select>
-                  </label>
+                    <div className="row" style={{ gap: 6 }}>
+                      <select
+                        className="input"
+                        disabled={macro}
+                        value={turbo === null ? 'off' : turbo.type === FX_TURBO_CLICK ? 'click' : 'press'}
+                        onChange={(e) => {
+                          const v = e.target.value
+                          setTurbo(v === 'off' ? null : { type: v === 'click' ? FX_TURBO_CLICK : FX_TURBO_PRESS, frequency: turbo?.frequency ?? orig?.frequency ?? 8 })
+                        }}
+                      >
+                        <option value="off">Turbo off</option>
+                        <option value="press">Turbo: Press</option>
+                        <option value="click">Turbo: Click</option>
+                      </select>
+                      {turbo !== null && (
+                        <input
+                          type="number"
+                          className="input mono"
+                          style={{ width: 64 }}
+                          min={FX_TURBO_MIN}
+                          max={FX_TURBO_MAX}
+                          step={1}
+                          value={turbo.frequency}
+                          title="Repeat frequency"
+                          onChange={(e) => {
+                            const f = Math.round(Number(e.target.value))
+                            if (Number.isFinite(f)) setTurbo({ ...turbo, frequency: Math.max(FX_TURBO_MIN, Math.min(FX_TURBO_MAX, f)) })
+                          }}
+                        />
+                      )}
+                    </div>
+                  </div>
                 )
               })}
             </div>

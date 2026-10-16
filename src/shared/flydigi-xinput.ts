@@ -478,34 +478,71 @@ const FX_KEY_MACRO = 32
 export interface FxKeyEntry {
   /** Key id this entry belongs to. */
   id: number
-  /** 'key' = plain remap (target = FX_KEY_DEFAULT when unremapped); turbo/macro are shown but not edited. */
+  /** 'key' = plain remap (target = FX_KEY_DEFAULT when unremapped); 'turbo' repeats the key; macros are shown but not edited. */
   kind: 'key' | 'turbo' | 'macro'
   target: number
+  /** Turbo only: FX_TURBO_PRESS or FX_TURBO_CLICK (0 otherwise). */
+  enableType: number
+  /** Turbo only: repeat frequency, Space Station's number (0 otherwise). */
+  frequency: number
+}
+
+/** Turbo entry `[key, enableType, frequency]`, from Space Station's writes: A on Press at 8 -> `04 01 08`, R3 on Click at 15 -> `0f 02 0f`. */
+export const FX_TURBO_PRESS = 1
+export const FX_TURBO_CLICK = 2
+export const FX_TURBO_MIN = 1
+export const FX_TURBO_MAX = 30
+
+export interface FxTurbo {
+  type: number
+  frequency: number
 }
 
 export function fxDecodeKeys(blob: Uint8Array): FxKeyEntry[] {
   return FX_KEY_ORDER.map((id) => {
     const o = FX_OFF.keys + id * 3
-    const [t, , freq] = [blob[o], blob[o + 1], blob[o + 2]]
+    const [t, type, freq] = [blob[o], blob[o + 1], blob[o + 2]]
     const kind = t === FX_KEY_MACRO ? 'macro' : freq > 0 ? 'turbo' : 'key'
-    return { id, kind, target: t > FX_KEY_MACRO && t !== FX_KEY_DEFAULT ? FX_KEY_DEFAULT : t }
+    return {
+      id,
+      kind,
+      target: t > FX_KEY_MACRO && t !== FX_KEY_DEFAULT ? FX_KEY_DEFAULT : t,
+      enableType: kind === 'turbo' ? type : 0,
+      frequency: kind === 'turbo' ? freq : 0
+    }
   })
 }
 
 /**
  * Point key `id` at `target` (FX_KEY_DEFAULT clears the remap). Writes the entry
  * as `[target, 0, 0]`, which is what Space Station writes for a plain remap
- * (A->B gave `05 00 00`). Turbo and macro entries are refused.
+ * (A->B gave `05 00 00`). An existing turbo entry is replaced; macro entries are refused.
  */
 export function fxSetKeyTarget(blob: Uint8Array, id: number, target: number): Uint8Array {
   if (!(id in FX_KEY_NAMES)) throw new Error(`fx: key ${id} is not a Direwolf key`)
   if (target !== FX_KEY_DEFAULT && !(target in FX_KEY_NAMES)) throw new Error(`fx: key ${id} cannot be mapped to ${target}`)
   const o = FX_OFF.keys + id * 3
-  if (blob[o] === FX_KEY_MACRO || blob[o + 2] > 0) throw new Error(`fx: ${FX_KEY_NAMES[id]} has a turbo/macro entry; edit it in Space Station`)
+  if (blob[o] === FX_KEY_MACRO) throw new Error(`fx: ${FX_KEY_NAMES[id]} has a macro; edit it in Space Station`)
   const out = blob.slice()
   out[o] = target & 0xff
   out[o + 1] = 0
   out[o + 2] = 0
+  return out
+}
+
+/** Make key `id` a turbo key that repeats itself: entry `[id, type, frequency]`. Macro entries are refused. */
+export function fxSetKeyTurbo(blob: Uint8Array, id: number, turbo: FxTurbo): Uint8Array {
+  if (!(id in FX_KEY_NAMES)) throw new Error(`fx: key ${id} is not a Direwolf key`)
+  if (turbo.type !== FX_TURBO_PRESS && turbo.type !== FX_TURBO_CLICK) throw new Error('fx: turbo type must be Press or Click')
+  if (!Number.isInteger(turbo.frequency) || turbo.frequency < FX_TURBO_MIN || turbo.frequency > FX_TURBO_MAX) {
+    throw new Error(`fx: turbo frequency must be ${FX_TURBO_MIN}..${FX_TURBO_MAX}`)
+  }
+  const o = FX_OFF.keys + id * 3
+  if (blob[o] === FX_KEY_MACRO) throw new Error(`fx: ${FX_KEY_NAMES[id]} has a macro; edit it in Space Station`)
+  const out = blob.slice()
+  out[o] = id
+  out[o + 1] = turbo.type
+  out[o + 2] = turbo.frequency
   return out
 }
 
@@ -537,6 +574,8 @@ export interface FxPatch {
   rightTrigger?: FxTriggerRaw
   /** key id -> target key id (255 = default); only the keys listed are changed. */
   keys?: Record<number, number>
+  /** key id -> turbo setting, or null to turn turbo off (back to the default key); applied after `keys`. */
+  turbo?: Record<number, FxTurbo | null>
   /** Persist with the 0x50 save after a verified write (survives a replug). */
   save?: boolean
 }

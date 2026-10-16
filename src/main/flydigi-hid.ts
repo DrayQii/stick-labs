@@ -20,6 +20,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
   FX_BLOB_LEN,
+  FX_KEY_DEFAULT,
   FX_CMD_READ_CFG_ACK,
   FX_CMD_READ_CFG_ID,
   FX_CMD_SAVE,
@@ -46,6 +47,7 @@ import {
   fxSaveAcked,
   fxSetCurve,
   fxSetKeyTarget,
+  fxSetKeyTurbo,
   fxSetStickCenter,
   fxSetTrigger,
   fxToDInput,
@@ -387,6 +389,7 @@ export function fxHidWrite(patch: FxPatch): Promise<{ verified: boolean; restore
     if (patch.leftCurve) want = fxSetCurve(want, 0, patch.leftCurve)
     if (patch.rightCurve) want = fxSetCurve(want, 1, patch.rightCurve)
     for (const [id, target] of Object.entries(patch.keys ?? {})) want = fxSetKeyTarget(want, Number(id), target)
+    for (const [id, t] of Object.entries(patch.turbo ?? {})) want = t ? fxSetKeyTurbo(want, Number(id), t) : fxSetKeyTarget(want, Number(id), FX_KEY_DEFAULT)
     if (patch.leftTrigger) want = fxSetTrigger(want, 0, patch.leftTrigger)
     if (patch.rightTrigger) want = fxSetTrigger(want, 1, patch.rightTrigger)
     return commit(cfgId, activeCfgId, before, want, patch.save)
