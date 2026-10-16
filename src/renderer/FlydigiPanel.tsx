@@ -162,7 +162,12 @@ export default function FlydigiPanel(): JSX.Element {
     <div className="card" style={{ marginTop: 16 }}>
       <h3>Flydigi Direwolf 4</h3>
       <div className="hint" style={{ margin: '6px 0 12px' }}>
-        Config 1…4 are the onboard slots (Space Station&apos;s 配置1…4); • marks the one the pad is running. XInput mode only. Run Stick Labs as Administrator and close Flydigi Space Station and its background service first — they hold the driver this uses.
+        Config 1…4 are the onboard slots (Space Station&apos;s 配置1…4); • marks the one the pad is running.{' '}
+        {snap?.transport === 'hid'
+          ? 'Connected over plain HID (DInput mode): no driver, Space Station or admin needed.'
+          : snap?.transport === 'filter'
+            ? 'XInput mode through Space Station’s filter driver: run Stick Labs as Administrator and close Space Station and its background service.'
+            : 'DInput mode (04B4:2412) needs nothing else; XInput mode needs Stick Labs run as Administrator with Space Station and its service closed.'}
       </div>
       <div className="row" style={{ gap: 8 }}>
         <button className="btn" disabled={busy} onClick={() => void load(snap?.cfgId)}>

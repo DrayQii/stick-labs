@@ -27,7 +27,7 @@ export const FX_CMD_WRITE_PACK = 0x24
 export const FX_CMD_SAVE = 0x50
 export const FX_SUB_SAVE = 0x03
 export const FX_SUB_APPLY = 0x05
-const FX_MARK = 0xa0
+export const FX_MARK = 0xa0
 
 /** Blob offsets (V3.0 layout). Unused bytes are 0xFF. */
 export const FX_OFF = {
@@ -146,6 +146,53 @@ export function fxDiffPacks(oldBlob: Uint8Array, newBlob: Uint8Array): FxWriteRu
 /** Frames for one run: start, then packs numbered 0..n-1 within the run. */
 export function fxRunFrames(run: FxWriteRun, cfgId: number): Uint8Array[] {
   return [fxWriteStart(run.startPack, run.packs.length, cfgId), ...run.packs.map((p, i) => fxWritePack(p, i))]
+}
+
+// --- DInput mode (04B4:2412, vendor interface 2): same commands over plain HID ---
+//
+// Space Station's DInputProtocol sends report 0x05 with different command bytes
+// and answers in 32-byte reports led by report id 0x04 (`04 FF F0 ...`). The
+// session logic is shared, so these two helpers translate at the transport edge:
+// XInput-style frames out, XInput-style acks in.
+
+export const FXD_REPORT_ID = 0x05
+
+/** Translate an XInput-style command frame (A5 <cmd> …) into the DInput HID report. */
+export function fxToDInput(frame: Uint8Array): Uint8Array {
+  const f = frame.slice()
+  f[0] = FXD_REPORT_ID
+  switch (frame[1]) {
+    case FX_CMD_READ_CFG_ID:
+      f[1] = 0xeb
+      f[2] = FX_MARK
+      return f
+    case FX_CMD_READ_CFG:
+      f[1] = 0xeb
+      return f
+    case FX_CMD_WRITE_START:
+      f[1] = 0xef
+      return f
+    case FX_CMD_WRITE_PACK:
+      f[1] = 0x22
+      return f
+    case FX_CMD_SAVE:
+      return f
+    default:
+      throw new Error(`fx: no DInput form for command 0x${frame[1].toString(16)}`)
+  }
+}
+
+/**
+ * Normalise a DInput reply report (report id first) into XInput-style acks.
+ * Plain input reports (`04 FE 66 …`) and get-info replies yield none.
+ */
+export function fxFromDInput(r: Uint8Array): FxAck[] {
+  if (r.length < 16 || r[1] !== 0xff || r[2] !== 0xf0) return []
+  if (r[15] === 0xeb) return [{ cmd: FX_CMD_READ_CFG_ACK, data: Uint8Array.of(r[3], ...r.subarray(5, 15)) }]
+  if (r[15] === 0xea) return [{ cmd: FX_CMD_WRITE_START, data: new Uint8Array(0) }, { cmd: FX_CMD_WRITE_PACK, data: new Uint8Array(0) }]
+  if (r[3] === 0xaa && r[4] === 0xac) return [{ cmd: FX_CMD_READ_CFG_ID, data: Uint8Array.of(r[5], r[6], r[7]) }]
+  if (r[3] === FX_CMD_SAVE) return [{ cmd: FX_CMD_SAVE, data: Uint8Array.of(r[4], 1) }]
+  return []
 }
 
 // --- decode / encode (only fields whose meaning is proven) ---
@@ -280,6 +327,8 @@ export function fxSetCurve(blob: Uint8Array, side: 0 | 1, curve: FxCurve): Uint8
 // --- session-level shapes shared with the renderer ---
 
 export interface FxSnapshot {
+  /** 'hid' = DInput mode over plain HID; 'filter' = XInput mode through Space Station's driver. */
+  transport: 'hid' | 'filter'
   /** Config slot shown (0-based; Space Station's 配置1 is 0). */
   cfgId: number
   /** Slot the pad is currently running, and how many slots it has. */

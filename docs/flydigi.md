@@ -134,3 +134,28 @@ Capture notes: USBPcap's `usb.idVendor` field only exists in the descriptor
 response, so filter on `usb.bus_id == 1 && usb.device_address == <n>` instead.
 Start the capture before making the change; the log timestamps show whether
 the write landed inside the capture window.
+
+### Direwolf 4 in DInput mode (04B4:2412) — plain HID, proven for reads
+
+The pad can be switched in software: `A5 17` through the XInput filter path
+(Space Station's legacy SwitchToDInput) re-enumerated it as `04B4:2412`
+(four interfaces, vendor usage page 0xFFA0 on interface 2). The mode survives a
+replug. Back to XInput: `05 ED` (SwitchToXInput) or Space Station.
+
+Same protocol, different bytes (report id 0x05 out, `04 FF F0 …` replies in;
+indexes include the report id):
+
+| action | out | reply |
+|---|---|---|
+| active config + count | `05 EB A0` | `[3..4]=AA AC [5]=active [7]=count` |
+| read config | `05 EB <cfgId>` | `[15]=EB [3]=pack idx [5..14]=10 bytes` |
+| write start | `05 EF <start> <count> A0 <cfgId>` | `[15]=EA` |
+| write pack | `05 22 <10 bytes> A0 <packNum>` | `[15]=EA` |
+| save / activate | `05 50 03 <ver lo/hi>` / `05 50 05 <cfgId>` | `[3]=50 [4]=sub` (shape not yet captured) |
+
+Read verified on hardware: configs 0 and 1 came back byte-for-byte in the
+layout above (deadzone 20 on config id 1 matched the fitted curve). Writes and
+the save/apply acks over this path are built from Space Station's DInput
+command classes and still need a hardware check. Stick Labs auto-selects
+this transport when `04B4:2412` interface 2 is present, otherwise the
+XInput filter sidecar.

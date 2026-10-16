@@ -1,14 +1,18 @@
 /**
- * Flydigi XInput-mode (Direwolf 4) config session: read, verified write, save.
+ * Flydigi Direwolf 4 config session: read, verified write, save.
  *
- * Transport is scripts/flydigi-xinput-sidecar.py, which relays raw frames to
- * Space Station's Xbox 360 filter driver. Needs an elevated process and Space
- * Station (and its service) closed. Every write is read back; a mismatch is
- * rolled back to the config captured just before the write. Protocol framing:
- * src/shared/flydigi-xinput.ts, docs/flydigi.md.
+ * Two transports carry the same protocol (src/shared/flydigi-xinput.ts):
+ *  - DInput mode (04B4:2412): plain HID on interface 2 via node-hid. No driver,
+ *    no Space Station, no admin. Preferred whenever that interface is present.
+ *  - XInput mode (045E:028E): scripts/flydigi-xinput-sidecar.py relays frames to
+ *    Space Station's Xbox 360 filter driver. Needs an elevated process and
+ *    Space Station (and its service) closed.
+ * Every write is read back; a mismatch is rolled back to the config captured
+ * just before the write. docs/flydigi.md has the framing.
  */
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
 import { app } from 'electron'
+import HIDModule, { type HID as HIDInstance } from 'node-hid'
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import {
@@ -25,6 +29,8 @@ import {
   fxDecodeSticks,
   fxDecodeVibration,
   fxDiffPacks,
+  fxFromDInput,
+  fxToDInput,
   fxEncodeVibration,
   fxParseAck,
   fxReadConfig,
@@ -40,11 +46,16 @@ import {
   FX_CMD_READ_CFG_ID
 } from '../shared/flydigi-xinput'
 
+const FD_V1_VID = 0x04b4
+const FD_V1_PID = 0x2412
+const FD_V1_INTERFACE = 2
 const SIDECAR = join(__dirname, '../../scripts/flydigi-xinput-sidecar.py')
 const ACK_TIMEOUT_MS = 2000
 const READ_SETTLE_MS = 2500
 
 let child: ChildProcessWithoutNullStreams | null = null
+let hid: HIDInstance | null = null
+let mode: 'hid' | 'filter' | null = null
 let ready: Promise<void> | null = null
 let nextId = 1
 const pending = new Map<number, (r: { ok: boolean; error?: string }) => void>()
@@ -53,8 +64,50 @@ let busy = Promise.resolve()
 
 const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms))
 
+/** Path of the DInput vendor interface when the pad is in DInput mode. */
+function dinputPath(): string | null {
+  try {
+    const d = HIDModule.devices().find((x) => x.vendorId === FD_V1_VID && x.productId === FD_V1_PID && x.interface === FD_V1_INTERFACE)
+    return d?.path ?? null
+  } catch {
+    return null
+  }
+}
+
+function openHid(path: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    try {
+      const h = new HIDModule.HID(path)
+      h.on('data', (raw: Buffer) => {
+        for (const a of fxFromDInput(new Uint8Array(raw))) acks.push(a)
+      })
+      h.on('error', () => {
+        if (hid === h) {
+          hid = null
+          mode = null
+          ready = null
+        }
+      })
+      hid = h
+      mode = 'hid'
+      resolve()
+    } catch (e) {
+      ready = null
+      reject(new Error(`flydigi: cannot open the DInput interface (${(e as Error).message}). Close Flydigi Space Station and retry.`))
+    }
+  })
+}
+
 function start(): Promise<void> {
+  // The pad can change mode between calls (replug, mode switch): re-pick the transport.
+  const path = dinputPath()
+  if (ready && (mode === 'hid') !== (path !== null)) closeTransports()
   if (ready) return ready
+  if (path) {
+    ready = openHid(path)
+    return ready
+  }
+  mode = 'filter'
   ready = new Promise<void>((resolve, reject) => {
     const p = spawn(process.env.FLYDIGI_PYTHON ?? 'python', [SIDECAR], { stdio: 'pipe' })
     child = p
@@ -127,6 +180,14 @@ function rpc(req: Record<string, unknown>): Promise<{ ok: boolean; error?: strin
 }
 
 async function sendFrame(frame: Uint8Array): Promise<void> {
+  if (mode === 'hid') {
+    try {
+      hid!.write(Array.from(fxToDInput(frame)))
+    } catch (e) {
+      throw new Error(`flydigi: write failed (${(e as Error).message})`)
+    }
+    return
+  }
   const r = await rpc({ op: 'send', hex: Buffer.from(frame).toString('hex') })
   if (!r.ok) throw new Error(`flydigi: write failed (${r.error ?? 'no detail'})`)
 }
@@ -177,7 +238,7 @@ async function writeBlob(cfgId: number, from: Uint8Array, to: Uint8Array): Promi
 }
 
 function snapshot(cfgId: number, activeCfgId: number, cfgCount: number, blob: Uint8Array): FxSnapshot {
-  return { cfgId, activeCfgId, cfgCount, dataVersion: fxDataVersion(blob), vibration: fxDecodeVibration(blob), sticks: fxDecodeSticks(blob), curves: fxDecodeCurves(blob) }
+  return { transport: mode ?? 'filter', cfgId, activeCfgId, cfgCount, dataVersion: fxDataVersion(blob), vibration: fxDecodeVibration(blob), sticks: fxDecodeSticks(blob), curves: fxDecodeCurves(blob) }
 }
 
 /** Serialise sessions: the pad answers one command at a time. */
@@ -263,8 +324,20 @@ export function fxXInputWrite(patch: FxPatch): Promise<{ verified: boolean; rest
   })
 }
 
-export function fxXInputStop(): void {
+function closeTransports(): void {
   child?.kill()
   child = null
+  try {
+    hid?.removeAllListeners()
+    hid?.close()
+  } catch {
+    /* already gone */
+  }
+  hid = null
+  mode = null
   ready = null
+}
+
+export function fxXInputStop(): void {
+  closeTransports()
 }

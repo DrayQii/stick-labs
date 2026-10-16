@@ -12,6 +12,10 @@ import {
   FX_CURVE_DEFAULT,
   FX_CURVE_DEFAULT_POINTS,
   fxDeadzonePoints,
+  fxFromDInput,
+  fxToDInput,
+  fxReadConfigId,
+  fxWriteStart,
   fxDecodeCurves,
   fxDecodeSticks,
   fxDecodeVibration,
@@ -91,6 +95,32 @@ for (const [d, want] of Object.entries(dzObs)) {
   check(`deadzone ${d} -> curve (max error ${maxErr})`, maxErr <= 1, got.join())
 }
 check('deadzone 0, 10, 20, 50, 100 are exact', [0, 10, 20, 50, 100].every((d) => fxDeadzonePoints(d).join() === dzObs[d].join()))
+
+// --- DInput transport translation, against replies captured from the pad in 04B4:2412 mode ---
+const h2 = (s: string): Uint8Array => Uint8Array.from(s.split(' ').map((x) => parseInt(x, 16)))
+check('DInput read-config-id frame', hex(fxToDInput(fxReadConfigId())) === '05 eb a0 00 00 00 00 00 00 00 00 00 00 00 00')
+check('DInput read-config frame', hex(fxToDInput(fxReadConfig(1))) === '05 eb 01 00 00 00 00 00 00 00 00 00 00 00 00')
+check('DInput write-start frame', hex(fxToDInput(fxWriteStart(14, 1, 1))) === '05 ef 0e 01 a0 01 00 00 00 00 00 00 00 00 00')
+check('DInput pack frame', hex(fxToDInput(frames[1])) === '05 22 08 19 19 01 ff 00 00 3c ff 32 a0 00 00')
+check('DInput save frame', hex(fxToDInput(fxSave(0x080a))) === '05 50 03 0a 08 00 00 00 00 00 00 00 00 00 00')
+const idReply = fxFromDInput(h2('04 ff f0 aa ac 00 a0 04 00 00 00 00 00 00 00 00 01 81 00 80 00 80 7e 00 00 00 00 00 84 02 00 00'))
+check('DInput config-id reply: active 0 of 4', idReply.length === 1 && idReply[0].cmd === 0x20 && idReply[0].data[0] === 0 && idReply[0].data[2] === 4)
+check('DInput plain input yields no ack', fxFromDInput(h2('04 fe 66 00 00 00 00 00 00 00 00 00 00 00 00 ff 00 81 00 80 00 80 7e 00 00 00 00 00 84 01 00 00')).length === 0)
+check('DInput get-info reply yields no ack', fxFromDInput(h2('04 ff f0 84 00 0a 08 61 38 34 72 04 02 01 06 ec 00 81 00 80 00 80 7e 00 00 00 00 00 84 02 00 00')).length === 0)
+// A pack reply for index 80 must not be mistaken for the 0x50 save ack (idx 80 = 0x50).
+const p80 = fxFromDInput(h2('04 ff f0 50 00 01 02 03 04 05 06 07 08 09 0a eb 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00'))
+check('pack index 80 is a config pack, not a save ack', p80.length === 1 && p80[0].cmd === 0x22 && p80[0].data[0] === 0x50 && p80[0].data[1] === 1)
+// Reassemble the real DInput config read: pack 0 of a 0x0301 blob.
+const dAcks: FxAck[] = []
+for (let i = 0; i < 84; i++) {
+  const rep = new Uint8Array(32)
+  rep.set([0x04, 0xff, 0xf0, i, 0], 0)
+  rep.set(blob.subarray(i * 10, i * 10 + 10), 5)
+  rep[15] = 0xeb
+  dAcks.push(...fxFromDInput(rep))
+}
+const dBlob = fxAssembleBlob(dAcks)
+check('84 DInput pack replies reassemble the blob', !!dBlob && hex(dBlob) === hex(blob))
 
 // Ack parsing / blob assembly from real reply shapes.
 const rep = (cmd: number, data: number[]): Uint8Array => {
