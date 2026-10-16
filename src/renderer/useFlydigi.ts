@@ -241,18 +241,27 @@ export function useFlydigi(onLost: () => void) {
     }
   }
 
+  const edgeOf = (c: { left: FxCurve; right: FxCurve } | null, side: 'left' | 'right'): number => (c ? sc(c[side].edge) : 0)
+
+  /** Centre slider (-100..100): sets the stick's centre byte and regenerates the curve for the current edge. */
   const setDeadzone = (side: 'left' | 'right', d: number): void => {
     ;(side === 'left' ? setLeft : setRight)(d)
-    setCurves((c) => (c ? { ...c, [side]: { ...c[side], type: FX_CURVE_CUSTOM, points: fxDeadzonePoints(d) } } : c))
+    setCurves((c) => (c ? { ...c, [side]: { ...c[side], type: FX_CURVE_CUSTOM, points: fxDeadzonePoints(d, edgeOf(c, side)) } } : c))
+  }
+
+  /** Edge slider (-100..100): stored as a signed byte in the curve record; regenerates the curve for the current centre. */
+  const setEdge = (side: 'left' | 'right', e: number): void => {
+    const centre = side === 'left' ? left : right
+    setCurves((c) => (c ? { ...c, [side]: { ...c[side], type: FX_CURVE_CUSTOM, edge: e & 0xff, points: fxDeadzonePoints(centre, e) } } : c))
   }
 
   const setMotor = (side: 'left' | 'right', patch: Partial<FxVibration['left']>): void =>
     setVib((v) => (v ? { ...v, [side]: { ...v[side], ...patch } } : v))
 
   return {
-    active, snap, vib, setVib, left, right, keyEdits, setKeyEdits, triggers, setTriggers, curves, setCurves,
+    sc, active, snap, vib, setVib, left, right, keyEdits, setKeyEdits, triggers, setTriggers, curves, setCurves,
     save, setSave, busy, rate, mode, msg, setMsg, backups, dirty,
-    load, disconnect, toXInput, pollingRate, activate, selectSlot, backupNow, restore, apply, setDeadzone, setMotor
+    load, disconnect, toXInput, pollingRate, activate, selectSlot, backupNow, restore, apply, setDeadzone, setEdge, setMotor
   }
 }
 

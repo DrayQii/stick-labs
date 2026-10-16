@@ -108,7 +108,22 @@ for (const [d, want] of Object.entries(dzObs)) {
   const maxErr = Math.max(...got.map((v, i) => Math.abs(v - want[i])))
   check(`deadzone ${d} -> curve (max error ${maxErr})`, maxErr <= 1, got.join())
 }
-check('deadzone -13 matches the one logged negative: ends 63 and 150', (() => { const g = fxDeadzonePoints(-13); return g[0] === 63 && g[8] === 150 && g.every((v, i) => i === 0 || v >= g[i - 1]) })())
+// Space Station service log (UpdateConfig joystickConfig): [centre, edge] -> the nine points it wrote.
+const ceObs: Array<[number, number, number[]]> = [
+  [-100, 0, [150, 150, 150, 150, 150, 150, 150, 150, 150]],
+  [-13, 0, [63, 74, 85, 96, 107, 118, 129, 139, 150]],
+  [0, -30, [50, 59, 68, 76, 85, 94, 103, 111, 120]],
+  [-13, -30, [63, 70, 78, 85, 92, 99, 106, 113, 120]],
+  [-40, -30, [90, 94, 98, 101, 105, 109, 113, 116, 120]],
+  [50, -30, [0, 0, 15, 33, 50, 68, 85, 103, 120]],
+  [50, 30, [0, 0, 0, 0, 50, 113, 150, 150, 150]]
+]
+for (const [c, e, want] of ceObs) {
+  const got = fxDeadzonePoints(c, e)
+  const maxErr = Math.max(...got.map((v, i) => Math.abs(v - want[i])))
+  check(`centre ${c} / edge ${e} -> curve (max error ${maxErr})`, maxErr <= 1, got.join())
+}
+check('edge byte is signed: -30 -> 0xe2', ((-30) & 0xff) === 0xe2)
 check('deadzone 0, 10, 20, 50, 100 are exact', [0, 10, 20, 50, 100].every((d) => fxDeadzonePoints(d).join() === dzObs[d].join()))
 
 // --- DInput transport translation, against replies captured from the pad in 04B4:2412 mode ---

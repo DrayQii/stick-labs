@@ -82,22 +82,6 @@ export default function FlydigiCurveDesigner(props: {
             </option>
           ))}
         </select>
-        <label className="row" style={{ gap: 4 }} title="Raw edge (outer threshold) byte, 0..255. Its scale is not confirmed yet: 0 is what the pad ships with.">
-          <span className="label">Edge</span>
-          <input
-            type="number"
-            className="input mono"
-            style={{ width: 64 }}
-            min={0}
-            max={255}
-            step={1}
-            value={curve.edge}
-            onChange={(e) => {
-              const v = Math.round(Number(e.target.value))
-              if (Number.isFinite(v)) onChange({ ...curve, edge: Math.max(0, Math.min(255, v)) })
-            }}
-          />
-        </label>
         <button className="btn ghost sm" onClick={() => onChange({ ...curve, type: FX_CURVE_DEFAULT, points: [...FX_CURVE_DEFAULT_POINTS] })}>
           Reset
         </button>

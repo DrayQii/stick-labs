@@ -144,10 +144,21 @@ and 100 is flat 50. Exact for 0/10/20/50/100, within 1 on a few points at 5 and
 13 (its rounding). Negative centres were also seen (-13 gave 63..150) and do not
 follow this formula; not used.
 
-`edge` is 0 on both sticks of the real read and its scale is unconfirmed. The curve
-designer exposes it as a raw 0..255 field. To pin it down: set Space Station's
-outer-threshold slider to two or three values, read the config each time
-(`A5 21` / `05 EB`) and compare blob 801 and 813 (and the main records at 109..122).
+Space Station's service log (`service_log_*.txt`, `FlydigiWorker Receive command from client`) records
+every setting as JSON (`IpcCommandEnum_UpdateConfig`), which is how the following was decoded:
+
+- `edge` (curve record +11, blob 801 / 813) is a signed byte, the Edge slider -100..100 (-30 = `e2`);
+  the main record's centre byte (110 / 117) is the Center slider, also signed.
+- The nine curve points are a straight line in output percent over input percent (raw 50 = 0%, 150 = 100%),
+  extended past its ends and clamped to raw 0..150. Start: centre >= 0 crosses 0% at input c%, centre < 0
+  starts at |c|%. End: edge <= 0 ends at 100% + e% at full travel, edge > 0 reaches 100% at input 100% - e%.
+  `fxDeadzonePoints(c, e)` reproduces every logged combination within 1 (tests/flydigixinput.ts).
+- Turbo is a key entry `[target, enableType, frequency]`: A turbo on press at 8 wrote `04 01 08`
+  (enableType Click = 0, Press = 1; frequencies seen: 15, 8).
+- Motion block (blob 137..144): `[mode/mapping, enableKey, enableType, deadZone, sensitivity, ?, ?, ff]`;
+  deadZone and sensitivity match the log values (8 / 25 -> 17 / 30), enableKey is a key id (13 RT, 12 LT).
+  Not decoded further yet.
+- `CallGripVibration {leftValue, rightValue}` is a live motor test, not a config field.
 
 Backups: every write and restore first saves the slot's 840-byte blob to
 `userData/flydigi-backups/fp4-cfg<N>-<ISO time>.bin` (N is 0-based); the panel lists them and can

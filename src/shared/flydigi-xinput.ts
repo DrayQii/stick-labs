@@ -315,24 +315,32 @@ export interface FxCurve {
 }
 
 /**
- * Curve points Space Station writes for a stick deadzone of `d` (its centre slider, -100..100;
- * the same value goes in the main record's centre byte as a signed byte). For d >= 0 the ramp ends
- * at 150 and rises 12.5 per ninth, steepened by 1/(1 - d/100) and clamped at 0; 100 is flat 50.
- * Fitted to Space Station's log (d = 0, 5, 10, 20, 50, 100, 13): exact for 0/10/20/50/100, within 1
- * on a few points at 5 and 13 (its rounding).
+ * Curve points Space Station writes for a stick's Center (`c`) and Edge (`e`) sliders, each
+ * -100..100 and stored as signed bytes (centre in the main stick record, edge in the curve record at
+ * +11; edge -30 is 0xe2). Space Station computes the nine points itself: a straight line in output
+ * percent over input percent, extended past its ends and clamped to raw 0..150 (raw 50 = 0%, 150 = 100%; the
+ * low end is written as raw 0, i.e. -50%, not clamped at 50).
  *
- * Negative values (the slider's "Offset" side) were seen once: -13 gave points 63..150. Only those
- * two ends are known, so a negative d lifts the first point to 50 + |d| and runs straight to 150;
- * the in-between points are an assumption (Space Station's ramps are linear in the index).
+ *   start: c >= 0 -> crosses 0% at input c% (the deadzone);  c < 0 -> starts at |c|% (the offset)
+ *   end:   e <= 0 -> ends at 100% + e% at full travel;       e > 0 -> reaches 100% at input 100% - e%
+ *
+ * Fitted to Space Station's writes (its service log, tests/flydigixinput.ts): c in -100..100 with e = 0,
+ * and c/e = 0/-30, -13/-30, -40/-30, 50/-30, 50/30. Every point is within 1 of its output (it rounds a
+ * little differently in places).
  */
-export function fxDeadzonePoints(d: number): number[] {
-  if (d >= 100) return Array(FX_CURVE_POINTS).fill(50)
-  if (d < 0) {
-    const lo = 50 + Math.min(100, -d)
-    return Array.from({ length: FX_CURVE_POINTS }, (_, i) => Math.round(lo + ((150 - lo) * i) / (FX_CURVE_POINTS - 1)))
-  }
-  const k = 1 - d / 100
-  return Array.from({ length: FX_CURVE_POINTS }, (_, i) => Math.max(0, Math.min(255, Math.round(150 - (12.5 * (8 - i)) / k))))
+export function fxDeadzonePoints(c: number, e = 0): number[] {
+  const cc = Math.max(-100, Math.min(100, c))
+  const ee = Math.max(-100, Math.min(100, e))
+  if (cc >= 100) return Array(FX_CURVE_POINTS).fill(50) // zero-width ramp: flat at 0%
+  const x0 = cc >= 0 ? cc / 100 : 0
+  const y0 = cc >= 0 ? 0 : -cc / 100
+  const x1 = ee > 0 ? 1 - ee / 100 : 1
+  const y1 = ee > 0 ? 1 : 1 + ee / 100
+  if (x1 <= x0) return Array(FX_CURVE_POINTS).fill(fxCurvePercentToRaw(y1 * 100))
+  return Array.from({ length: FX_CURVE_POINTS }, (_, i) => {
+    const x = i / (FX_CURVE_POINTS - 1)
+    return Math.min(150, fxCurvePercentToRaw((y0 + ((y1 - y0) * (x - x0)) / (x1 - x0)) * 100))
+  })
 }
 
 /**
