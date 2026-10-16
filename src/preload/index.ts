@@ -42,6 +42,7 @@ const api = {
     call<DeepPollResult>('diag:deeppoll', vid, pid, seconds),
   flydigiIdentify: (path: string) => call<FdIdentifyResult>('flydigi:identify', path),
   flydigiXRead: (cfgId?: number) => call<FxSnapshot>('flydigix:read', cfgId),
+  flydigiXToXInput: () => call<{ switched: boolean }>('flydigix:toXInput'),
   flydigiXActivate: (cfgId: number) => call<FxSnapshot>('flydigix:activate', cfgId),
   flydigiXWrite: (patch: FxPatch) =>
     call<{ verified: boolean; restored: boolean; saved: boolean; changedPacks: number }>('flydigix:write', patch),

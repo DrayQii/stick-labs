@@ -13,6 +13,7 @@ import {
   FX_CURVE_DEFAULT_POINTS,
   fxDeadzonePoints,
   fxFromDInput,
+  fxDInputSwitchToXInput,
   fxToDInput,
   fxReadConfigId,
   fxWriteStart,
@@ -111,6 +112,7 @@ check('DInput pack frame', hex(fxToDInput(frames[1])) === '05 22 08 19 19 01 ff 
 check('DInput save frame', hex(fxToDInput(fxSave(0x080a))) === '05 50 03 0a 08 00 00 00 00 00 00 00 00 00 00')
 const idReply = fxFromDInput(h2('04 ff f0 aa ac 00 a0 04 00 00 00 00 00 00 00 00 01 81 00 80 00 80 7e 00 00 00 00 00 84 02 00 00'))
 check('DInput config-id reply: active 0 of 4', idReply.length === 1 && idReply[0].cmd === 0x20 && idReply[0].data[0] === 0 && idReply[0].data[2] === 4)
+check('DInput switch-to-XInput frame', hex(fxDInputSwitchToXInput()) === '05 ed 00 00 00 00 00 00 00 00 00 00 00 00 00')
 check('DInput plain input yields no ack', fxFromDInput(h2('04 fe 66 00 00 00 00 00 00 00 00 00 00 00 00 ff 00 81 00 80 00 80 7e 00 00 00 00 00 84 01 00 00')).length === 0)
 check('DInput get-info reply yields no ack', fxFromDInput(h2('04 ff f0 84 00 0a 08 61 38 34 72 04 02 01 06 ec 00 81 00 80 00 80 7e 00 00 00 00 00 84 02 00 00')).length === 0)
 // A pack reply for index 80 must not be mistaken for the 0x50 save ack (idx 80 = 0x50).

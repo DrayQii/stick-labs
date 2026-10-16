@@ -27,6 +27,7 @@ import {
   fxDecodeSticks,
   fxDecodeTriggers,
   fxDecodeVibration,
+  fxDInputSwitchToXInput,
   fxDiffPacks,
   fxEncodeVibration,
   fxFromDInput,
@@ -240,6 +241,32 @@ export function fxHidWrite(patch: FxPatch): Promise<{ verified: boolean; restore
       saved = !!a && fxSaveAcked(a)
     }
     return { verified: true, restored: false, saved, changedPacks }
+  })
+}
+
+/**
+ * Send Space Station's SwitchToXInput (05 ED) and wait for the pad to leave
+ * DInput mode. The pad drops off the bus and returns as 045E:028E, after which
+ * Stick Labs can no longer configure it until it is put back in DInput mode.
+ */
+export function fxHidSwitchToXInput(): Promise<{ switched: boolean }> {
+  return exclusive(async () => {
+    open()
+    try {
+      hid!.write(Array.from(fxDInputSwitchToXInput()))
+    } catch (e) {
+      close()
+      throw new Error(`flydigi: write failed (${(e as Error).message})`)
+    }
+    const end = Date.now() + 6000
+    while (Date.now() < end) {
+      await sleep(250)
+      if (dinputPath() === null) {
+        close()
+        return { switched: true }
+      }
+    }
+    return { switched: false }
   })
 }
 

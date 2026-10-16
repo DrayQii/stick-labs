@@ -77,6 +77,8 @@ interface LabApi {
   flydigiIdentify(path: string): Promise<FdIdentifyResult>
   /** Flydigi Direwolf 4 (DInput mode, plain HID): read a config slot. Space Station must be closed. */
   flydigiXRead(cfgId?: number): Promise<FxSnapshot>
+  /** Switch the pad from DInput back to XInput mode; it drops off the bus and returns as an Xbox 360 pad. */
+  flydigiXToXInput(): Promise<{ switched: boolean }>
   /** Make a config slot (0-based) the one the pad runs. */
   flydigiXActivate(cfgId: number): Promise<FxSnapshot>
   /** Verified write (rolled back on mismatch); `save` persists across replug. */

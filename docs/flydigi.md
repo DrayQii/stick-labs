@@ -152,7 +152,7 @@ the write landed inside the capture window.
 The pad can be switched in software: `A5 17` through the XInput filter path
 (Space Station's legacy SwitchToDInput) re-enumerated it as `04B4:2412`
 (four interfaces, vendor usage page 0xFFA0 on interface 2). The mode survives a
-replug. Back to XInput: `05 ED` (SwitchToXInput) or Space Station.
+replug. Back to XInput: `05 ED` over plain HID (Space Station's SwitchToXInput; the panel's "Switch to XInput" button sends it and checks the pad leaves 04B4:2412) or just launching Space Station.
 
 Same protocol, different bytes (report id 0x05 out, `04 FF F0 …` replies in;
 indexes include the report id):

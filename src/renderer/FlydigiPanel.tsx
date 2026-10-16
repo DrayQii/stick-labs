@@ -110,6 +110,28 @@ export default function FlydigiPanel(): JSX.Element {
     }
   }
 
+  async function toXInput(): Promise<void> {
+    const ok = window.confirm(
+      'Switch the Direwolf back to XInput mode?\n\nThe pad will disconnect and return as an Xbox 360 controller (for games). Stick Labs cannot configure it again until it is put back in DInput mode.'
+    )
+    if (!ok) return
+    setBusy(true)
+    setMsg(null)
+    try {
+      const r = await api().flydigiXToXInput()
+      if (r.switched) {
+        setSnap(null)
+        setMsg({ kind: 'ok', text: 'Switched: the pad is now in XInput mode (an Xbox 360 controller).' })
+      } else {
+        setMsg({ kind: 'err', text: 'The pad did not leave DInput mode. Unplug and replug it, or check it in Windows Device Manager.' })
+      }
+    } catch (e) {
+      setMsg({ kind: 'err', text: (e as Error).message })
+    } finally {
+      setBusy(false)
+    }
+  }
+
   async function activate(): Promise<void> {
     if (!snap) return
     setBusy(true)
@@ -174,6 +196,9 @@ export default function FlydigiPanel(): JSX.Element {
       <div className="row" style={{ gap: 8 }}>
         <button className="btn" disabled={busy} onClick={() => void load(snap?.cfgId)}>
           {snap ? 'Re-read' : 'Read pad'}
+        </button>
+        <button className="btn ghost" disabled={busy} onClick={() => void toXInput()} title="Send the pad back to XInput mode so games see an Xbox controller">
+          Switch to XInput
         </button>
         {snap && (
           <>

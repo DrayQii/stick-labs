@@ -9,7 +9,7 @@ import { discover, discoverLive } from './hid'
 import { ljReadButtonTable, ljReadMainSnapshot, ljReadSnapshot, ljWriteButtonVerified, ljWriteStickVerified, ljWriteTriggerVerified } from './leadjoy'
 import type { LjButtonTarget, LjStickPatch } from '../shared/leadjoy'
 import { fdIdentify } from './flydigi'
-import { fxHidActivate, fxHidRead, fxHidWrite, fxHidStop } from './flydigi-hid'
+import { fxHidActivate, fxHidRead, fxHidSwitchToXInput, fxHidWrite, fxHidStop } from './flydigi-hid'
 import type { FxPatch } from '../shared/flydigi-xinput'
 import { ljButtonWriteRecord } from '../shared/leadjoy'
 import { steamInfo, exportApexDeadzones, listInstalledGames, exportDeadzonesToGames } from './steam'
@@ -125,6 +125,7 @@ handle('flydigix:read', (cfgId?: number) => {
   if (!cfgOk(cfgId)) throw new Error('flydigi: config id must be 0..7')
   return fxHidRead(cfgId)
 })
+handle('flydigix:toXInput', () => fxHidSwitchToXInput())
 handle('flydigix:activate', (cfgId: number) => {
   if (!Number.isInteger(cfgId) || cfgId < 0 || cfgId > 7) throw new Error('flydigi: config id must be 0..7')
   return fxHidActivate(cfgId)

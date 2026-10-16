@@ -185,6 +185,18 @@ export function fxToDInput(frame: Uint8Array): Uint8Array {
 }
 
 /**
+ * Switch the pad from DInput back to XInput mode (Space Station's legacy
+ * SwitchToXInput, command 0xED). Already a DInput-form report; not run through
+ * fxToDInput. The pad re-enumerates as 045E:028E afterwards.
+ */
+export const fxDInputSwitchToXInput = (): Uint8Array => {
+  const f = new Uint8Array(FX_FRAME_LEN)
+  f[0] = FXD_REPORT_ID
+  f[1] = 0xed
+  return f
+}
+
+/**
  * Normalise a DInput reply report (report id first) into XInput-style acks.
  * Plain input reports (`04 FE 66 …`) and get-info replies yield none.
  */
