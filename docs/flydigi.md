@@ -190,12 +190,12 @@ were `00 00 ff 00 00 05 00 00 ff 00` and `... 05 00 00 04 00` (pack 2), i.e. ent
 Mode note: launching Space Station flips a DInput-mode pad (04B4:2412) back to XInput
 (045E:028E), so the plain-HID transport only lasts while Space Station is not running.
 
-Polling rate (a device setting, not part of the config blob). Space Station sets it with
-`A5 50 0A <code>` (XInput form) / `05 50 0A <code>` (DInput form); there is no ack, so Stick
-Labs verifies by reading the device settings back. Codes: 1 = 1000 Hz, 2 = 500, 4 = 250,
-8 = 125 (the Direwolf has no 8K gears). The settings read is `A5 50 07` / `05 F2 03`; the
-XInput ack (`A5 50 07 01 00 01 0F 01 01 01 11 01 …` on this pad) holds, from ack[17]: mapping
-switch, stick debounce, auto calibration (0 = on), sleep time, quick switch, **report rate
-(ack[22]; code 1 here = 1000 Hz)**, precision, sensitivity, rebound. The DInput reply layout is
-taken from Space Station's DInput parser and not yet seen on hardware.
+Polling rate is NOT available over the plain-HID (DInput) transport on the Direwolf 4. Checked on
+hardware (2026-10-16): `05 F2 03` returns a short settings block with no rate byte (`0f 01 00 …`),
+`05 50 07` gets no reply, and `05 50 0A <code>` (codes 1/2/4/8 = 1000/500/250/125 Hz) changes
+nothing observable and is never acked. Space Station's own DInput parser agrees: it reads
+`ReportRate = (Serial != 3) ? data[9] : 0`, and the Direwolf is serial 3, so it ignores the rate in
+DInput mode. In XInput mode, through the filter driver, the rate is exposed: `A5 50 07` returns a
+block with the report-rate code at ack[22] (1 = 1000 Hz on this pad) and `A5 50 0A <code>` sets it.
+Supporting it would mean bringing the driver path back, so it is left out.
 

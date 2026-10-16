@@ -6,7 +6,7 @@
  * process and rolled back on mismatch.
  */
 import { useEffect, useState } from 'react'
-import { FX_REPORT_RATES, FX_KEY_DEFAULT, FX_KEY_NAMES, FX_KEY_ORDER, FX_CURVE_CUSTOM, FX_CURVE_DEFAULT, FX_CURVE_DEFAULT_POINTS, fxDeadzonePoints, fxTriggerRange, type FxCurve, type FxSnapshot, type FxTriggerRaw, type FxVibration } from '@shared/flydigi-xinput'
+import { FX_KEY_DEFAULT, FX_KEY_NAMES, FX_KEY_ORDER, FX_CURVE_CUSTOM, FX_CURVE_DEFAULT, FX_CURVE_DEFAULT_POINTS, fxDeadzonePoints, fxTriggerRange, type FxCurve, type FxSnapshot, type FxTriggerRaw, type FxVibration } from '@shared/flydigi-xinput'
 import { api } from './api'
 
 const sc = (b: number): number => (b > 127 ? b - 256 : b)
@@ -150,25 +150,6 @@ export default function FlydigiPanel(props: { onClose?: () => void }): JSX.Eleme
     }
   }
 
-  async function setRate(code: number, hz: number): Promise<void> {
-    if (!snap) return
-    setBusy(true)
-    setMsg(null)
-    try {
-      const r = await api().flydigiXSetRate(code)
-      setSnap((s0) => (s0 ? { ...s0, reportRate: r.reportRate } : s0))
-      setMsg(
-        r.verified
-          ? { kind: 'ok', text: `Polling rate set to ${hz} Hz (read back from the pad).` }
-          : { kind: 'err', text: 'The pad did not report the new polling rate. Re-read to see what it is using.' }
-      )
-    } catch (e) {
-      setMsg({ kind: 'err', text: (e as Error).message })
-    } finally {
-      setBusy(false)
-    }
-  }
-
   async function activate(): Promise<void> {
     if (!snap) return
     setBusy(true)
@@ -273,21 +254,6 @@ export default function FlydigiPanel(props: { onClose?: () => void }): JSX.Eleme
 
       {snap && vib && curves && triggers && (
         <div className="stack" style={{ gap: 14, marginTop: 16 }}>
-          <div>
-            <h4>Polling rate</h4>
-            <div className="hint" style={{ margin: '4px 0 8px' }}>
-              How often the pad reports to the PC. Applied immediately and read back from the pad (a device setting, not part of the config slot).
-            </div>
-            <div className="row" style={{ gap: 6 }}>
-              {FX_REPORT_RATES.map((r) => (
-                <button key={r.code} className={`choice-btn${snap.reportRate === r.code ? ' active' : ''}`} disabled={busy} onClick={() => void setRate(r.code, r.hz)}>
-                  {r.hz} Hz
-                </button>
-              ))}
-              {snap.reportRate === null && <span className="mono" style={{ alignSelf: 'center' }}>not reported</span>}
-            </div>
-          </div>
-
           <div>
             <h4>Sticks</h4>
             <div className="hint" style={{ margin: '4px 0 8px' }}>
