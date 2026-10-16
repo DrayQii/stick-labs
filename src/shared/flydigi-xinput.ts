@@ -315,16 +315,61 @@ export interface FxCurve {
 }
 
 /**
- * Curve points Space Station writes for a stick deadzone of `d` (its slider,
- * 0..100; the same value goes in the main record's centre byte). The ramp ends
- * at 150 and rises 12.5 per ninth, steepened by 1/(1 - d/100) and clamped at 0;
- * 100 is flat 50. Fitted to Space Station's log (d = 0, 5, 10, 20, 50, 100, 13):
- * exact for 0/10/20/50/100, within 1 on a few points at 5 and 13 (its rounding).
+ * Curve points Space Station writes for a stick's Center (`c`) and Edge (`e`) sliders, each
+ * -100..100 and stored as signed bytes (centre in the main stick record, edge in the curve record at
+ * +11; edge -30 is 0xe2). Space Station computes the nine points itself: a straight line in output
+ * percent over input percent, extended past its ends and clamped to raw 0..150 (raw 50 = 0%, 150 = 100%; the
+ * low end is written as raw 0, i.e. -50%, not clamped at 50).
+ *
+ *   start: c >= 0 -> crosses 0% at input c% (the deadzone);  c < 0 -> starts at |c|% (the offset)
+ *   end:   e <= 0 -> ends at 100% + e% at full travel;       e > 0 -> reaches 100% at input 100% - e%
+ *
+ * Fitted to Space Station's writes (its service log, tests/flydigixinput.ts): c in -100..100 with e = 0,
+ * and c/e = 0/-30, -13/-30, -40/-30, 50/-30, 50/30. Every point is within 1 of its output (it rounds a
+ * little differently in places).
  */
-export function fxDeadzonePoints(d: number): number[] {
-  if (d >= 100) return Array(FX_CURVE_POINTS).fill(50)
-  const k = 1 - Math.max(0, d) / 100
-  return Array.from({ length: FX_CURVE_POINTS }, (_, i) => Math.max(0, Math.min(255, Math.round(150 - (12.5 * (8 - i)) / k))))
+export function fxDeadzonePoints(c: number, e = 0): number[] {
+  const cc = Math.max(-100, Math.min(100, c))
+  const ee = Math.max(-100, Math.min(100, e))
+  if (cc >= 100) return Array(FX_CURVE_POINTS).fill(50) // zero-width ramp: flat at 0%
+  const x0 = cc >= 0 ? cc / 100 : 0
+  const y0 = cc >= 0 ? 0 : -cc / 100
+  const x1 = ee > 0 ? 1 - ee / 100 : 1
+  const y1 = ee > 0 ? 1 : 1 + ee / 100
+  if (x1 <= x0) return Array(FX_CURVE_POINTS).fill(fxCurvePercentToRaw(y1 * 100))
+  return Array.from({ length: FX_CURVE_POINTS }, (_, i) => {
+    const x = i / (FX_CURVE_POINTS - 1)
+    return Math.min(150, fxCurvePercentToRaw((y0 + ((y1 - y0) * (x - x0)) / (x1 - x0)) * 100))
+  })
+}
+
+/**
+ * Curve values are bytes where 50 is 0% output and 150 is 100% (the stock ramp runs 50..150, and a
+ * deadzone pushes the low points below 50, which the pad clamps to 0%). The nine points sit at evenly
+ * spaced input positions (0, 12.5 … 100%): Space Station's deadzone writes are linear in the index.
+ */
+export const FX_CURVE_ZERO = 50
+export const fxCurveRawToPercent = (raw: number): number => raw - FX_CURVE_ZERO
+export const fxCurvePercentToRaw = (pct: number): number => Math.max(0, Math.min(255, Math.round(FX_CURVE_ZERO + pct)))
+
+/**
+ * Sample a designed curve (x, y pairs on a 0..max scale, x ascending, as the GameSir presets are)
+ * onto the pad's nine evenly spaced input steps and return the nine raw bytes.
+ */
+export function fxCurveFromDesign(design: ReadonlyArray<{ x: number; y: number }>, max = 255): number[] {
+  const pts = [...design].sort((a, b) => a.x - b.x)
+  const at = (x: number): number => {
+    if (x <= pts[0].x) return pts[0].y
+    for (let k = 1; k < pts.length; k++) {
+      if (x <= pts[k].x) {
+        const a = pts[k - 1]
+        const b = pts[k]
+        return b.x === a.x ? b.y : a.y + ((b.y - a.y) * (x - a.x)) / (b.x - a.x)
+      }
+    }
+    return pts[pts.length - 1].y
+  }
+  return Array.from({ length: FX_CURVE_POINTS }, (_, i) => fxCurvePercentToRaw((at((i / (FX_CURVE_POINTS - 1)) * max) / max) * 100))
 }
 
 export function fxDecodeCurves(blob: Uint8Array): { left: FxCurve; right: FxCurve } {
@@ -337,10 +382,15 @@ export function fxDecodeCurves(blob: Uint8Array): { left: FxCurve; right: FxCurv
   return { left: rec(FX_OFF.curves), right: rec(FX_OFF.curves + 12) }
 }
 
-/** Returns a copy of `blob` with one stick's curve record replaced. */
+/**
+ * Returns a copy of `blob` with one stick's curve record replaced. Space Station writes the
+ * sensitivity type to both the curve record (790) and the main stick record (109 / 116), so this
+ * sets both; otherwise a Custom curve could sit next to a main record that still says Default.
+ */
 export function fxSetCurve(blob: Uint8Array, side: 0 | 1, curve: FxCurve): Uint8Array {
   if (curve.points.length !== FX_CURVE_POINTS) throw new Error(`fx: a curve has ${FX_CURVE_POINTS} points`)
   const out = blob.slice()
+  out[FX_OFF.joystick + side * 7] = curve.type & 0xff
   const o = FX_OFF.curves + side * 12
   out[o] = curve.type & 0xff
   curve.points.forEach((v, i) => (out[o + 1 + i] = v & 0xff))
@@ -428,34 +478,111 @@ const FX_KEY_MACRO = 32
 export interface FxKeyEntry {
   /** Key id this entry belongs to. */
   id: number
-  /** 'key' = plain remap (target = FX_KEY_DEFAULT when unremapped); turbo/macro are shown but not edited. */
+  /** 'key' = plain remap (target = FX_KEY_DEFAULT when unremapped); 'turbo' repeats the key; macros are shown but not edited. */
   kind: 'key' | 'turbo' | 'macro'
   target: number
+  /** Turbo only: FX_TURBO_PRESS or FX_TURBO_CLICK (0 otherwise). */
+  enableType: number
+  /** Turbo only: repeat frequency, Space Station's number (0 otherwise). */
+  frequency: number
+}
+
+/** Turbo entry `[key, enableType, frequency]`, from Space Station's writes: A on Press at 8 -> `04 01 08`, R3 on Click at 15 -> `0f 02 0f`. */
+export const FX_TURBO_PRESS = 1
+export const FX_TURBO_CLICK = 2
+export const FX_TURBO_MIN = 1
+export const FX_TURBO_MAX = 30
+
+export interface FxTurbo {
+  type: number
+  frequency: number
 }
 
 export function fxDecodeKeys(blob: Uint8Array): FxKeyEntry[] {
   return FX_KEY_ORDER.map((id) => {
     const o = FX_OFF.keys + id * 3
-    const [t, , freq] = [blob[o], blob[o + 1], blob[o + 2]]
+    const [t, type, freq] = [blob[o], blob[o + 1], blob[o + 2]]
     const kind = t === FX_KEY_MACRO ? 'macro' : freq > 0 ? 'turbo' : 'key'
-    return { id, kind, target: t > FX_KEY_MACRO && t !== FX_KEY_DEFAULT ? FX_KEY_DEFAULT : t }
+    return {
+      id,
+      kind,
+      target: t > FX_KEY_MACRO && t !== FX_KEY_DEFAULT ? FX_KEY_DEFAULT : t,
+      enableType: kind === 'turbo' ? type : 0,
+      frequency: kind === 'turbo' ? freq : 0
+    }
   })
 }
 
 /**
  * Point key `id` at `target` (FX_KEY_DEFAULT clears the remap). Writes the entry
  * as `[target, 0, 0]`, which is what Space Station writes for a plain remap
- * (A->B gave `05 00 00`). Turbo and macro entries are refused.
+ * (A->B gave `05 00 00`). An existing turbo entry is replaced; macro entries are refused.
  */
 export function fxSetKeyTarget(blob: Uint8Array, id: number, target: number): Uint8Array {
   if (!(id in FX_KEY_NAMES)) throw new Error(`fx: key ${id} is not a Direwolf key`)
   if (target !== FX_KEY_DEFAULT && !(target in FX_KEY_NAMES)) throw new Error(`fx: key ${id} cannot be mapped to ${target}`)
   const o = FX_OFF.keys + id * 3
-  if (blob[o] === FX_KEY_MACRO || blob[o + 2] > 0) throw new Error(`fx: ${FX_KEY_NAMES[id]} has a turbo/macro entry; edit it in Space Station`)
+  if (blob[o] === FX_KEY_MACRO) throw new Error(`fx: ${FX_KEY_NAMES[id]} has a macro; edit it in Space Station`)
   const out = blob.slice()
   out[o] = target & 0xff
   out[o + 1] = 0
   out[o + 2] = 0
+  return out
+}
+
+/** Make key `id` a turbo key that repeats itself: entry `[id, type, frequency]`. Macro entries are refused. */
+export function fxSetKeyTurbo(blob: Uint8Array, id: number, turbo: FxTurbo): Uint8Array {
+  if (!(id in FX_KEY_NAMES)) throw new Error(`fx: key ${id} is not a Direwolf key`)
+  if (turbo.type !== FX_TURBO_PRESS && turbo.type !== FX_TURBO_CLICK) throw new Error('fx: turbo type must be Press or Click')
+  if (!Number.isInteger(turbo.frequency) || turbo.frequency < FX_TURBO_MIN || turbo.frequency > FX_TURBO_MAX) {
+    throw new Error(`fx: turbo frequency must be ${FX_TURBO_MIN}..${FX_TURBO_MAX}`)
+  }
+  const o = FX_OFF.keys + id * 3
+  if (blob[o] === FX_KEY_MACRO) throw new Error(`fx: ${FX_KEY_NAMES[id]} has a macro; edit it in Space Station`)
+  const out = blob.slice()
+  out[o] = id
+  out[o + 1] = turbo.type
+  out[o + 2] = turbo.frequency
+  return out
+}
+
+// --- gyro / motion (blob 137..144, decoded from Space Station's service log) ---
+
+/** Gyro mapping byte: 0 = off (as shipped), 1 = Left stick, 2 = Right stick. Other values (e.g. mouse) are not decoded and are preserved. */
+export const FX_MOTION_OFF = 0
+export const FX_MOTION_LEFT = 1
+export const FX_MOTION_RIGHT = 2
+/** Enable type byte: 1 = Press (gyro only while the key is held); 0 is what Space Station leaves when it is unset. */
+export const FX_MOTION_PRESS = 1
+
+export interface FxMotion {
+  mapping: number
+  /** Key id that activates the gyro (FX_KEY_DEFAULT = none). */
+  enableKey: number
+  enableType: number
+  deadZone: number
+  /** Joystick modes write the same value to both sensitivity bytes. */
+  sensitivity: number
+  sensitivityY: number
+  /** 1 = Space Station's "Racer" mode (it clears this when the mapping moves to the right stick). */
+  racer: number
+  /** Second activation key, 255 = none. */
+  enableKey2: number
+}
+
+export function fxDecodeMotion(blob: Uint8Array): FxMotion {
+  const o = FX_OFF.motion
+  return { mapping: blob[o], enableKey: blob[o + 1], enableType: blob[o + 2], deadZone: blob[o + 3], sensitivity: blob[o + 4], sensitivityY: blob[o + 5], racer: blob[o + 6], enableKey2: blob[o + 7] }
+}
+
+/** Returns a copy of `blob` with only the listed motion fields changed. Changing the sensitivity writes both axes. */
+export function fxSetMotion(blob: Uint8Array, patch: Partial<FxMotion>): Uint8Array {
+  const m = { ...fxDecodeMotion(blob), ...patch }
+  if (patch.sensitivity !== undefined && patch.sensitivityY === undefined) m.sensitivityY = patch.sensitivity
+  for (const [k, v] of Object.entries(m)) if (!Number.isInteger(v) || v < 0 || v > 255) throw new Error(`fx: motion ${k} must be a byte`)
+  const out = blob.slice()
+  const o = FX_OFF.motion
+  out.set([m.mapping, m.enableKey, m.enableType, m.deadZone, m.sensitivity, m.sensitivityY, m.racer, m.enableKey2], o)
   return out
 }
 
@@ -473,6 +600,7 @@ export interface FxSnapshot {
   curves: { left: FxCurve; right: FxCurve }
   triggers: { left: FxTriggerRaw; right: FxTriggerRaw }
   keys: FxKeyEntry[]
+  motion: FxMotion
 }
 
 export interface FxPatch {
@@ -487,6 +615,10 @@ export interface FxPatch {
   rightTrigger?: FxTriggerRaw
   /** key id -> target key id (255 = default); only the keys listed are changed. */
   keys?: Record<number, number>
+  /** Only the gyro fields listed are changed. */
+  motion?: Partial<FxMotion>
+  /** key id -> turbo setting, or null to turn turbo off (back to the default key); applied after `keys`. */
+  turbo?: Record<number, FxTurbo | null>
   /** Persist with the 0x50 save after a verified write (survives a replug). */
   save?: boolean
 }

@@ -46,6 +46,10 @@ const api = {
   flydigiXMode: () => call<'dinput' | 'xinput' | 'none'>('flydigix:mode'),
   flydigiXToXInput: () => call<{ switched: boolean }>('flydigix:toXInput'),
   flydigiXActivate: (cfgId: number) => call<FxSnapshot>('flydigix:activate', cfgId),
+  flydigiXBackups: () => call<{ name: string; cfgId: number; time: string }[]>('flydigix:backups'),
+  flydigiXBackup: (cfgId?: number) => call<{ name: string; cfgId: number; time: string }>('flydigix:backup', cfgId),
+  flydigiXRestore: (name: string, save: boolean) =>
+    call<{ verified: boolean; restored: boolean; saved: boolean; changedPacks: number; cfgId: number }>('flydigix:restore', { name, save }),
   flydigiXWrite: (patch: FxPatch) =>
     call<{ verified: boolean; restored: boolean; saved: boolean; changedPacks: number }>('flydigix:write', patch),
   leadjoyReadMain: (path: string) => call<LjSnapshot>('leadjoy:readMain', path),

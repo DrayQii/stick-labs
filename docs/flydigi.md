@@ -57,6 +57,8 @@ survives replugs until Space Station runs again. "Switch to XInput" (`05 ED`, pl
 the pad back for games and closes the Direwolf screen. The sections below that mention the
 driver describe how the protocol was first captured; the config traffic itself is plain HID.
 
+Where the work stands and what is left is in **Direwolf 4: status and next steps** at the end of this file.
+
 ## Direwolf 4 (field notes from a Space Station 4.2.0.9 service log)
 
 Space Station's internal code for it is `fp4`. It shows up under one of two USB identities:
@@ -144,6 +146,34 @@ and 100 is flat 50. Exact for 0/10/20/50/100, within 1 on a few points at 5 and
 13 (its rounding). Negative centres were also seen (-13 gave 63..150) and do not
 follow this formula; not used.
 
+Space Station's service log (`service_log_*.txt`, `FlydigiWorker Receive command from client`) records
+every setting as JSON (`IpcCommandEnum_UpdateConfig`), which is how the following was decoded:
+
+- `edge` (curve record +11, blob 801 / 813) is a signed byte, the Edge slider -100..100 (-30 = `e2`);
+  the main record's centre byte (110 / 117) is the Center slider, also signed.
+- The nine curve points are a straight line in output percent over input percent (raw 50 = 0%, 150 = 100%),
+  extended past its ends and clamped to raw 0..150. Start: centre >= 0 crosses 0% at input c%, centre < 0
+  starts at |c|%. End: edge <= 0 ends at 100% + e% at full travel, edge > 0 reaches 100% at input 100% - e%.
+  `fxDeadzonePoints(c, e)` reproduces every logged combination within 1 (tests/flydigixinput.ts).
+- Turbo is a key entry `[key, enableType, frequency]`: A on Press at 8 wrote `04 01 08`, R3 on Click at 15
+  wrote `0f 02 0f` (Press = 1, Click = 2; frequencies seen: 8, 15, the allowed range is not confirmed).
+  Turning turbo off writes the plain default entry `ff 00 00`. The Buttons tab edits it.
+- Motion (gyro) block, blob 137..144, matched byte by byte to the log's `motionConfig` writes:
+  `[mapping, enableKey, enableType, deadZone, sensitivity, sensitivityY, racer, enableKey2]`. Mapping 1 =
+  Left stick, 2 = Right stick (0 = off as shipped; mouse is not decoded). enableKey is a key id (13 RT,
+  12 LT), enableType 1 = Press (0 when unset), enableKey2 255 = none. Joystick modes write the same value to
+  both sensitivity bytes (25/46/30 seen); the racer byte is 1 for Racer mode and Space Station clears it when
+  the mapping moves to the right stick. The mouse sensitivities, the smoothing curve and the other
+  enable-type values are not decoded. Example: left, RT, Press, dead zone 8, sensitivity 46, Racer ->
+  `01 0d 01 08 2e 2e 01 ff`; the Device tab's Gyro card edits it and writes only the fields you change.
+- `CallGripVibration {leftValue, rightValue}` is a live motor test, not a config field.
+
+Backups: every write and restore first saves the slot's 840-byte blob to
+`userData/flydigi-backups/fp4-cfg<N>-<ISO time>.bin` (N is 0-based); the panel lists them and can
+back up on demand. Restore writes a file back to its own slot through the normal verified path
+(rolled back on a mismatch), refuses a file whose data version differs from the pad's, and backs up
+the slot's current contents first.
+
 Decompiled sources stay out of the repo.
 
 Capture notes: USBPcap's `usb.idVendor` field only exists in the descriptor
@@ -200,3 +230,64 @@ reads it back. Verified on hardware (2026-10-16): 500 Hz set and read back as co
 survived a DInput/XInput round trip, and 1000 Hz was restored. Stick Labs therefore does this in one
 elevated helper run (`--set-rate CODE` / `--read-rate`, optionally `--to-dinput`): from DInput it
 sends `05 ED`, runs the helper, and waits for `04B4:2412` to return (about 20 seconds).
+
+Curve designer. The nine curve bytes are output heights at evenly spaced input steps (0, 12.5 … 100%):
+`raw = 50 + percent`, so 50 is 0% and 150 is 100%, and a deadzone writes the low points below 50, which the
+pad clamps to 0% (Space Station's deadzone writes are exactly linear in the point index, which is what pins the
+even spacing). Stick Labs' designer plots them as percent, lets you drag or type each point, and samples the
+shared aim presets (`src/shared/aimcurves.ts`) onto the nine steps. Space Station writes the sensitivity type to
+both the curve record (790) and the main stick record (109 / 116), so `fxSetCurve` sets both. Not yet checked on
+hardware: how the pad responds to a non-linear custom curve (the points are assumed to be interpolated linearly).
+
+## Direwolf 4: status and next steps
+
+### How it is wired into the app
+- Connect from the sidebar like any pad (the "Flydigi (DInput mode)" candidate, or "Flydigi Direwolf 4 (XInput mode)"
+  when the pad is in XInput mode). `src/renderer/useFlydigi.ts` holds the session state; `FlydigiSections.tsx` renders
+  the tabs: Sticks (live view, Center/Edge sliders, curve designers), Buttons (remaps and turbo), Device (triggers,
+  gyro, vibration, polling rate, pad mode) and Profiles (config slots, save-to-pad, backups). P1..P4 in the top bar
+  switch config slots and Write to controller applies every edit. Calibrate and Lab are hidden while it is connected.
+- Main process: `src/main/flydigi-hid.ts` (read, verified write with rollback, save, backups and restore, mode
+  switch, polling rate through `scripts/flydigi-xinput-helper.py`). IPC is `flydigix:*` in `src/main/index.ts` and
+  `window.sticklab.flydigiX*` in the preload. Frames, blob codec and every decoded field live in
+  `src/shared/flydigi-xinput.ts` with tests in `tests/flydigixinput.ts`
+  (`node scripts/test.mjs tests/flydigixinput.ts`) and the real read `fixtures/flydigi/fp4-cfg1.bin`.
+- Checks that run without a pad: `npm run typecheck`, the test above, `npx electron-vite build`
+  (`npm ci --ignore-scripts` is enough to install for them). Everything touching the pad needs a Windows machine
+  with the Direwolf, so hardware testing stays local. Keep `package-lock.json` as it is.
+- The decode method that worked best: Space Station's service log (`service_log_*.txt`, the
+  `Receive command from client` JSON plus the `WriteMappingConfigPackCommandXInput` ack lines) names every setting and
+  shows the bytes written, so it pins a field down faster than blob diffs. `scripts/flydigi-blobdiff.mjs` compares two
+  backups when the log is not enough.
+
+### Decoded and built, not yet tried on the pad
+These match Space Station's logged bytes in the tests but have not been confirmed on hardware:
+- Turbo editor (Press = 1, Click = 2, frequency; the 1..30 range and the Press/Click behaviour are assumptions).
+- Gyro card (mapping Left/Right, activation key, Press, sensitivity, dead zone, Racer; slider ranges 0..100 are assumed).
+- Center/Edge model for the curve (-100..100 each; five logged combinations exact, two within 1).
+- Axis defaults for the live view in DInput mode (LX 0, LY 1, RX 2, RY 5, LT axis 3, RT axis 4, inferred from rest values).
+- The curve designer's assumption that the pad interpolates the nine points linearly.
+- Backup and restore, config-slot switching from the top bar, and the integrated connect flow.
+
+### Next steps
+1. **Hardware pass** over the list above, in the app: write each setting, read it back, compare with Space Station.
+2. **Gyro, remaining fields.** Mouse mapping (and its X/Y sensitivities), the other enable types, the second activation
+   key and the smoothing curve (`smoothness` point1/point2/end in the log). Capture with the service log while
+   changing one thing at a time in Space Station, plus a backup before and after (`flydigi-blobdiff.mjs`). Whether
+   mapping 0 is "off" is also unconfirmed.
+3. **LED / RGB.** Nothing in the logs yet. Change colour, brightness and effect in Space Station one at a time. The
+   undecoded config region is blob 154..770; LED is probably there. If the blob does not change it is a live command
+   and needs a wire capture.
+4. **Macros.** Key entry target 32 marks a macro; the macro data is elsewhere in the 154..770 region. Capture one
+   simple macro and the one after adding a step.
+5. **Trigger vibration**, if Space Station has it for this pad, and the live `CallGripVibration {leftValue, rightValue}`
+   motor test (a button that buzzes the grips).
+6. **Edge cases in the key table.** What a turbo key with a remap target does, and `enableKey2` for gyro.
+7. **Translations** for the Direwolf tabs (the rest of the app has zh, ja and ru).
+8. **Steam export** for the Direwolf curves, as the GameSir side has.
+9. **Firmware and battery readout.** The service log has `GetDeviceDetailInfo`; the old identify code in
+   `src/main/flydigi.ts` already parses a handshake for other Flydigi pads.
+10. **Clean-ups.** The header comment of `FlydigiLiveView.tsx` still describes the old standard-only axis default.
+
+### Not available on this pad
+- Calibration: Space Station has no calibration screen for the Direwolf 4, so there is nothing to copy.

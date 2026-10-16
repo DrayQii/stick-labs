@@ -1,5 +1,6 @@
 import { useContext, useEffect, useRef, useState } from 'react'
 import { api, b64ToBytes, bytesToB64, type Candidate, type DeviceInfo, type DeviceStats, type LiveSample, type PingResult } from './api'
+import { AIM_CURVES } from '@shared/aimcurves'
 import { parseProfile, serializeProfile, fun, stick, button, trigger, LINEAR_CURVE, looksLikeCEProfile, type Packet, type Profile } from '@shared/profile'
 import { PROFILE_LENGTH, REPORT_RATE_OPTIONS, STICK_RESOLUTION_OPTIONS, STANDARD_BUTTONS, CENTER_NUDGE } from '@shared/protocol'
 import { identifyModel, MODELS, type ControllerModel } from '@shared/models'
@@ -23,7 +24,8 @@ import { createPortal } from 'react-dom'
 import { LANGS, LangContext, tr, useLangState, useT } from './i18n'
 import { THEMES, ThemeContext, useThemeState } from './theme'
 import type { DeepPollResult } from '@shared/deeppoll'
-import FlydigiPanel from './FlydigiPanel'
+import { useFlydigi } from './useFlydigi'
+import { FxButtons, FxDevice, FxProfiles, FxSticks } from './FlydigiSections'
 import { LJ_HID_KEYS, LJ_MOUSE_BUTTONS, LJ_MAP_GAMEPAD, LJ_MAP_KEYBOARD, LJ_MAP_MOUSE, LJ_SHAPES, LJ_PHYSICAL, ljCurveZones, ljFitZones, ljLinearCurve, ljPercentToWire, ljSampleDesign, ljTargetLabel, type LjButtonTarget, type LjSnapshot, type LjStickZones, type LjTriggerZones } from '@shared/leadjoy'
 
 
@@ -247,101 +249,7 @@ function CurvePlot({ points, onChange, overlay, smooth, max = 255 }: { points: A
   )
 }
 
-/**
- * FPS curve pack — static 5-point dual-zone approximations of a "dynamic"
- * response (fine centre for micro-aim, hot edge for flicks). The pad has no
- * speed-sensing, so true velocity-dynamic curves are impossible; these bend
- * the same LUT a dynamic curve would average out to. All verified byte-safe:
- * curve bytes only, +14..+23. The Dynamic (CoD) entry is digitized from the
- * game's own published curve chart (thumbstick movement → rotation speed):
- * above the diagonal early, crossing at mid, settled below it late.
- */
-export const AIM_CURVES: Record<string, { label: string; hint: string; pts: Array<{ x: number; y: number }> }> = {
-  linear: { label: 'Linear', hint: '1:1 raw', pts: [...LINEAR_CURVE] },
-  zamilitox: {
-    label: 'Zamilitox',
-    hint: 'shared S-curve: hot start, settled edge',
-    pts: [{ x: 0, y: 0 }, { x: 26, y: 48 }, { x: 71, y: 89 }, { x: 128, y: 128 }, { x: 184, y: 166 }, { x: 230, y: 204 }, { x: 255, y: 255 }]
-  },
-  dynamic: {
-    label: 'Dynamic (CoD)',
-    hint: 'digitized from CoD chart: hot start, settled mid',
-    pts: [{ x: 0, y: 0 }, { x: 64, y: 89 }, { x: 128, y: 128 }, { x: 191, y: 173 }, { x: 255, y: 255 }]
-  },
-  fpsAim: {
-    label: 'Kiyoshi Curve',
-    hint: 'calm centre, hot edge',
-    pts: [{ x: 0, y: 0 }, { x: 64, y: 38 }, { x: 128, y: 100 }, { x: 191, y: 185 }, { x: 255, y: 255 }]
-  },
-  micro: {
-    label: 'Micro-aim',
-    hint: 'extra-fine centre for tracking',
-    pts: [{ x: 0, y: 0 }, { x: 64, y: 28 }, { x: 128, y: 80 }, { x: 191, y: 170 }, { x: 255, y: 255 }]
-  },
-  flick: {
-    label: 'Flick/Snap',
-    hint: 'fast start for 180s',
-    pts: [{ x: 0, y: 0 }, { x: 64, y: 100 }, { x: 128, y: 160 }, { x: 191, y: 215 }, { x: 255, y: 255 }]
-  },
-  snappy: {
-    label: 'Snappy mid',
-    hint: 'COD-style boosted mid',
-    pts: [{ x: 0, y: 0 }, { x: 64, y: 78 }, { x: 128, y: 140 }, { x: 191, y: 200 }, { x: 255, y: 255 }]
-  },
-  steady: {
-    label: 'Steady track',
-    hint: 'Apex-style even pull',
-    pts: [{ x: 0, y: 0 }, { x: 64, y: 52 }, { x: 128, y: 112 }, { x: 191, y: 188 }, { x: 255, y: 255 }]
-  },  expo: {
-    label: 'Expo',
-    hint: 'late surge',
-    pts: [{ x: 0, y: 0 }, { x: 64, y: 16 }, { x: 128, y: 70 }, { x: 191, y: 158 }, { x: 255, y: 255 }]
-  },
-  sacreds: {    label: 'Sacreds',
-    hint: 'Hyperstrike-style smooth fast start, 10 points',
-    pts: [
-      { x: 0, y: 0 },
-      { x: 26, y: 41 },
-      { x: 49, y: 72 },
-      { x: 76, y: 107 },
-      { x: 102, y: 140 },
-      { x: 133, y: 157 },
-      { x: 153, y: 177 },
-      { x: 168, y: 197 },
-      { x: 191, y: 223 },
-      { x: 229, y: 255 }
-    ]
-  },
-  machixo: {
-    label: 'Machixo',
-    hint: 'Slow-start desensitized, tops at 94%',
-    pts: [
-      { x: 0, y: 0 },
-      { x: 20, y: 15 },
-      { x: 82, y: 61 },
-      { x: 133, y: 99 },
-      { x: 184, y: 138 },
-      { x: 235, y: 176 },
-      { x: 255, y: 240 }
-    ]
-  },
-  nekosu: {
-    label: 'Nekosu',
-    hint: 'Snappy fast start, even pull, 10 points',
-    pts: [
-      { x: 0, y: 0 },
-      { x: 12, y: 39 },
-      { x: 39, y: 61 },
-      { x: 69, y: 82 },
-      { x: 98, y: 104 },
-      { x: 131, y: 125 },
-      { x: 169, y: 154 },
-      { x: 207, y: 182 },
-      { x: 228, y: 206 },
-      { x: 255, y: 255 }
-    ]
-  }
-}
+export { AIM_CURVES }
 
 
 function AnalyticsPanel({ context, setHz, gear }: { context: string; setHz: number; gear: number }): JSX.Element {  const t = useT()
@@ -2271,7 +2179,17 @@ export default function App(): JSX.Element {
   const [busy, setBusy] = useState(false)
   const [loadId, setLoadId] = useState(0)
   const [savedAt, setSavedAt] = useState<{ slot: number; at: number } | null>(null)
-  const [tab, setTab] = useState<'sticks' | 'device' | 'buttons' | 'profiles' | 'lab' | 'calibrate' | 'language' | 'theme' | 'flydigi'>('sticks')
+  const [tab, setTab] = useState<'sticks' | 'device' | 'buttons' | 'profiles' | 'lab' | 'calibrate' | 'language' | 'theme'>('sticks')
+  // Flydigi Direwolf 4: state lives in the hook; the topbar, nav and tabs below switch to it while it is connected.
+  const fx = useFlydigi(() => {
+    setConnected(false)
+    setConnPath(null)
+    setModel(null)
+    setPid(null)
+  })
+  useEffect(() => {
+    if (fx.active && (tab === 'calibrate' || tab === 'lab')) setTab('sticks')
+  }, [fx.active, tab])
   const [measuring, setMeasuring] = useState<{ left: number; suggestion: { dev: number; pct10: number } | null } | null>(null)
   const wanderRef = useRef(0)
   const modelLenRef = useRef(PROFILE_LENGTH)
@@ -2520,11 +2438,37 @@ export default function App(): JSX.Element {
     }
   }
 
+  /** Direwolf 4: read the active config over HID (switching it out of XInput mode if needed) and drive the normal tabs from it. */
+  async function connectFlydigi(path: string | null): Promise<void> {
+    setErr(null)
+    setMsg(null)
+    if (connected && !fx.active) await api().disconnect().catch(() => undefined)
+    if (!(await fx.load())) return
+    const base = MODELS.find((x) => x.id === 'FlydigiV1') ?? null
+    setModel(base ? { ...base, marketingName: 'Flydigi Direwolf 4' } : null)
+    setPid(0x2412)
+    setBlob(null)
+    setLjPath(null)
+    setLjSnap(null)
+    setLjSlot(0)
+    setInfo(null)
+    setSavedAt(null)
+    setDirty(false)
+    setConnPath(path)
+    setConnected(true)
+    setTab('sticks')
+  }
+
   async function connect(path: string): Promise<void> {
     setErr(null)
     try {
       const cand = candidates.find((c) => c.path === path)
       const pre = identifyModel(cand?.product, cand?.productId) ?? null
+      if (pre?.id === 'FlydigiV1') {
+        await connectFlydigi(path)
+        return
+      }
+      if (fx.active) fx.disconnect()
       if (pre && pre.support === 'unsupported') {
         // Known-unsupportable (e.g. DLL-driven pads with no HID listener):
         // don't waste 10 s timing out a handshake that cannot answer.
@@ -2960,24 +2904,22 @@ export default function App(): JSX.Element {
             <button type="button" className={`nav-item${tab === 'buttons' ? ' active' : ''}`} onClick={() => setTab('buttons')}>
               {t('nav.buttons')}
             </button>
-            <button type="button" className={`nav-item${tab === 'calibrate' ? ' active' : ''}`} onClick={() => setTab('calibrate')}>
-              {t('nav.calibrate')}
-            </button>
+            {!fx.active && (
+              <button type="button" className={`nav-item${tab === 'calibrate' ? ' active' : ''}`} onClick={() => setTab('calibrate')}>
+                {t('nav.calibrate')}
+              </button>
+            )}
           </div>
           <div className="nav-group">
             <h4>{t('nav.data')}</h4>
             <button type="button" className={`nav-item${tab === 'profiles' ? ' active' : ''}`} onClick={() => setTab('profiles')}>
               {t('nav.profiles')}
             </button>
-            <button type="button" className={`nav-item${tab === 'lab' ? ' active' : ''}`} onClick={() => setTab('lab')}>
-              {t('nav.lab')}
-            </button>
-          </div>
-          <div className="nav-group">
-            <h4>Flydigi</h4>
-            <button type="button" className={`nav-item${tab === 'flydigi' ? ' active' : ''}`} onClick={() => setTab('flydigi')}>
-              Direwolf 4
-            </button>
+            {!fx.active && (
+              <button type="button" className={`nav-item${tab === 'lab' ? ' active' : ''}`} onClick={() => setTab('lab')}>
+                {t('nav.lab')}
+              </button>
+            )}
           </div>
           <div className="nav-group">
             <h4>{t('nav.app')}</h4>
@@ -3023,10 +2965,16 @@ export default function App(): JSX.Element {
               </button>
             )
           })}
+          {!fx.active && fx.mode === 'xinput' && !candidates.some((c) => c.productId === 0x2412) && (
+            <button className="btn sm" disabled={fx.busy} onClick={() => void connectFlydigi(null)} title="The pad is in XInput mode: connecting switches it to DInput (Windows asks permission once)">
+              Flydigi Direwolf 4 (XInput mode)
+            </button>
+          )}
           {connected && (
             <button
               className="btn ghost sm"
               onClick={() => {
+                fx.disconnect()
                 void api().disconnect()
                 setConnPath(null)
                 setConnected(false)
@@ -3084,6 +3032,25 @@ export default function App(): JSX.Element {
             <h2>Stick Labs</h2>
             <span className="sub">{t('topbar.sub')}</span>
           </div>
+          {fx.active ? (
+            <div className="row" style={{ gap: 8 }}>
+              {Array.from({ length: Math.max(fx.snap?.cfgCount ?? 4, 1) }, (_, i) => (
+                <button
+                  key={i}
+                  className={`choice-btn${fx.snap?.cfgId === i ? ' active' : ''}`}
+                  disabled={fx.busy}
+                  title={fx.snap?.activeCfgId === i ? 'The pad is running this config' : undefined}
+                  onClick={() => void fx.selectSlot(i)}
+                >
+                  <span className="choice-label">P{i + 1}{fx.snap?.activeCfgId === i ? ' •' : ''}</span>
+                </button>
+              ))}
+              <button className="btn sm primary" disabled={fx.busy || !fx.dirty} onClick={() => void fx.apply()}>
+                {fx.busy ? t('common.working') : t('top.write')}
+              </button>
+              {fx.dirty && <span className="pill warn">{t('msg.unsaved')}</span>}
+            </div>
+          ) : (
           <div className="row" style={{ gap: 8 }}>
             {isLj
               ? (['Main', 'Sub1', 'Sub2'] as const).map((name, i) => (
@@ -3120,6 +3087,7 @@ export default function App(): JSX.Element {
               </span>
             )}
           </div>
+          )}
         </header>
         <div className="content">
           {showSafety && (
@@ -3150,6 +3118,8 @@ export default function App(): JSX.Element {
             </div>
           )}
           {err && <div className="note bad">{err}</div>}
+          {fx.msg && (fx.active || !connected) && <div className={`note${fx.msg.kind === 'err' ? ' bad' : ''}`}>{fx.msg.text}</div>}
+          {fx.dirty && <div className="note warn">{t('msg.dirty')}</div>}
           {msg && <div className="note">{msg}</div>}
           {(isLj ? ljDirty : dirty) && <div className="note warn">{t('msg.dirty')}</div>}
           {!connected && (
@@ -3266,7 +3236,7 @@ export default function App(): JSX.Element {
               )}
             </>
           )}
-          {connected && !profile && !isLj && (
+          {connected && !profile && !isLj && !fx.active && (
             !model || model.support !== 'full' ? (
               <div className="msg">
                 <h3>{model ? `${model.marketingName} — ${t('msg.locked')}` : `${t('msg.unknownModel')} — ${t('msg.locked')}`}</h3>
@@ -3678,6 +3648,9 @@ export default function App(): JSX.Element {
               )}
             </>
           )}
+          {fx.active && tab === 'sticks' && <FxSticks fx={fx} />}
+          {fx.active && tab === 'device' && <FxDevice fx={fx} />}
+          {fx.active && tab === 'buttons' && <FxButtons fx={fx} />}
           {tab === 'buttons' && connected && profile && (
             <>
             <TriggerDeadzoneCard profile={profile} edit={edit} />
@@ -3764,7 +3737,9 @@ export default function App(): JSX.Element {
             </>
           )}
           {tab === 'profiles' && (
-            isLj ? (
+            fx.active ? (
+              <FxProfiles fx={fx} />
+            ) : isLj ? (
               <div className="msg">
                 <h3>{model?.marketingName} — {t('lj.profilesLockedTitle')}</h3>
                 <p>{t('lj.profilesLockedBody')}</p>
@@ -3780,7 +3755,6 @@ export default function App(): JSX.Element {
               <div className="msg"><h3>{t('cal.connectTitle')}</h3><p>{t('cal.connectBody')}</p></div>
             )
           )}
-          {tab === 'flydigi' && <FlydigiPanel onClose={() => setTab('sticks')} />}
           {tab === 'language' && (
             <LanguagePanel />
           )}

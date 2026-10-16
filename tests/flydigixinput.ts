@@ -3,6 +3,7 @@
  * (fixtures/flydigi/fp4-cfg1.bin) and the exact frames the live write test sent.
  */
 import { readFileSync } from 'node:fs'
+import { AIM_CURVES } from '../src/shared/aimcurves.ts'
 import {
   FX_BLOB_LEN,
   fxAssembleBlob,
@@ -11,6 +12,9 @@ import {
   FX_CURVE_CUSTOM,
   FX_CURVE_DEFAULT,
   FX_CURVE_DEFAULT_POINTS,
+  fxCurveFromDesign,
+  fxCurvePercentToRaw,
+  fxCurveRawToPercent,
   fxDeadzonePoints,
   fxFromDInput,
   fxDInputSwitchToXInput,
@@ -22,6 +26,11 @@ import {
   fxDecodeKeys,
   fxDecodeSticks,
   fxSetKeyTarget,
+  fxSetKeyTurbo,
+  fxSetMotion,
+  fxDecodeMotion,
+  FX_TURBO_CLICK,
+  FX_TURBO_PRESS,
   FX_KEY_DEFAULT,
   fxDecodeTriggers,
   fxDecodeVibration,
@@ -84,8 +93,10 @@ check('right curve: Default stock ramp', curves.right.type === FX_CURVE_DEFAULT 
 check('curve set round-trips', hex(fxSetCurve(fxSetCurve(blob, 0, curves.left), 1, curves.right)) === hex(blob))
 const bumped = fxSetCurve(blob, 1, { ...curves.right, type: FX_CURVE_CUSTOM, points: curves.right.points.map((p) => p + 1) })
 const cdiff = fxDiffPacks(blob, bumped)
-check('right curve edit spans packs 80..81', cdiff.length === 1 && cdiff[0].startPack === 80 && cdiff[0].packs.length === 2, JSON.stringify(cdiff.map((r) => [r.startPack, r.packs.length])))
-check('curve edit leaves the rest of the blob alone', bumped.slice(0, 802).every((v, i) => v === blob[i]) && bumped.slice(815).every((v, i) => v === blob[815 + i]))
+// Right stick Default -> Custom changes the main record's type byte (116, pack 11) and the curve record (790..: packs 80..81).
+check('right curve edit: main type byte (pack 11) + curve record (packs 80..81)', cdiff.length === 2 && cdiff[0].startPack === 11 && cdiff[0].packs.length === 1 && cdiff[1].startPack === 80 && cdiff[1].packs.length === 2, JSON.stringify(cdiff.map((r) => [r.startPack, r.packs.length])))
+check('Space Station mirrors the type in both places', bumped[116] === 3 && bumped[802] === 3)
+check('curve edit leaves everything else alone', bumped.slice(0, 116).every((v, i) => v === blob[i]) && bumped.slice(117, 802).every((v, i) => v === blob[117 + i]) && bumped.slice(815).every((v, i) => v === blob[815 + i]))
 
 // Deadzone -> curve, against Space Station's logged writes (left stick, slider value -> points).
 const dzObs: Record<number, number[]> = {
@@ -102,6 +113,52 @@ for (const [d, want] of Object.entries(dzObs)) {
   const maxErr = Math.max(...got.map((v, i) => Math.abs(v - want[i])))
   check(`deadzone ${d} -> curve (max error ${maxErr})`, maxErr <= 1, got.join())
 }
+// Space Station service log (UpdateConfig joystickConfig): [centre, edge] -> the nine points it wrote.
+const ceObs: Array<[number, number, number[]]> = [
+  [-100, 0, [150, 150, 150, 150, 150, 150, 150, 150, 150]],
+  [-13, 0, [63, 74, 85, 96, 107, 118, 129, 139, 150]],
+  [0, -30, [50, 59, 68, 76, 85, 94, 103, 111, 120]],
+  [-13, -30, [63, 70, 78, 85, 92, 99, 106, 113, 120]],
+  [-40, -30, [90, 94, 98, 101, 105, 109, 113, 116, 120]],
+  [50, -30, [0, 0, 15, 33, 50, 68, 85, 103, 120]],
+  [50, 30, [0, 0, 0, 0, 50, 113, 150, 150, 150]]
+]
+for (const [c, e, want] of ceObs) {
+  const got = fxDeadzonePoints(c, e)
+  const maxErr = Math.max(...got.map((v, i) => Math.abs(v - want[i])))
+  check(`centre ${c} / edge ${e} -> curve (max error ${maxErr})`, maxErr <= 1, got.join())
+}
+// Turbo entries (Space Station wire bytes: A Press 8 -> 04 01 08, R3 Click 15 -> 0f 02 0f)
+{
+  const base = new Uint8Array(840).fill(0xff)
+  const a = fxSetKeyTurbo(base, 4, { type: FX_TURBO_PRESS, frequency: 8 })
+  check('turbo A press 8 writes 04 01 08', a[25] === 0x04 && a[26] === 0x01 && a[27] === 0x08)
+  const r3 = fxSetKeyTurbo(base, 15, { type: FX_TURBO_CLICK, frequency: 15 })
+  check('turbo R3 click 15 writes 0f 02 0f', r3[58] === 0x0f && r3[59] === 0x02 && r3[60] === 0x0f)
+  const dec = fxDecodeKeys(a).find((k) => k.id === 4)!
+  check('turbo entry decodes back', dec.kind === 'turbo' && dec.enableType === FX_TURBO_PRESS && dec.frequency === 8)
+  check('turbo off writes the default entry', fxSetKeyTarget(a, 4, 0xff).slice(25, 28).join() === '255,0,0')
+  check('turbo only touches its own entry', fxDiffPacks(base, a).reduce((n, r) => n + r.packs.length, 0) <= 2)
+  let refused = false
+  try {
+    fxSetKeyTurbo(a, 4, { type: FX_TURBO_PRESS, frequency: 0 })
+  } catch {
+    refused = true
+  }
+  check('turbo frequency 0 is refused', refused)
+}
+// Gyro (Space Station log: Left stick, Racer, enable RT, Press, deadzone 8, sensitivity 46 -> 01 0d 01 08 2e 2e 01 ff)
+{
+  const base = new Uint8Array(840).fill(0xff)
+  const m = fxSetMotion(base, { mapping: 1, enableKey: 13, enableType: 1, deadZone: 8, sensitivity: 46, racer: 1, enableKey2: 255 })
+  check('gyro left/RT/press/8/46/racer writes 01 0d 01 08 2e 2e 01 ff', Array.from(m.subarray(137, 145)).map((v) => v.toString(16).padStart(2, '0')).join(' ') === '01 0d 01 08 2e 2e 01 ff')
+  const d = fxDecodeMotion(m)
+  check('gyro decodes back', d.mapping === 1 && d.enableKey === 13 && d.deadZone === 8 && d.sensitivity === 46 && d.sensitivityY === 46 && d.racer === 1)
+  const r = fxSetMotion(m, { mapping: 2, racer: 0, sensitivity: 30, enableKey: 12, enableType: 0, deadZone: 17 })
+  check('gyro right/LT/17/30 matches the final log state 02 0c 00 11 1e 1e 00 ff', Array.from(r.subarray(137, 145)).map((v) => v.toString(16).padStart(2, '0')).join(' ') === '02 0c 00 11 1e 1e 00 ff')
+  check('gyro edit leaves every other byte alone', r.every((v, i) => (i >= 137 && i < 145) || v === base[i]))
+}
+check('edge byte is signed: -30 -> 0xe2', ((-30) & 0xff) === 0xe2)
 check('deadzone 0, 10, 20, 50, 100 are exact', [0, 10, 20, 50, 100].every((d) => fxDeadzonePoints(d).join() === dzObs[d].join()))
 
 // --- DInput transport translation, against replies captured from the pad in 04B4:2412 mode ---
@@ -157,6 +214,15 @@ check('clearing a remap restores the default entry', hex(fxSetKeyTarget(aToB, 4,
 check('non-Direwolf key refused', (() => { try { fxSetKeyTarget(blob, 30, 4); return false } catch { return true } })())
 
 check('report-rate codes 1/2/4/8 = 1000/500/250/125 Hz', [1, 2, 4, 8].map((c) => fxHzFromReportRate(c)).join() === '1000,500,250,125' && fxHzFromReportRate(3) === null && fxHzFromReportRate(null) === null)
+
+// --- curve designer helpers ---
+check('linear preset samples onto the stock ramp', fxCurveFromDesign(AIM_CURVES.linear.pts).join() === FX_CURVE_DEFAULT_POINTS.join(), fxCurveFromDesign(AIM_CURVES.linear.pts).join())
+check('percent <-> raw: 0% = 50, 100% = 150, clamped', fxCurvePercentToRaw(0) === 50 && fxCurvePercentToRaw(100) === 150 && fxCurvePercentToRaw(-80) === 0 && fxCurveRawToPercent(150) === 100 && fxCurveRawToPercent(0) === -50)
+for (const [key, c] of Object.entries(AIM_CURVES)) {
+  const raw = fxCurveFromDesign(c.pts)
+  check(`preset ${key}: nine points, rising, starts at 0%`, raw.length === 9 && raw[0] === 50 && raw.every((v, i) => i === 0 || v >= raw[i - 1]), raw.join())
+}
+check('a design that ends below 100% stays below 150', fxCurveFromDesign(AIM_CURVES.machixo.pts)[8] < 150, String(fxCurveFromDesign(AIM_CURVES.machixo.pts)[8]))
 
 // Ack parsing / blob assembly from real reply shapes.
 const rep = (cmd: number, data: number[]): Uint8Array => {

@@ -9,7 +9,7 @@ import { discover, discoverLive } from './hid'
 import { ljReadButtonTable, ljReadMainSnapshot, ljReadSnapshot, ljWriteButtonVerified, ljWriteStickVerified, ljWriteTriggerVerified } from './leadjoy'
 import type { LjButtonTarget, LjStickPatch } from '../shared/leadjoy'
 import { fdIdentify } from './flydigi'
-import { fxHidActivate, fxHidMode, fxHidPollingRate, fxHidRead, fxHidSwitchToXInput, fxHidWrite, fxHidStop } from './flydigi-hid'
+import { fxHidActivate, fxHidBackup, fxHidBackups, fxHidRestore, fxHidMode, fxHidPollingRate, fxHidRead, fxHidSwitchToXInput, fxHidWrite, fxHidStop } from './flydigi-hid'
 import type { FxPatch } from '../shared/flydigi-xinput'
 import { ljButtonWriteRecord } from '../shared/leadjoy'
 import { steamInfo, exportApexDeadzones, listInstalledGames, exportDeadzonesToGames } from './steam'
@@ -156,11 +156,30 @@ handle('flydigix:write', (patch: FxPatch) => {
       if (!byte(Number(id)) || !byte(target)) throw new Error('flydigi: key ids and targets must be bytes 0..255')
     }
   }
+  if (patch.motion !== undefined) {
+    if (typeof patch.motion !== 'object' || patch.motion === null || !Object.values(patch.motion).every(byte)) throw new Error('flydigi: motion fields must be bytes 0..255')
+  }
+  if (patch.turbo !== undefined) {
+    if (typeof patch.turbo !== 'object' || patch.turbo === null) throw new Error('flydigi: turbo must be an object')
+    for (const [id, t] of Object.entries(patch.turbo)) {
+      if (!byte(Number(id))) throw new Error('flydigi: turbo key ids must be bytes 0..255')
+      if (t !== null && !(Number.isInteger(t?.type) && Number.isInteger(t?.frequency))) throw new Error('flydigi: a turbo needs an integer type and frequency')
+    }
+  }
   const v = patch.vibration
   if (v && ![v.left?.min, v.left?.max, v.left?.scale, v.right?.min, v.right?.max, v.right?.scale].every(byte)) {
     throw new Error('flydigi: vibration values must be 0..255')
   }
   return fxHidWrite(patch)
+})
+handle('flydigix:backups', () => fxHidBackups())
+handle('flydigix:backup', (cfgId?: number) => {
+  if (!cfgOk(cfgId)) throw new Error('flydigi: config id must be 0..7')
+  return fxHidBackup(cfgId)
+})
+handle('flydigix:restore', (req: { name: string; save?: boolean }) => {
+  if (typeof req?.name !== 'string') throw new Error('flydigi: restore needs a backup name')
+  return fxHidRestore(req.name, req.save === true)
 })
 handle('leadjoy:readMain', (path: string) => ljReadMainSnapshot(path))
 handle('leadjoy:readSlot', (req: { path: string; slot: number }) => {

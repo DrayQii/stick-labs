@@ -87,6 +87,12 @@ interface LabApi {
   flydigiXActivate(cfgId: number): Promise<FxSnapshot>
   /** Verified write (rolled back on mismatch); `save` persists across replug. */
   flydigiXWrite(patch: FxPatch): Promise<{ verified: boolean; restored: boolean; saved: boolean; changedPacks: number }>
+  /** Config backups saved in userData/flydigi-backups, newest first (made before every write, or on demand). */
+  flydigiXBackups(): Promise<{ name: string; cfgId: number; time: string }[]>
+  /** Back up a config slot (the active one when omitted). */
+  flydigiXBackup(cfgId?: number): Promise<{ name: string; cfgId: number; time: string }>
+  /** Write a backup back to the slot it came from (verified, rolled back on mismatch; current contents are backed up first). */
+  flydigiXRestore(name: string, save: boolean): Promise<{ verified: boolean; restored: boolean; saved: boolean; changedPacks: number; cfgId: number }>
   /** LeadJoy Saber Plus: read-only Main-slot snapshot (sticks stay locked). */
   leadjoyReadMain(path: string): Promise<LjSnapshot>
   /** LeadJoy slot snapshot (Main 0 / Sub1 1 / Sub2 2). */
