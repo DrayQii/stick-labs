@@ -97,16 +97,23 @@ refuses anything but a one-byte change, and every write verified + re-read:
 | 0 | 12-bit (finest documented) | yes | 47 / 72 / 75 / 68 |
 | 1 | 11-bit | yes | 5 / 5 / 8 / 8 |
 | 4 | 8-bit | yes | 2 / 2 / 1 / 1 (output collapses to plateaus) |
-| 255 | "13-bit" (signed −1 in the same formula) | **yes, byte-exact** | 48 / 72 / 75 / 68 — same as 12-bit |
+| 255 | "13-bit" | **yes, byte-exact** | 48 / 72 / 75 / 68 |
+| 254 | "14-bit" | **yes, byte-exact** | 44 / 65 / 67 / 64 |
+| 252 | "16-bit" | **yes, byte-exact** | 44 / 65 / 67 / 63 |
+| 5 | out-of-domain positive ("7-bit" by the formula) | **yes, byte-exact** | 41 / 65 / 65 / 59 |
 
-So the ladder is real and monotone on hardware, and the field is **not clamped**
-— the firmware stores any byte, including ones its own app never produces. At
-255 nothing changes: as fine as 12-bit, no finer. The method has a floor that
-matters: at 12-bit the local pitch is already below one XInput count, so a
-genuinely finer step would look identical — this test can prove *storage* and
-rule out *coarsening*, not prove a gain. Verdict: more than 12-bit is not a
-supported mode; the Device tab stays 8–12 and the codec's `EXTENDED_BITS` /
-`bitsToWireRaw` stay unused. (Vendor-stated 12-bit ADC is the physical limit.)
+So the ladder is real and monotone on hardware (8-bit and 11-bit coarsen exactly
+as the vendor's steps predict), and the field is **not clamped on write** — the
+firmware stores any byte, including ones its own app never produces. But every
+out-of-range value behaves like the 12-bit default: no finer output. `wire 5` is
+the tell — as an index it would be *coarser* than 8-bit, yet the output stayed as
+fine as 12-bit, i.e. the firmware functionally clamps anything outside 0–4 to the
+finest step. The method also has a floor worth stating: at 12-bit the local pitch
+is already below one XInput count, so a genuinely finer step would look identical
+— this test can prove *storage* and rule out *coarsening*, not prove a gain.
+Verdict: more than 12-bit is not a supported mode; the Device tab stays 8–12 and
+the codec's `EXTENDED_BITS` / `bitsToWireRaw` stay unused. (Vendor-stated 12-bit
+ADC is the physical limit.)
 
 ## Motherboard note
 
