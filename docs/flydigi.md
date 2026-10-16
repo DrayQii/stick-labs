@@ -144,6 +144,11 @@ and 100 is flat 50. Exact for 0/10/20/50/100, within 1 on a few points at 5 and
 13 (its rounding). Negative centres were also seen (-13 gave 63..150) and do not
 follow this formula; not used.
 
+`edge` is 0 on both sticks of the real read and its scale is unconfirmed. The curve
+designer exposes it as a raw 0..255 field. To pin it down: set Space Station's
+outer-threshold slider to two or three values, read the config each time
+(`A5 21` / `05 EB`) and compare blob 801 and 813 (and the main records at 109..122).
+
 Decompiled sources stay out of the repo.
 
 Capture notes: USBPcap's `usb.idVendor` field only exists in the descriptor
