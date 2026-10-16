@@ -327,6 +327,35 @@ export function fxDeadzonePoints(d: number): number[] {
   return Array.from({ length: FX_CURVE_POINTS }, (_, i) => Math.max(0, Math.min(255, Math.round(150 - (12.5 * (8 - i)) / k))))
 }
 
+/**
+ * Curve values are bytes where 50 is 0% output and 150 is 100% (the stock ramp runs 50..150, and a
+ * deadzone pushes the low points below 50, which the pad clamps to 0%). The nine points sit at evenly
+ * spaced input positions (0, 12.5 … 100%): Space Station's deadzone writes are linear in the index.
+ */
+export const FX_CURVE_ZERO = 50
+export const fxCurveRawToPercent = (raw: number): number => raw - FX_CURVE_ZERO
+export const fxCurvePercentToRaw = (pct: number): number => Math.max(0, Math.min(255, Math.round(FX_CURVE_ZERO + pct)))
+
+/**
+ * Sample a designed curve (x, y pairs on a 0..max scale, x ascending, as the GameSir presets are)
+ * onto the pad's nine evenly spaced input steps and return the nine raw bytes.
+ */
+export function fxCurveFromDesign(design: ReadonlyArray<{ x: number; y: number }>, max = 255): number[] {
+  const pts = [...design].sort((a, b) => a.x - b.x)
+  const at = (x: number): number => {
+    if (x <= pts[0].x) return pts[0].y
+    for (let k = 1; k < pts.length; k++) {
+      if (x <= pts[k].x) {
+        const a = pts[k - 1]
+        const b = pts[k]
+        return b.x === a.x ? b.y : a.y + ((b.y - a.y) * (x - a.x)) / (b.x - a.x)
+      }
+    }
+    return pts[pts.length - 1].y
+  }
+  return Array.from({ length: FX_CURVE_POINTS }, (_, i) => fxCurvePercentToRaw((at((i / (FX_CURVE_POINTS - 1)) * max) / max) * 100))
+}
+
 export function fxDecodeCurves(blob: Uint8Array): { left: FxCurve; right: FxCurve } {
   const rec = (o: number): FxCurve => ({
     type: blob[o],
@@ -337,10 +366,15 @@ export function fxDecodeCurves(blob: Uint8Array): { left: FxCurve; right: FxCurv
   return { left: rec(FX_OFF.curves), right: rec(FX_OFF.curves + 12) }
 }
 
-/** Returns a copy of `blob` with one stick's curve record replaced. */
+/**
+ * Returns a copy of `blob` with one stick's curve record replaced. Space Station writes the
+ * sensitivity type to both the curve record (790) and the main stick record (109 / 116), so this
+ * sets both; otherwise a Custom curve could sit next to a main record that still says Default.
+ */
 export function fxSetCurve(blob: Uint8Array, side: 0 | 1, curve: FxCurve): Uint8Array {
   if (curve.points.length !== FX_CURVE_POINTS) throw new Error(`fx: a curve has ${FX_CURVE_POINTS} points`)
   const out = blob.slice()
+  out[FX_OFF.joystick + side * 7] = curve.type & 0xff
   const o = FX_OFF.curves + side * 12
   out[o] = curve.type & 0xff
   curve.points.forEach((v, i) => (out[o + 1 + i] = v & 0xff))

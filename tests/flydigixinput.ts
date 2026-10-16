@@ -3,6 +3,7 @@
  * (fixtures/flydigi/fp4-cfg1.bin) and the exact frames the live write test sent.
  */
 import { readFileSync } from 'node:fs'
+import { AIM_CURVES } from '../src/shared/aimcurves.ts'
 import {
   FX_BLOB_LEN,
   fxAssembleBlob,
@@ -11,6 +12,9 @@ import {
   FX_CURVE_CUSTOM,
   FX_CURVE_DEFAULT,
   FX_CURVE_DEFAULT_POINTS,
+  fxCurveFromDesign,
+  fxCurvePercentToRaw,
+  fxCurveRawToPercent,
   fxDeadzonePoints,
   fxFromDInput,
   fxDInputSwitchToXInput,
@@ -84,8 +88,10 @@ check('right curve: Default stock ramp', curves.right.type === FX_CURVE_DEFAULT 
 check('curve set round-trips', hex(fxSetCurve(fxSetCurve(blob, 0, curves.left), 1, curves.right)) === hex(blob))
 const bumped = fxSetCurve(blob, 1, { ...curves.right, type: FX_CURVE_CUSTOM, points: curves.right.points.map((p) => p + 1) })
 const cdiff = fxDiffPacks(blob, bumped)
-check('right curve edit spans packs 80..81', cdiff.length === 1 && cdiff[0].startPack === 80 && cdiff[0].packs.length === 2, JSON.stringify(cdiff.map((r) => [r.startPack, r.packs.length])))
-check('curve edit leaves the rest of the blob alone', bumped.slice(0, 802).every((v, i) => v === blob[i]) && bumped.slice(815).every((v, i) => v === blob[815 + i]))
+// Right stick Default -> Custom changes the main record's type byte (116, pack 11) and the curve record (790..: packs 80..81).
+check('right curve edit: main type byte (pack 11) + curve record (packs 80..81)', cdiff.length === 2 && cdiff[0].startPack === 11 && cdiff[0].packs.length === 1 && cdiff[1].startPack === 80 && cdiff[1].packs.length === 2, JSON.stringify(cdiff.map((r) => [r.startPack, r.packs.length])))
+check('Space Station mirrors the type in both places', bumped[116] === 3 && bumped[802] === 3)
+check('curve edit leaves everything else alone', bumped.slice(0, 116).every((v, i) => v === blob[i]) && bumped.slice(117, 802).every((v, i) => v === blob[117 + i]) && bumped.slice(815).every((v, i) => v === blob[815 + i]))
 
 // Deadzone -> curve, against Space Station's logged writes (left stick, slider value -> points).
 const dzObs: Record<number, number[]> = {
@@ -157,6 +163,15 @@ check('clearing a remap restores the default entry', hex(fxSetKeyTarget(aToB, 4,
 check('non-Direwolf key refused', (() => { try { fxSetKeyTarget(blob, 30, 4); return false } catch { return true } })())
 
 check('report-rate codes 1/2/4/8 = 1000/500/250/125 Hz', [1, 2, 4, 8].map((c) => fxHzFromReportRate(c)).join() === '1000,500,250,125' && fxHzFromReportRate(3) === null && fxHzFromReportRate(null) === null)
+
+// --- curve designer helpers ---
+check('linear preset samples onto the stock ramp', fxCurveFromDesign(AIM_CURVES.linear.pts).join() === FX_CURVE_DEFAULT_POINTS.join(), fxCurveFromDesign(AIM_CURVES.linear.pts).join())
+check('percent <-> raw: 0% = 50, 100% = 150, clamped', fxCurvePercentToRaw(0) === 50 && fxCurvePercentToRaw(100) === 150 && fxCurvePercentToRaw(-80) === 0 && fxCurveRawToPercent(150) === 100 && fxCurveRawToPercent(0) === -50)
+for (const [key, c] of Object.entries(AIM_CURVES)) {
+  const raw = fxCurveFromDesign(c.pts)
+  check(`preset ${key}: nine points, rising, starts at 0%`, raw.length === 9 && raw[0] === 50 && raw.every((v, i) => i === 0 || v >= raw[i - 1]), raw.join())
+}
+check('a design that ends below 100% stays below 150', fxCurveFromDesign(AIM_CURVES.machixo.pts)[8] < 150, String(fxCurveFromDesign(AIM_CURVES.machixo.pts)[8]))
 
 // Ack parsing / blob assembly from real reply shapes.
 const rep = (cmd: number, data: number[]): Uint8Array => {

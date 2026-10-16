@@ -200,3 +200,12 @@ reads it back. Verified on hardware (2026-10-16): 500 Hz set and read back as co
 survived a DInput/XInput round trip, and 1000 Hz was restored. Stick Labs therefore does this in one
 elevated helper run (`--set-rate CODE` / `--read-rate`, optionally `--to-dinput`): from DInput it
 sends `05 ED`, runs the helper, and waits for `04B4:2412` to return (about 20 seconds).
+
+Curve designer. The nine curve bytes are output heights at evenly spaced input steps (0, 12.5 … 100%):
+`raw = 50 + percent`, so 50 is 0% and 150 is 100%, and a deadzone writes the low points below 50, which the
+pad clamps to 0% (Space Station's deadzone writes are exactly linear in the point index, which is what pins the
+even spacing). Stick Labs' designer plots them as percent, lets you drag or type each point, and samples the
+shared aim presets (`src/shared/aimcurves.ts`) onto the nine steps. Space Station writes the sensitivity type to
+both the curve record (790) and the main stick record (109 / 116), so `fxSetCurve` sets both. Not yet checked on
+hardware: how the pad responds to a non-linear custom curve (the points are assumed to be interpolated linearly).
+

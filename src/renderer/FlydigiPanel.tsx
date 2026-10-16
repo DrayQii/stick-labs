@@ -6,53 +6,11 @@
  * process and rolled back on mismatch.
  */
 import { useEffect, useState } from 'react'
-import { FX_REPORT_RATES, fxHzFromReportRate, FX_KEY_DEFAULT, FX_KEY_NAMES, FX_KEY_ORDER, FX_CURVE_CUSTOM, FX_CURVE_DEFAULT, FX_CURVE_DEFAULT_POINTS, fxDeadzonePoints, fxTriggerRange, type FxCurve, type FxSnapshot, type FxTriggerRaw, type FxVibration } from '@shared/flydigi-xinput'
+import { FX_REPORT_RATES, fxHzFromReportRate, FX_KEY_DEFAULT, FX_KEY_NAMES, FX_KEY_ORDER, FX_CURVE_CUSTOM, fxDeadzonePoints, fxTriggerRange, type FxCurve, type FxSnapshot, type FxTriggerRaw, type FxVibration } from '@shared/flydigi-xinput'
 import { api } from './api'
+import FlydigiCurveDesigner from './FlydigiCurveDesigner'
 
 const sc = (b: number): number => (b > 127 ? b - 256 : b)
-
-/** Nine-point response curve: type, circularity and a draggable-by-slider preview. */
-function CurveEditor(props: { title: string; curve: FxCurve; onChange: (c: FxCurve) => void }): JSX.Element {
-  const { curve, onChange } = props
-  const W = 220
-  const H = 120
-  const top = 255
-  const pts = curve.points.map((v, i) => `${(i / 8) * W},${H - (Math.min(v, top) / top) * H}`).join(' ')
-  const setPoint = (i: number, v: number): void =>
-    onChange({ ...curve, type: FX_CURVE_CUSTOM, points: curve.points.map((p, k) => (k === i ? v : p)) })
-  return (
-    <div className="stack" style={{ gap: 6, marginBottom: 14 }}>
-      <span className="label">{props.title}</span>
-      <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
-        <select className="input" value={curve.type === FX_CURVE_DEFAULT ? 'default' : 'custom'} onChange={(e) => onChange(e.target.value === 'default' ? { ...curve, type: FX_CURVE_DEFAULT, points: [...FX_CURVE_DEFAULT_POINTS] } : { ...curve, type: FX_CURVE_CUSTOM })}>
-          <option value="default">Default ramp</option>
-          <option value="custom">Custom curve</option>
-        </select>
-        <select className="input" value={curve.circularity} onChange={(e) => onChange({ ...curve, circularity: Number(e.target.value) })}>
-          <option value={1}>Circular</option>
-          <option value={0}>Rectangle</option>
-        </select>
-        <button className="btn ghost sm" onClick={() => onChange({ ...curve, type: FX_CURVE_DEFAULT, points: [...FX_CURVE_DEFAULT_POINTS] })}>
-          Reset to default
-        </button>
-      </div>
-      <svg width={W} height={H} style={{ background: 'var(--bg-2, #111)', border: '1px solid var(--line-2, #333)', borderRadius: 4 }}>
-        <polyline points={pts} fill="none" stroke="var(--accent, #e44)" strokeWidth={2} />
-      </svg>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
-        {curve.points.map((v, i) => (
-          <label key={i} style={{ display: 'block' }}>
-            <div className="row spread">
-              <span className="label">P{i + 1}</span>
-              <span className="mono">{v}</span>
-            </div>
-            <input type="range" className="input" style={{ width: '100%' }} min={0} max={255} step={1} value={v} onChange={(e) => setPoint(i, Number(e.target.value))} />
-          </label>
-        ))}
-      </div>
-    </div>
-  )
-}
 
 function Num(props: { label: string; value: number; min: number; max: number; onChange: (v: number) => void }): JSX.Element {
   return (
@@ -309,11 +267,26 @@ export default function FlydigiPanel(props: { onClose?: () => void }): JSX.Eleme
             <Num label="Left stick deadzone" value={left} min={0} max={100} onChange={(d) => setDeadzone('left', d)} />
             <Num label="Right stick deadzone" value={right} min={0} max={100} onChange={(d) => setDeadzone('right', d)} />
             <div style={{ height: 10 }} />
-            <details style={{ marginTop: 6 }}>
-              <summary className="label" style={{ cursor: 'pointer' }}>Advanced: raw curve points</summary>
-            <CurveEditor title="Left stick curve" curve={curves.left} onChange={(c) => setCurves({ ...curves, left: c })} />
-            <CurveEditor title="Right stick curve" curve={curves.right} onChange={(c) => setCurves({ ...curves, right: c })} />
-            </details>
+            <h4 style={{ marginTop: 12 }}>Response curves</h4>
+            <div className="hint" style={{ margin: '4px 0 8px' }}>
+              Output height at nine evenly spaced stick positions (0% to 100% of travel). Drag the points, type values, or apply a preset. Moving a deadzone slider above regenerates that stick&apos;s curve.
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 16 }}>
+              <FlydigiCurveDesigner
+                title="Left stick curve"
+                curve={curves.left}
+                onChange={(c) => setCurves({ ...curves, left: c })}
+                onCopyToOther={() => setCurves({ ...curves, right: { ...curves.left } })}
+                otherLabel="right"
+              />
+              <FlydigiCurveDesigner
+                title="Right stick curve"
+                curve={curves.right}
+                onChange={(c) => setCurves({ ...curves, right: c })}
+                onCopyToOther={() => setCurves({ ...curves, left: { ...curves.right } })}
+                otherLabel="left"
+              />
+            </div>
           </div>
 
           <div>
