@@ -46,6 +46,8 @@ confirmation, a closed vendor app, and verified readback/restore behavior.
 The Direwolf 4 is tuned over plain HID, with no driver and no Space Station
 running. Details, byte layouts and open questions: [`docs/flydigi.md`](docs/flydigi.md).
 
+<img width="1201" height="850" alt="image" src="https://github.com/user-attachments/assets/d70ea882-e994-4a4b-9f97-3bdeef47a30f" />
+
 ### What you can do
 
 | Tab | Controls |
