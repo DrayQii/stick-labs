@@ -2019,7 +2019,13 @@ function LjLiveCard({ live, windows }: { live: { lx: number; ly: number; rx: num
     <div className="card">
       <h3>{t('sticks.live')}</h3>
       <Hint>{t('lj.liveHint')}</Hint>
-      <StickCross lx={live?.lx ?? 128} ly={live?.ly ?? 128} rx={live?.rx ?? 128} ry={live?.ry ?? 128} />
+      <StickCross
+        lx={live?.lx ?? 128}
+        ly={live?.ly ?? 128}
+        rx={live?.rx ?? 128}
+        ry={live?.ry ?? 128}
+        windows={windows}
+      />
       <div className="row spread">
         <span className="mono">L {live?.lx ?? '—'},{live?.ly ?? '—'}</span>
         <span className="mono">R {live?.rx ?? '—'},{live?.ry ?? '—'}</span>
