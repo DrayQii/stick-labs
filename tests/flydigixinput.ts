@@ -27,6 +27,8 @@ import {
   fxDecodeSticks,
   fxSetKeyTarget,
   fxSetKeyTurbo,
+  fxSetMotion,
+  fxDecodeMotion,
   FX_TURBO_CLICK,
   FX_TURBO_PRESS,
   FX_KEY_DEFAULT,
@@ -144,6 +146,17 @@ for (const [c, e, want] of ceObs) {
     refused = true
   }
   check('turbo frequency 0 is refused', refused)
+}
+// Gyro (Space Station log: Left stick, Racer, enable RT, Press, deadzone 8, sensitivity 46 -> 01 0d 01 08 2e 2e 01 ff)
+{
+  const base = new Uint8Array(840).fill(0xff)
+  const m = fxSetMotion(base, { mapping: 1, enableKey: 13, enableType: 1, deadZone: 8, sensitivity: 46, racer: 1, enableKey2: 255 })
+  check('gyro left/RT/press/8/46/racer writes 01 0d 01 08 2e 2e 01 ff', Array.from(m.subarray(137, 145)).map((v) => v.toString(16).padStart(2, '0')).join(' ') === '01 0d 01 08 2e 2e 01 ff')
+  const d = fxDecodeMotion(m)
+  check('gyro decodes back', d.mapping === 1 && d.enableKey === 13 && d.deadZone === 8 && d.sensitivity === 46 && d.sensitivityY === 46 && d.racer === 1)
+  const r = fxSetMotion(m, { mapping: 2, racer: 0, sensitivity: 30, enableKey: 12, enableType: 0, deadZone: 17 })
+  check('gyro right/LT/17/30 matches the final log state 02 0c 00 11 1e 1e 00 ff', Array.from(r.subarray(137, 145)).map((v) => v.toString(16).padStart(2, '0')).join(' ') === '02 0c 00 11 1e 1e 00 ff')
+  check('gyro edit leaves every other byte alone', r.every((v, i) => (i >= 137 && i < 145) || v === base[i]))
 }
 check('edge byte is signed: -30 -> 0xe2', ((-30) & 0xff) === 0xe2)
 check('deadzone 0, 10, 20, 50, 100 are exact', [0, 10, 20, 50, 100].every((d) => fxDeadzonePoints(d).join() === dzObs[d].join()))

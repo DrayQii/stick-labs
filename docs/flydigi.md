@@ -156,9 +156,14 @@ every setting as JSON (`IpcCommandEnum_UpdateConfig`), which is how the followin
 - Turbo is a key entry `[key, enableType, frequency]`: A on Press at 8 wrote `04 01 08`, R3 on Click at 15
   wrote `0f 02 0f` (Press = 1, Click = 2; frequencies seen: 8, 15, the allowed range is not confirmed).
   Turning turbo off writes the plain default entry `ff 00 00`. The Buttons tab edits it.
-- Motion block (blob 137..144): `[mode/mapping, enableKey, enableType, deadZone, sensitivity, ?, ?, ff]`;
-  deadZone and sensitivity match the log values (8 / 25 -> 17 / 30), enableKey is a key id (13 RT, 12 LT).
-  Not decoded further yet.
+- Motion (gyro) block, blob 137..144, matched byte by byte to the log's `motionConfig` writes:
+  `[mapping, enableKey, enableType, deadZone, sensitivity, sensitivityY, racer, enableKey2]`. Mapping 1 =
+  Left stick, 2 = Right stick (0 = off as shipped; mouse is not decoded). enableKey is a key id (13 RT,
+  12 LT), enableType 1 = Press (0 when unset), enableKey2 255 = none. Joystick modes write the same value to
+  both sensitivity bytes (25/46/30 seen); the racer byte is 1 for Racer mode and Space Station clears it when
+  the mapping moves to the right stick. The mouse sensitivities, the smoothing curve and the other
+  enable-type values are not decoded. Example: left, RT, Press, dead zone 8, sensitivity 46, Racer ->
+  `01 0d 01 08 2e 2e 01 ff`; the Device tab's Gyro card edits it and writes only the fields you change.
 - `CallGripVibration {leftValue, rightValue}` is a live motor test, not a config field.
 
 Backups: every write and restore first saves the slot's 840-byte blob to

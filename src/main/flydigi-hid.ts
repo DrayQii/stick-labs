@@ -33,6 +33,7 @@ import {
   fxDataVersion,
   fxDecodeCurves,
   fxDecodeKeys,
+  fxDecodeMotion,
   fxDecodeSticks,
   fxDecodeTriggers,
   fxDecodeVibration,
@@ -48,6 +49,7 @@ import {
   fxSetCurve,
   fxSetKeyTarget,
   fxSetKeyTurbo,
+  fxSetMotion,
   fxSetStickCenter,
   fxSetTrigger,
   fxToDInput,
@@ -248,7 +250,7 @@ async function writeBlob(cfgId: number, from: Uint8Array, to: Uint8Array): Promi
 }
 
 function snapshot(cfgId: number, activeCfgId: number, cfgCount: number, blob: Uint8Array): FxSnapshot {
-  return { cfgId, activeCfgId, cfgCount, dataVersion: fxDataVersion(blob), vibration: fxDecodeVibration(blob), sticks: fxDecodeSticks(blob), curves: fxDecodeCurves(blob), triggers: fxDecodeTriggers(blob), keys: fxDecodeKeys(blob) }
+  return { cfgId, activeCfgId, cfgCount, dataVersion: fxDataVersion(blob), vibration: fxDecodeVibration(blob), sticks: fxDecodeSticks(blob), curves: fxDecodeCurves(blob), triggers: fxDecodeTriggers(blob), keys: fxDecodeKeys(blob), motion: fxDecodeMotion(blob) }
 }
 
 /** Serialise sessions: the pad answers one command at a time. */
@@ -389,6 +391,7 @@ export function fxHidWrite(patch: FxPatch): Promise<{ verified: boolean; restore
     if (patch.leftCurve) want = fxSetCurve(want, 0, patch.leftCurve)
     if (patch.rightCurve) want = fxSetCurve(want, 1, patch.rightCurve)
     for (const [id, target] of Object.entries(patch.keys ?? {})) want = fxSetKeyTarget(want, Number(id), target)
+    if (patch.motion) want = fxSetMotion(want, patch.motion)
     for (const [id, t] of Object.entries(patch.turbo ?? {})) want = t ? fxSetKeyTurbo(want, Number(id), t) : fxSetKeyTarget(want, Number(id), FX_KEY_DEFAULT)
     if (patch.leftTrigger) want = fxSetTrigger(want, 0, patch.leftTrigger)
     if (patch.rightTrigger) want = fxSetTrigger(want, 1, patch.rightTrigger)

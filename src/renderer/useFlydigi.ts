@@ -7,7 +7,7 @@
  * the main process and rolled back on mismatch.
  */
 import { useCallback, useEffect, useState } from 'react'
-import { FX_CURVE_CUSTOM, fxDeadzonePoints, fxHzFromReportRate, type FxCurve, type FxSnapshot, type FxTriggerRaw, type FxTurbo, type FxVibration } from '@shared/flydigi-xinput'
+import { FX_CURVE_CUSTOM, fxDeadzonePoints, fxHzFromReportRate, type FxCurve, type FxMotion, type FxSnapshot, type FxTriggerRaw, type FxTurbo, type FxVibration } from '@shared/flydigi-xinput'
 import { api } from './api'
 
 export type FxMsg = { kind: 'ok' | 'err'; text: string }
@@ -25,6 +25,7 @@ export function useFlydigi(onLost: () => void) {
   const [left, setLeft] = useState(0)
   const [right, setRight] = useState(0)
   const [keyEdits, setKeyEdits] = useState<Record<number, number>>({})
+  const [motion, setMotion] = useState<FxMotion | null>(null)
   const [turboEdits, setTurboEdits] = useState<Record<number, FxTurbo | null>>({})
   const [triggers, setTriggers] = useState<{ left: FxTriggerRaw; right: FxTriggerRaw } | null>(null)
   const [curves, setCurves] = useState<{ left: FxCurve; right: FxCurve } | null>(null)
@@ -72,10 +73,19 @@ export function useFlydigi(onLost: () => void) {
     setTriggers(s.triggers)
     setKeyEdits({})
     setTurboEdits({})
+    setMotion(s.motion)
     setBase(sig(s.vibration, l, r, s.curves, s.triggers))
   }
 
-  const dirty = !!snap && (sig(vib, left, right, curves, triggers) !== base || Object.keys(keyEdits).length > 0 || Object.keys(turboEdits).length > 0)
+  /** The gyro fields the user changed (so unedited bytes are never rewritten), or null. */
+  function motionDiff(): Partial<FxMotion> | null {
+    if (!snap || !motion) return null
+    const d: Partial<FxMotion> = {}
+    for (const k of Object.keys(motion) as (keyof FxMotion)[]) if (motion[k] !== snap.motion[k]) d[k] = motion[k]
+    return Object.keys(d).length > 0 ? d : null
+  }
+
+  const dirty = !!snap && (sig(vib, left, right, curves, triggers) !== base || motionDiff() !== null || Object.keys(keyEdits).length > 0 || Object.keys(turboEdits).length > 0)
 
   /** Read a slot (the active one when omitted). Returns whether it worked; marks the pad connected on success. */
   async function load(cfgId?: number): Promise<boolean> {
@@ -100,6 +110,7 @@ export function useFlydigi(onLost: () => void) {
     setVib(null)
     setCurves(null)
     setTriggers(null)
+    setMotion(null)
     setKeyEdits({})
     setTurboEdits({})
     setMsg(null)
@@ -225,6 +236,7 @@ export function useFlydigi(onLost: () => void) {
         rightCurve: curves.right,
         keys: keyEdits,
         turbo: turboEdits,
+        motion: motionDiff() ?? undefined,
         leftTrigger: triggers.left,
         rightTrigger: triggers.right,
         save
@@ -263,7 +275,7 @@ export function useFlydigi(onLost: () => void) {
     setVib((v) => (v ? { ...v, [side]: { ...v[side], ...patch } } : v))
 
   return {
-    sc, active, snap, vib, setVib, left, right, keyEdits, setKeyEdits, turboEdits, setTurboEdits, triggers, setTriggers, curves, setCurves,
+    sc, active, snap, vib, setVib, motion, setMotion, left, right, keyEdits, setKeyEdits, turboEdits, setTurboEdits, triggers, setTriggers, curves, setCurves,
     save, setSave, busy, rate, mode, msg, setMsg, backups, dirty,
     load, disconnect, toXInput, pollingRate, activate, selectSlot, backupNow, restore, apply, setDeadzone, setEdge, setMotor
   }

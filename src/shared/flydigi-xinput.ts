@@ -546,6 +546,46 @@ export function fxSetKeyTurbo(blob: Uint8Array, id: number, turbo: FxTurbo): Uin
   return out
 }
 
+// --- gyro / motion (blob 137..144, decoded from Space Station's service log) ---
+
+/** Gyro mapping byte: 0 = off (as shipped), 1 = Left stick, 2 = Right stick. Other values (e.g. mouse) are not decoded and are preserved. */
+export const FX_MOTION_OFF = 0
+export const FX_MOTION_LEFT = 1
+export const FX_MOTION_RIGHT = 2
+/** Enable type byte: 1 = Press (gyro only while the key is held); 0 is what Space Station leaves when it is unset. */
+export const FX_MOTION_PRESS = 1
+
+export interface FxMotion {
+  mapping: number
+  /** Key id that activates the gyro (FX_KEY_DEFAULT = none). */
+  enableKey: number
+  enableType: number
+  deadZone: number
+  /** Joystick modes write the same value to both sensitivity bytes. */
+  sensitivity: number
+  sensitivityY: number
+  /** 1 = Space Station's "Racer" mode (it clears this when the mapping moves to the right stick). */
+  racer: number
+  /** Second activation key, 255 = none. */
+  enableKey2: number
+}
+
+export function fxDecodeMotion(blob: Uint8Array): FxMotion {
+  const o = FX_OFF.motion
+  return { mapping: blob[o], enableKey: blob[o + 1], enableType: blob[o + 2], deadZone: blob[o + 3], sensitivity: blob[o + 4], sensitivityY: blob[o + 5], racer: blob[o + 6], enableKey2: blob[o + 7] }
+}
+
+/** Returns a copy of `blob` with only the listed motion fields changed. Changing the sensitivity writes both axes. */
+export function fxSetMotion(blob: Uint8Array, patch: Partial<FxMotion>): Uint8Array {
+  const m = { ...fxDecodeMotion(blob), ...patch }
+  if (patch.sensitivity !== undefined && patch.sensitivityY === undefined) m.sensitivityY = patch.sensitivity
+  for (const [k, v] of Object.entries(m)) if (!Number.isInteger(v) || v < 0 || v > 255) throw new Error(`fx: motion ${k} must be a byte`)
+  const out = blob.slice()
+  const o = FX_OFF.motion
+  out.set([m.mapping, m.enableKey, m.enableType, m.deadZone, m.sensitivity, m.sensitivityY, m.racer, m.enableKey2], o)
+  return out
+}
+
 // --- session-level shapes shared with the renderer ---
 
 export interface FxSnapshot {
@@ -560,6 +600,7 @@ export interface FxSnapshot {
   curves: { left: FxCurve; right: FxCurve }
   triggers: { left: FxTriggerRaw; right: FxTriggerRaw }
   keys: FxKeyEntry[]
+  motion: FxMotion
 }
 
 export interface FxPatch {
@@ -574,6 +615,8 @@ export interface FxPatch {
   rightTrigger?: FxTriggerRaw
   /** key id -> target key id (255 = default); only the keys listed are changed. */
   keys?: Record<number, number>
+  /** Only the gyro fields listed are changed. */
+  motion?: Partial<FxMotion>
   /** key id -> turbo setting, or null to turn turbo off (back to the default key); applied after `keys`. */
   turbo?: Record<number, FxTurbo | null>
   /** Persist with the 0x50 save after a verified write (survives a replug). */

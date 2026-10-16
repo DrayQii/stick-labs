@@ -156,6 +156,9 @@ handle('flydigix:write', (patch: FxPatch) => {
       if (!byte(Number(id)) || !byte(target)) throw new Error('flydigi: key ids and targets must be bytes 0..255')
     }
   }
+  if (patch.motion !== undefined) {
+    if (typeof patch.motion !== 'object' || patch.motion === null || !Object.values(patch.motion).every(byte)) throw new Error('flydigi: motion fields must be bytes 0..255')
+  }
   if (patch.turbo !== undefined) {
     if (typeof patch.turbo !== 'object' || patch.turbo === null) throw new Error('flydigi: turbo must be an object')
     for (const [id, t] of Object.entries(patch.turbo)) {

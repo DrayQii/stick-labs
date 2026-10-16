@@ -2,7 +2,7 @@
  * Flydigi Direwolf 4 tab content for the main app: one section per tab (Sticks, Buttons, Device,
  * Profiles). State and actions come from useFlydigi; the topbar owns slots and Write.
  */
-import { FX_REPORT_RATES, fxHzFromReportRate, FX_KEY_DEFAULT, FX_KEY_NAMES, FX_KEY_ORDER, FX_TURBO_CLICK, FX_TURBO_MAX, FX_TURBO_MIN, FX_TURBO_PRESS, fxTriggerRange, type FxTurbo } from '@shared/flydigi-xinput'
+import { FX_REPORT_RATES, fxHzFromReportRate, FX_KEY_DEFAULT, FX_KEY_NAMES, FX_KEY_ORDER, FX_MOTION_LEFT, FX_MOTION_OFF, FX_MOTION_PRESS, FX_MOTION_RIGHT, FX_TURBO_CLICK, FX_TURBO_MAX, FX_TURBO_MIN, FX_TURBO_PRESS, fxTriggerRange, type FxMotion, type FxTurbo } from '@shared/flydigi-xinput'
 import FlydigiCurveDesigner from './FlydigiCurveDesigner'
 import FlydigiLiveView from './FlydigiLiveView'
 import type { Flydigi } from './useFlydigi'
@@ -186,8 +186,9 @@ export function FxButtons({ fx }: { fx: Flydigi }): JSX.Element | null {
 }
 
 export function FxDevice({ fx }: { fx: Flydigi }): JSX.Element | null {
-  const { snap, vib, setVib, setMotor, triggers, setTriggers, busy, rate, mode, pollingRate, toXInput } = fx
-  if (!snap || !vib || !triggers) return null
+  const { snap, vib, setVib, setMotor, triggers, setTriggers, motion, setMotion, busy, rate, mode, pollingRate, toXInput } = fx
+  if (!snap || !vib || !triggers || !motion) return null
+  const setGyro = (p: Partial<FxMotion>): void => setMotion({ ...motion, ...p })
   return (
     <>
           <div className="card" style={{ marginTop: 16 }}>
@@ -202,6 +203,61 @@ export function FxDevice({ fx }: { fx: Flydigi }): JSX.Element | null {
                 <Num label="End" value={triggers[side].end} min={0} max={255} onChange={(v) => setTriggers({ ...triggers, [side]: fxTriggerRange(triggers[side], triggers[side].zero, v) })} />
               </div>
             ))}
+          </div>
+
+          <div className="card" style={{ marginTop: 16 }}>
+            <h3>Gyro</h3>
+            <div className="hint" style={{ margin: '4px 0 8px' }}>
+              Maps the pad&apos;s motion sensor to a stick while an activation key is held. Decoded from Space Station&apos;s log: Left/Right stick mapping, the activation key, sensitivity, dead zone and Racer mode. Mouse mapping and the smoothing curve are not decoded yet, so they are left as they are. Only the fields you change are written.
+            </div>
+            <label style={{ display: 'block', maxWidth: 360 }}>
+              <span className="label">Gyro mapping</span>
+              <select
+                className="input"
+                style={{ width: '100%' }}
+                value={motion.mapping}
+                onChange={(e) => {
+                  const v = Number(e.target.value)
+                  setGyro({ mapping: v, ...(v === FX_MOTION_RIGHT ? { racer: 0 } : {}) })
+                }}
+              >
+                <option value={FX_MOTION_OFF}>Off</option>
+                <option value={FX_MOTION_LEFT}>Left stick</option>
+                <option value={FX_MOTION_RIGHT}>Right stick</option>
+                {![FX_MOTION_OFF, FX_MOTION_LEFT, FX_MOTION_RIGHT].includes(motion.mapping) && <option value={motion.mapping}>Other mapping ({motion.mapping}), not decoded</option>}
+              </select>
+            </label>
+            {motion.mapping !== FX_MOTION_OFF && (
+              <div className="stack" style={{ gap: 8, marginTop: 10, maxWidth: 360 }}>
+                <label style={{ display: 'block' }}>
+                  <span className="label">Activation key</span>
+                  <select className="input" style={{ width: '100%' }} value={motion.enableKey} onChange={(e) => setGyro({ enableKey: Number(e.target.value) })}>
+                    <option value={FX_KEY_DEFAULT}>None</option>
+                    {FX_KEY_ORDER.map((id) => (
+                      <option key={id} value={id}>
+                        {FX_KEY_NAMES[id]}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label style={{ display: 'block' }}>
+                  <span className="label">Activation</span>
+                  <select className="input" style={{ width: '100%' }} value={motion.enableType} onChange={(e) => setGyro({ enableType: Number(e.target.value) })}>
+                    <option value={FX_MOTION_PRESS}>Only while the key is held (Press)</option>
+                    <option value={0}>Not set (Space Station&apos;s default)</option>
+                    {![0, FX_MOTION_PRESS].includes(motion.enableType) && <option value={motion.enableType}>Other ({motion.enableType}), not decoded</option>}
+                  </select>
+                </label>
+                <Num label="Sensitivity" value={motion.sensitivity} min={0} max={100} onChange={(v) => setGyro({ sensitivity: v, sensitivityY: v })} />
+                <Num label="Dead zone" value={motion.deadZone} min={0} max={100} onChange={(v) => setGyro({ deadZone: v })} />
+                {motion.mapping === FX_MOTION_LEFT && (
+                  <label className="row" style={{ gap: 8 }}>
+                    <input type="checkbox" checked={motion.racer === 1} onChange={(e) => setGyro({ racer: e.target.checked ? 1 : 0 })} />
+                    <span>Racer mode</span>
+                  </label>
+                )}
+              </div>
+            )}
           </div>
 
           <div className="card" style={{ marginTop: 16 }}>
