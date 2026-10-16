@@ -159,3 +159,10 @@ the save/apply acks over this path are built from Space Station's DInput
 command classes and still need a hardware check. Stick Labs auto-selects
 this transport when `04B4:2412` interface 2 is present, otherwise the
 XInput filter sidecar.
+
+Trigger records (blob 123..136, 7 bytes per trigger: `type, zero, p1x, p1y, p2x, p2y, end`).
+Verified from Space Station's log acks after sliders Start 20/50/100 and End 200/110:
+the slider values are the bytes (plain 0..255), `zero` = Start, `end` = End, and it
+writes point 1 = (Start, Start), point 2 = (End, End); `type` stays 0. E.g. start 20 / end
+255 gives `00 14 14 14 ff ff ff`, start 0 / end 110 gives `00 00 00 00 6e 6e 6e`.
+

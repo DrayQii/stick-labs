@@ -325,9 +325,9 @@ export function fxSetCurve(blob: Uint8Array, side: 0 | 1, curve: FxCurve): Uint8
 }
 
 /**
- * Raw per-trigger record (7 bytes at 123 / 130): type, zero (inner start), the two
- * curve points and end (outer limit). Names are Space Station's; the scale of
- * zero/end against its sliders is not decoded yet, so they are kept as raw bytes.
+ * Per-trigger record (7 bytes at 123 / 130): type, zero (Start slider), the two
+ * curve points and end (End slider). Start/End are Space Station's slider values
+ * as plain 0..255 bytes; see fxTriggerRange for the derived points.
  */
 export interface FxTriggerRaw {
   type: number
@@ -337,6 +337,16 @@ export interface FxTriggerRaw {
   p2x: number
   p2y: number
   end: number
+}
+
+/**
+ * A trigger record for Space Station's Start/End sliders (plain 0..255 numbers):
+ * zero = start, end = end, and it derives the two curve points as (start, start)
+ * and (end, end). Matches its writes for (start 20, end 255) -> 00 14 14 14 ff ff ff
+ * and (start 0, end 110) -> 00 00 00 00 6e 6e 6e. `type` is kept.
+ */
+export function fxTriggerRange(t: FxTriggerRaw, start: number, end: number): FxTriggerRaw {
+  return { ...t, zero: start, p1x: start, p1y: start, p2x: end, p2y: end, end }
 }
 
 export function fxDecodeTriggers(blob: Uint8Array): { left: FxTriggerRaw; right: FxTriggerRaw } {

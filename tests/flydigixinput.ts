@@ -30,6 +30,7 @@ import {
   fxSetCurve,
   fxSetStickCenter,
   fxSetTrigger,
+  fxTriggerRange,
   type FxAck
 } from '../src/shared/flydigi-xinput.ts'
 
@@ -131,6 +132,10 @@ check('trigger set round-trips', hex(fxSetTrigger(fxSetTrigger(blob, 0, trig.lef
 const tEdit = fxSetTrigger(blob, 0, { ...trig.left, end: 231 })
 const tDiff = fxDiffPacks(blob, tEdit)
 check('left trigger end 231 is one pack (12)', tDiff.length === 1 && tDiff[0].startPack === 12 && tDiff[0].packs[0][9 - 0] !== undefined, JSON.stringify(tDiff.map((r) => r.startPack)))
+// Space Station's trigger writes (from its log acks): the slider values ARE the bytes.
+const rec = (t: { type: number; zero: number; p1x: number; p1y: number; p2x: number; p2y: number; end: number }): string => hex(Uint8Array.of(t.type, t.zero, t.p1x, t.p1y, t.p2x, t.p2y, t.end))
+check('trigger start 20 / end 255 matches Space Station', rec(fxTriggerRange(trig.left, 20, 255)) === '00 14 14 14 ff ff ff', rec(fxTriggerRange(trig.left, 20, 255)))
+check('trigger start 0 / end 110 matches Space Station', rec(fxTriggerRange(trig.left, 0, 110)) === '00 00 00 00 6e 6e 6e', rec(fxTriggerRange(trig.left, 0, 110)))
 check('trigger end byte lands at 129', tEdit[129] === 231 && tEdit.slice(0, 129).every((v, i) => v === blob[i]) && tEdit.slice(130).every((v, i) => v === blob[130 + i]))
 
 // Ack parsing / blob assembly from real reply shapes.
