@@ -6,11 +6,12 @@ export function FlydigiCard(props: {
   mode: 'DInput' | 'XInput'
   busy: boolean
   batteryPercent?: number | null
+  charging?: boolean
   /** Raw get-info reply from the pad, shown while the battery byte is still unconfirmed. */
   probeHex?: string | null
   onConnect: () => void
 }): JSX.Element {
-  const { mode, busy, batteryPercent = null, probeHex = null, onConnect } = props
+  const { mode, busy, batteryPercent = null, charging = false, probeHex = null, onConnect } = props
   const pct = batteryPercent === null ? null : Math.max(0, Math.min(100, batteryPercent))
   return (
     <button
@@ -31,8 +32,8 @@ export function FlydigiCard(props: {
           <span className="fx-cell" title={pct === null ? 'Battery level is not readable over USB yet' : `${pct}%`}>
             <span className="fx-cell-k">Battery</span>
             <span className="fx-cell-v">
-              <span className="fx-battery-bar"><span className="fx-battery-fill" style={{ width: `${pct ?? 0}%` }} /></span>
-              {pct === null ? 'N/A' : `${pct}%`}
+              <span className="fx-battery-bar"><span className="fx-battery-fill" style={{ width: `${pct ?? 0}%` }} data-charging={charging || undefined} /></span>
+              {pct === null ? 'N/A' : `${pct}%${charging ? ' CHG' : ''}`}
             </span>
           </span>
         </span>

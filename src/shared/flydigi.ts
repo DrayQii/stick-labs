@@ -215,6 +215,9 @@ export interface FdV1Info {
   firmwareText: string
   serial: string
   connection: FdConnection
+  power: FdPower
+  /** 0-100, or null when the reply carries no usable level. */
+  batteryPercent: number | null
   /** The whole 32-byte reply as hex, kept so the battery byte can be located from real captures. */
   rawHex: string
 }
@@ -227,6 +230,19 @@ export function fdParseV1Info(reply: Uint8Array, product?: string): FdV1Info | n
   const serial = Array.from(reply.subarray(5, 9), (b) => b.toString(16).padStart(2, '0')).join('')
   let connection: FdConnection = 'unknown'
   if (firmware >= 0x6400) connection = reply[13] === 0 ? 'wireless' : reply[13] === 1 ? 'wired' : 'unknown'
+  // Byte 11 matches the V2 layout (hi nibble status, lo nibble level in fifths). Read off a Direwolf 4:
+  // 0x04 on battery and wired-idle, 0x14 while charging; the level scale is not yet confirmed at the extremes.
+  const status = (reply[11] >> 4) & 0x0f
+  const level = reply[11] & 0x0f
+  let power: FdPower = 'unknown'
+  let batteryPercent: number | null = null
+  if (status === 0 || status === 1) {
+    power = status === 0 ? 'battery' : 'charging'
+    batteryPercent = Math.min(100, level * 20)
+  } else if (status === 2) {
+    power = 'charged'
+    batteryPercent = 100
+  }
   return {
     deviceId,
     modelName: fdModelName(deviceId, product),
@@ -234,6 +250,8 @@ export function fdParseV1Info(reply: Uint8Array, product?: string): FdV1Info | n
     firmwareText: `0x${firmware.toString(16).padStart(4, '0').toUpperCase()}`,
     serial,
     connection,
+    power,
+    batteryPercent,
     rawHex: Array.from(reply.subarray(0, 32), (b) => b.toString(16).padStart(2, '0')).join(' ')
   }
 }

@@ -103,6 +103,14 @@ const v1r = new Uint8Array(32)
 v1r[3] = 19; v1r.set([0x17, 0x21, 0x39, 0x38], 5); v1r[9] = 0x10; v1r[10] = 0x64; v1r[13] = 1; v1r[15] = 0xec
 const v1 = fdParseV1Info(v1r)
 check('V1 reply decoded (id, serial, fw LE, wired)', v1?.deviceId === 19 && v1?.serial === '17213938' && v1?.firmware === 0x6410 && v1?.connection === 'wired', JSON.stringify(v1))
+const dw = new Uint8Array(32); dw[15] = 0xec; dw[11] = 0x04
+check('V1 byte 11 on battery: level 4 = 80%', fdParseV1Info(dw)?.batteryPercent === 80 && fdParseV1Info(dw)?.power === 'battery')
+dw[11] = 0x14
+check('V1 byte 11 charging', fdParseV1Info(dw)?.power === 'charging' && fdParseV1Info(dw)?.batteryPercent === 80)
+dw[11] = 0x25
+check('V1 byte 11 charged = 100%', fdParseV1Info(dw)?.batteryPercent === 100)
+dw[11] = 0x75
+check('V1 unknown status gives no battery', fdParseV1Info(dw)?.batteryPercent === null)
 check('V1 id 19 is Apex 2', v1?.modelName === 'Flydigi Apex 2')
 const old = new Uint8Array(v1r); old[10] = 0x60
 check('V1 fw < 0x6400 leaves connection unknown', fdParseV1Info(old)?.connection === 'unknown')

@@ -936,6 +936,17 @@ table.tbl tbody tr:hover {
 .fx-card-brand,
 .fx-cell-k,
 .fx-cell-v,
+.fx-battery-fill[data-charging] {
+  background: var(--warn);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .fx-battery-fill[data-charging] {
+    animation: fx-charge 1.6s ease-in-out infinite;
+  }
+}
+@keyframes fx-charge {
+  50% { opacity: 0.45; }
+}
 .fx-probe {
   font-family: 'JetBrains Mono', 'Cascadia Mono', Consolas, monospace;
   font-size: 9px;

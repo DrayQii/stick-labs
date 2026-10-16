@@ -3144,7 +3144,7 @@ export default function App(): JSX.Element {
           {showFxCard && (
             <div className="msg fx-panel">
               {fxDInputCandidates.map((c) => (
-                <FlydigiCard key={c.path} mode="DInput" busy={fx.busy} probeHex={fxProbe[c.path]?.rawHex ?? null} onConnect={() => void connect(c.path)} />
+                <FlydigiCard key={c.path} mode="DInput" busy={fx.busy} batteryPercent={fxProbe[c.path]?.batteryPercent ?? null} charging={fxProbe[c.path]?.power === 'charging'} probeHex={fxProbe[c.path]?.rawHex ?? null} onConnect={() => void connect(c.path)} />
               ))}
               {fxXInputDetected && <FlydigiCard mode="XInput" busy={fx.busy} onConnect={() => void connectFlydigi(null)} />}
             </div>
