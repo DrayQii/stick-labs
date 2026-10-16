@@ -50,7 +50,7 @@ pad back to XInput (`045E:028E`). No driver, no Space Station DLL and no admin r
 Getting the pad into DInput mode: from XInput mode the only known way is the legacy `A5 17`
 frame sent through Space Station's Xbox 360 filter driver (`XboxComm64.dll`). Stick Labs does
 this on "Read pad" when it finds the pad in XInput mode (USB `045E:028E`, serial
-`FLYDIGI_DIREWOLF_4`): it launches `scripts/flydigi-switch-to-dinput.py` elevated (one UAC
+`FLYDIGI_DIREWOLF_4`): it launches `scripts/flydigi-xinput-helper.py` elevated (one UAC
 prompt), which sends that single frame, then waits for `04B4:2412`. It needs python on PATH
 (or `FLYDIGI_PYTHON`), Space Station installed but not running, and nothing else. The mode then
 survives replugs until Space Station runs again. "Switch to XInput" (`05 ED`, plain HID) puts
@@ -190,3 +190,13 @@ were `00 00 ff 00 00 05 00 00 ff 00` and `... 05 00 00 04 00` (pack 2), i.e. ent
 Mode note: launching Space Station flips a DInput-mode pad (04B4:2412) back to XInput
 (045E:028E), so the plain-HID transport only lasts while Space Station is not running.
 
+Polling rate. Over plain HID (DInput) the Direwolf 4 does not expose it: `05 F2 03` returns a
+short settings block with no rate byte (`0f 01 00 …`), `05 50 07` gets no reply, and `05 50 0A <code>`
+is never acked and changes nothing observable. Space Station's own DInput parser agrees
+(`ReportRate = (Serial != 3) ? data[9] : 0`, and the Direwolf is serial 3). In XInput mode, through the
+filter driver, it works: `A5 50 07` returns a settings block with the report-rate code at ack[22]
+(1 = 1000 Hz, 2 = 500, 4 = 250, 8 = 125) and `A5 50 0A <code>` sets it, with no ack, so the helper
+reads it back. Verified on hardware (2026-10-16): 500 Hz set and read back as code 2, the value
+survived a DInput/XInput round trip, and 1000 Hz was restored. Stick Labs therefore does this in one
+elevated helper run (`--set-rate CODE` / `--read-rate`, optionally `--to-dinput`): from DInput it
+sends `05 ED`, runs the helper, and waits for `04B4:2412` to return (about 20 seconds).

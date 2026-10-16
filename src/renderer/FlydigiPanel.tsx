@@ -6,7 +6,7 @@
  * process and rolled back on mismatch.
  */
 import { useEffect, useState } from 'react'
-import { FX_KEY_DEFAULT, FX_KEY_NAMES, FX_KEY_ORDER, FX_CURVE_CUSTOM, FX_CURVE_DEFAULT, FX_CURVE_DEFAULT_POINTS, fxDeadzonePoints, fxTriggerRange, type FxCurve, type FxSnapshot, type FxTriggerRaw, type FxVibration } from '@shared/flydigi-xinput'
+import { FX_REPORT_RATES, fxHzFromReportRate, FX_KEY_DEFAULT, FX_KEY_NAMES, FX_KEY_ORDER, FX_CURVE_CUSTOM, FX_CURVE_DEFAULT, FX_CURVE_DEFAULT_POINTS, fxDeadzonePoints, fxTriggerRange, type FxCurve, type FxSnapshot, type FxTriggerRaw, type FxVibration } from '@shared/flydigi-xinput'
 import { api } from './api'
 
 const sc = (b: number): number => (b > 127 ? b - 256 : b)
@@ -85,6 +85,7 @@ export default function FlydigiPanel(props: { onClose?: () => void }): JSX.Eleme
   const [curves, setCurves] = useState<{ left: FxCurve; right: FxCurve } | null>(null)
   const [save, setSave] = useState(true)
   const [busy, setBusy] = useState(false)
+  const [rate, setRate] = useState<number | null>(null)
   const [mode, setMode] = useState<'dinput' | 'xinput' | 'none' | null>(null)
 
   // Follow the pad's real mode (it changes on replug, mode switches and when Space Station launches).
@@ -143,6 +144,32 @@ export default function FlydigiPanel(props: { onClose?: () => void }): JSX.Eleme
       } else {
         setMsg({ kind: 'err', text: 'The pad did not leave DInput mode. Unplug and replug it, or check it in Windows Device Manager.' })
       }
+    } catch (e) {
+      setMsg({ kind: 'err', text: (e as Error).message })
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function pollingRate(code: number | null): Promise<void> {
+    if (code !== null) {
+      const hz = fxHzFromReportRate(code)
+      const ok = window.confirm(
+        `Set the polling rate to ${hz} Hz?\n\nThe pad only exposes this in XInput mode, so Stick Labs will briefly switch it to XInput, change the rate through the Flydigi driver (administrator step) and switch it back. It takes about 20 seconds; keep Flydigi Space Station closed.`
+      )
+      if (!ok) return
+    }
+    setBusy(true)
+    setMsg({ kind: 'ok', text: code === null ? 'Reading the polling rate… (switches the pad to XInput and back, about 20 seconds)' : 'Setting the polling rate… (switches the pad to XInput and back, about 20 seconds)' })
+    try {
+      const r = await api().flydigiXRate(code)
+      setRate(r.reportRate)
+      const hz = fxHzFromReportRate(r.reportRate)
+      setMsg(
+        r.verified
+          ? { kind: 'ok', text: code === null ? `Polling rate is ${hz ?? 'unknown'} Hz.` : `Polling rate set to ${hz} Hz (read back from the pad).` }
+          : { kind: 'err', text: 'The pad did not confirm the polling rate.' }
+      )
     } catch (e) {
       setMsg({ kind: 'err', text: (e as Error).message })
     } finally {
@@ -245,6 +272,26 @@ export default function FlydigiPanel(props: { onClose?: () => void }): JSX.Eleme
           </>
         )}
       </div>
+
+      {mode && mode !== 'none' && (
+        <div style={{ marginTop: 14 }}>
+          <h4>Polling rate</h4>
+          <div className="hint" style={{ margin: '4px 0 8px' }}>
+            How often the pad reports to the PC. The Direwolf only exposes this in XInput mode, so changing it switches the pad to XInput and back through the Flydigi driver (one administrator step, about 20 seconds). Keep Flydigi Space Station closed.
+          </div>
+          <div className="row" style={{ gap: 6, flexWrap: 'wrap' }}>
+            {FX_REPORT_RATES.map((r) => (
+              <button key={r.code} className={`choice-btn${rate === r.code ? ' active' : ''}`} disabled={busy} onClick={() => void pollingRate(r.code)}>
+                {r.hz} Hz
+              </button>
+            ))}
+            <button className="btn ghost sm" disabled={busy} onClick={() => void pollingRate(null)}>
+              Check current
+            </button>
+            <span className="mono" style={{ alignSelf: 'center' }}>{rate === null ? 'not checked yet' : `${fxHzFromReportRate(rate) ?? '?'} Hz`}</span>
+          </div>
+        </div>
+      )}
 
       {msg && (
         <div className="hint" style={{ marginTop: 10, color: msg.kind === 'err' ? 'var(--bad, #e66)' : 'var(--good, #6c6)' }}>
