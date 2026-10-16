@@ -1879,7 +1879,7 @@ function UpdateRow(): JSX.Element | null {
   )
 }
 
-function StickCross({ lx, ly, rx, ry }: { lx: number; ly: number; rx: number; ry: number }): JSX.Element {
+function StickCross({ lx, ly, rx, ry, windows }: { lx: number; ly: number; rx: number; ry: number; windows?: Array<{ begin: number; end: number; beginAnti: number } | null> }): JSX.Element {
   const ref = useRef<HTMLCanvasElement | null>(null)
   useEffect(() => {
     const c = ref.current
@@ -1893,8 +1893,9 @@ function StickCross({ lx, ly, rx, ry }: { lx: number; ly: number; rx: number; ry
     if (!ctx) return
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
     ctx.clearRect(0, 0, w, h)
-    const draw = (x: number, y: number, cx: number, label: string): void => {
+    const draw = (x: number, y: number, cx: number, label: string, win?: { begin: number; end: number; beginAnti: number } | null): void => {
       const r = 62
+      ctx.setLineDash([])
       ctx.strokeStyle = '#3a2230'
       ctx.beginPath()
       ctx.arc(cx, h / 2, r, 0, Math.PI * 2)
@@ -1905,6 +1906,41 @@ function StickCross({ lx, ly, rx, ry }: { lx: number; ly: number; rx: number; ry
       ctx.moveTo(cx, h / 2 - r)
       ctx.lineTo(cx, h / 2 + r)
       ctx.stroke()
+
+      // The stick's own windows, so tuning is visible while it moves:
+      // dead zone disc (input below this reads 0), saturation ring (output is
+      // pinned past this), and the anti-dead-zone floor — the output jump that
+      // happens the moment you leave the dead zone.
+      if (win) {
+        const inner = Math.max(0, Math.min(0.95, win.begin / 1000)) * r
+        if (inner > 0.5) {
+          ctx.fillStyle = 'rgba(244,63,82,0.13)'
+          ctx.beginPath()
+          ctx.arc(cx, h / 2, inner, 0, Math.PI * 2)
+          ctx.fill()
+          ctx.strokeStyle = 'rgba(244,63,82,0.6)'
+          ctx.setLineDash([3, 3])
+          ctx.beginPath()
+          ctx.arc(cx, h / 2, inner, 0, Math.PI * 2)
+          ctx.stroke()
+        }
+        const outer = Math.max(0.05, Math.min(1, win.end / 1000)) * r
+        ctx.strokeStyle = 'rgba(120,200,255,0.55)'
+        ctx.setLineDash([5, 4])
+        ctx.beginPath()
+        ctx.arc(cx, h / 2, outer, 0, Math.PI * 2)
+        ctx.stroke()
+        const anti = Math.max(0, Math.min(0.95, win.beginAnti / 1000)) * r
+        if (anti > 0.5) {
+          ctx.strokeStyle = 'rgba(245,181,68,0.55)'
+          ctx.setLineDash([2, 3])
+          ctx.beginPath()
+          ctx.arc(cx, h / 2, anti, 0, Math.PI * 2)
+          ctx.stroke()
+        }
+        ctx.setLineDash([])
+      }
+
       const nx = (x - 128) / 128
       const ny = (y - 128) / 128
       const px = cx + nx * r
@@ -1916,10 +1952,15 @@ function StickCross({ lx, ly, rx, ry }: { lx: number; ly: number; rx: number; ry
       ctx.fillStyle = '#c9a3ad'
       ctx.font = '11px system-ui'
       ctx.fillText(label, cx - 12, h - 8)
+      if (win) {
+        ctx.fillStyle = '#8d7f86'
+        ctx.font = '10px system-ui'
+        ctx.fillText(`dz ${(win.begin / 10).toFixed(1)}% · sat ${(win.end / 10).toFixed(0)}% · anti ${(win.beginAnti / 10).toFixed(1)}%`, cx - 44, h - 20)
+      }
     }
-    draw(lx, ly, w * 0.27, `L ${lx},${ly}`)
-    draw(rx, ry, w * 0.73, `R ${rx},${ry}`)
-  }, [lx, ly, rx, ry])
+    draw(lx, ly, w * 0.27, `L ${lx},${ly}`, windows?.[0] ?? null)
+    draw(rx, ry, w * 0.73, `R ${rx},${ry}`, windows?.[1] ?? null)
+  }, [lx, ly, rx, ry, windows])
   return <canvas ref={ref} className="plot" style={{ height: 190 }} />
 }
 
@@ -3387,7 +3428,13 @@ export default function App(): JSX.Element {
                   <div className="card">
                     <h3>{t('sticks.live')}</h3>
                     <Hint>{t('sticks.liveNote')} {t('sticks.liveHint')}</Hint>
-                    <StickCross lx={live?.lx ?? 128} ly={live?.ly ?? 128} rx={live?.rx ?? 128} ry={live?.ry ?? 128} />
+                    <StickCross
+                      lx={live?.lx ?? 128}
+                      ly={live?.ly ?? 128}
+                      rx={live?.rx ?? 128}
+                      ry={live?.ry ?? 128}
+                      windows={[stick.deadzone(profile.sticks[0]), stick.deadzone(profile.sticks[1])]}
+                    />
                     <div className="row spread">
                       <span className="mono">L {live?.lx ?? '—'},{live?.ly ?? '—'}</span>
                       <span className="mono">R {live?.rx ?? '—'},{live?.ry ?? '—'}</span>
