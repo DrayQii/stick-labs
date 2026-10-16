@@ -8,8 +8,9 @@
  * just before the write. Framing: src/shared/flydigi-xinput.ts, docs/flydigi.md.
  *
  * The one exception: if the pad is in XInput mode, "Read pad" first switches it to
- * DInput by launching scripts/flydigi-switch-to-dinput.py elevated (UAC prompt).
- * That helper is the only thing that touches Space Station's filter driver.
+ * DInput by launching scripts/flydigi-xinput-helper.py elevated (UAC prompt). The same helper
+ * sets/reads the polling rate, which the pad only exposes in XInput mode. That helper is the
+ * only thing that touches Space Station's filter driver.
  */
 import { app } from 'electron'
 import HIDModule, { type HID as HIDInstance } from 'node-hid'
@@ -122,39 +123,55 @@ function spaceStationRunning(): boolean {
 
 const psq = (v: string): string => `'${v.replace(/'/g, "''")}'`
 
-/** Switch an XInput-mode Direwolf to DInput via the elevated helper, then wait for 04B4:2412. */
-async function switchToDInput(): Promise<void> {
+/**
+ * Run scripts/flydigi-xinput-helper.py elevated (it talks to Space Station's filter driver,
+ * so the pad must be in XInput mode and Space Station closed) and return its result.
+ */
+async function runHelper(args: string[]): Promise<{ reportRate: number | null }> {
   if (spaceStationRunning()) {
-    throw new Error('flydigi: Flydigi Space Station (or its background service) is running. Close it fully, then press Read pad again.')
+    throw new Error('flydigi: Flydigi Space Station (or its background service) is running. Close it fully, then try again.')
   }
-  const script = join(__dirname, '../../scripts/flydigi-switch-to-dinput.py')
-  const out = join(tmpdir(), `flydigi-switch-${Date.now()}.json`)
+  const script = join(__dirname, '../../scripts/flydigi-xinput-helper.py')
+  const out = join(tmpdir(), `flydigi-helper-${Date.now()}.json`)
   const py = process.env.FLYDIGI_PYTHON ?? 'python'
-  const ps =
-    `$p = Start-Process -FilePath ${psq(py)} -ArgumentList @(${psq(`"${script}"`)}, '--out', ${psq(`"${out}"`)}) ` +
-    `-Verb RunAs -WindowStyle Hidden -PassThru -Wait; exit $p.ExitCode`
+  const list = [`"${script}"`, '--out', `"${out}"`, ...args].map(psq).join(', ')
+  const ps = `$p = Start-Process -FilePath ${psq(py)} -ArgumentList @(${list}) -Verb RunAs -WindowStyle Hidden -PassThru -Wait; exit $p.ExitCode`
   const code = await new Promise<number>((resolve) => {
     const c = spawn('powershell', ['-NoProfile', '-NonInteractive', '-Command', ps], { windowsHide: true })
     c.on('error', () => resolve(-1))
     c.on('exit', (n) => resolve(n ?? -1))
   })
-  let detail: string | null = null
+  let parsed: { ok: boolean; error?: string; reportRate?: number | null } | null = null
   try {
     if (existsSync(out)) {
-      const r = JSON.parse(readFileSync(out, 'utf8')) as { ok: boolean; error?: string }
-      if (!r.ok) detail = r.error ?? 'the helper reported a failure'
+      parsed = JSON.parse(readFileSync(out, 'utf8'))
       rmSync(out, { force: true })
     }
   } catch {
     /* fall through to the generic messages */
   }
-  if (detail) throw new Error(`flydigi: switching to DInput failed: ${detail}`)
-  if (code !== 0) throw new Error('flydigi: switching to DInput did not run — the Windows permission prompt was declined, or python could not be started (set FLYDIGI_PYTHON).')
-  for (let i = 0; i < 48; i++) {
-    if (dinputPath()) return
+  if (parsed && !parsed.ok) throw new Error(`flydigi: ${parsed.error ?? 'the helper reported a failure'}`)
+  if (code !== 0 || !parsed) {
+    throw new Error('flydigi: the helper did not run — the Windows permission prompt was declined, or python could not be started (set FLYDIGI_PYTHON).')
+  }
+  return { reportRate: parsed.reportRate ?? null }
+}
+
+async function waitFor(cond: () => boolean, ms: number): Promise<boolean> {
+  const end = Date.now() + ms
+  while (Date.now() < end) {
+    if (cond()) return true
     await sleep(250)
   }
-  throw new Error('flydigi: the switch was sent but the pad did not appear as 04B4:2412. Unplug and replug it and try again.')
+  return cond()
+}
+
+/** Switch an XInput-mode Direwolf to DInput via the elevated helper, then wait for 04B4:2412. */
+async function switchToDInput(): Promise<void> {
+  await runHelper(['--to-dinput'])
+  if (!(await waitFor(() => dinputPath() !== null, 12000))) {
+    throw new Error('flydigi: the switch was sent but the pad did not appear as 04B4:2412. Unplug and replug it and try again.')
+  }
 }
 
 /** Open the vendor interface, switching the pad into DInput mode first if it is in XInput mode. */
@@ -322,24 +339,44 @@ export function fxHidWrite(patch: FxPatch): Promise<{ verified: boolean; restore
  * DInput mode. The pad drops off the bus and returns as 045E:028E, after which
  * Stick Labs can no longer configure it until it is put back in DInput mode.
  */
+/** Send 05 ED over the open vendor interface and wait for the pad to leave DInput mode. */
+async function hidSwitchToXInput(): Promise<boolean> {
+  open()
+  try {
+    hid!.write(Array.from(fxDInputSwitchToXInput()))
+  } catch (e) {
+    close()
+    throw new Error(`flydigi: write failed (${(e as Error).message})`)
+  }
+  const gone = await waitFor(() => dinputPath() === null, 6000)
+  if (gone) close()
+  return gone
+}
+
 export function fxHidSwitchToXInput(): Promise<{ switched: boolean }> {
+  return exclusive(async () => ({ switched: await hidSwitchToXInput() }))
+}
+
+/**
+ * Read (code = null) or set the polling rate. The Direwolf only exposes it in XInput mode, so a
+ * pad in DInput mode is switched to XInput (05 ED), the elevated helper sets/reads the rate through
+ * the filter driver and switches the pad back (A5 17), and this waits for 04B4:2412 to return.
+ * Codes: 1 = 1000 Hz, 2 = 500, 4 = 250, 8 = 125.
+ */
+export function fxHidPollingRate(code: number | null): Promise<{ reportRate: number | null; verified: boolean }> {
   return exclusive(async () => {
-    open()
-    try {
-      hid!.write(Array.from(fxDInputSwitchToXInput()))
-    } catch (e) {
-      close()
-      throw new Error(`flydigi: write failed (${(e as Error).message})`)
+    const wasDInput = dinputPath() !== null
+    if (!wasDInput && !xinputDirewolfPresent()) throw new Error('flydigi: Direwolf 4 not found (plug it in via USB).')
+    if (wasDInput) {
+      if (!(await hidSwitchToXInput())) throw new Error('flydigi: the pad did not leave DInput mode; unplug and replug it and try again.')
+      if (!(await waitFor(() => xinputDirewolfPresent(), 10000))) throw new Error('flydigi: the pad did not come back as an Xbox controller in time.')
     }
-    const end = Date.now() + 6000
-    while (Date.now() < end) {
-      await sleep(250)
-      if (dinputPath() === null) {
-        close()
-        return { switched: true }
-      }
+    const args = [...(code === null ? ['--read-rate'] : ['--set-rate', String(code)]), ...(wasDInput ? ['--to-dinput'] : [])]
+    const r = await runHelper(args)
+    if (wasDInput && !(await waitFor(() => dinputPath() !== null, 12000))) {
+      throw new Error('flydigi: the rate was applied but the pad did not return to DInput mode. Press Read pad to switch it again.')
     }
-    return { switched: false }
+    return { reportRate: r.reportRate, verified: code === null ? r.reportRate !== null : r.reportRate === code }
   })
 }
 

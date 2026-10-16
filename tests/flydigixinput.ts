@@ -14,6 +14,7 @@ import {
   fxDeadzonePoints,
   fxFromDInput,
   fxDInputSwitchToXInput,
+  fxHzFromReportRate,
   fxToDInput,
   fxReadConfigId,
   fxWriteStart,
@@ -154,6 +155,8 @@ const swapPack = fxDiffPacks(blob, swapped)
 check('then B->A matches Space Station', swapPack.length === 1 && hex(swapPack[0].packs[0]) === '00 00 ff 00 00 05 00 00 04 00', hex(swapPack[0].packs[0]))
 check('clearing a remap restores the default entry', hex(fxSetKeyTarget(aToB, 4, FX_KEY_DEFAULT)) === hex(blob))
 check('non-Direwolf key refused', (() => { try { fxSetKeyTarget(blob, 30, 4); return false } catch { return true } })())
+
+check('report-rate codes 1/2/4/8 = 1000/500/250/125 Hz', [1, 2, 4, 8].map((c) => fxHzFromReportRate(c)).join() === '1000,500,250,125' && fxHzFromReportRate(3) === null && fxHzFromReportRate(null) === null)
 
 // Ack parsing / blob assembly from real reply shapes.
 const rep = (cmd: number, data: number[]): Uint8Array => {

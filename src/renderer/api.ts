@@ -77,6 +77,8 @@ interface LabApi {
   flydigiIdentify(path: string): Promise<FdIdentifyResult>
   /** Flydigi Direwolf 4 (DInput mode, plain HID): read a config slot. Space Station must be closed. */
   flydigiXRead(cfgId?: number): Promise<FxSnapshot>
+  /** Polling rate (code 1/2/4/8 = 1000/500/250/125 Hz; null = just read it). Switches the pad to XInput and back via the elevated helper. */
+  flydigiXRate(code: number | null): Promise<{ reportRate: number | null; verified: boolean }>
   /** Which mode the Direwolf is in right now (cheap; no traffic to the pad). */
   flydigiXMode(): Promise<'dinput' | 'xinput' | 'none'>
   /** Switch the pad from DInput back to XInput mode; it drops off the bus and returns as an Xbox 360 pad. */

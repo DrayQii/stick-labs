@@ -150,6 +150,17 @@ export function fxRunFrames(run: FxWriteRun, cfgId: number): Uint8Array[] {
   return [fxWriteStart(run.startPack, run.packs.length, cfgId), ...run.packs.map((p, i) => fxWritePack(p, i))]
 }
 
+// --- polling rate (a device setting, only reachable in XInput mode through the filter driver) ---
+
+/** Report-rate codes Space Station uses and the rate each means (Direwolf 4: no 8K gears). */
+export const FX_REPORT_RATES: ReadonlyArray<{ code: number; hz: number }> = [
+  { code: 1, hz: 1000 },
+  { code: 2, hz: 500 },
+  { code: 4, hz: 250 },
+  { code: 8, hz: 125 }
+]
+export const fxHzFromReportRate = (code: number | null): number | null => FX_REPORT_RATES.find((r) => r.code === code)?.hz ?? null
+
 // --- DInput mode (04B4:2412, vendor interface 2): same commands over plain HID ---
 //
 // Space Station's DInputProtocol sends report 0x05 with different command bytes
