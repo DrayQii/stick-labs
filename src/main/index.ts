@@ -8,6 +8,7 @@ import { Controller, type DeviceInfo } from './controller'
 import { discover, discoverLive } from './hid'
 import { ljReadButtonTable, ljReadMainSnapshot, ljReadSnapshot, ljWriteButtonVerified, ljWriteStickVerified, ljWriteTriggerVerified } from './leadjoy'
 import type { LjButtonTarget, LjStickPatch } from '../shared/leadjoy'
+import { fdIdentify } from './flydigi'
 import { ljButtonWriteRecord } from '../shared/leadjoy'
 import { steamInfo, exportApexDeadzones, listInstalledGames, exportDeadzonesToGames } from './steam'
 import { PROFILE_LENGTH } from '../shared/protocol'
@@ -111,6 +112,11 @@ function handle(channel: string, fn: (...args: any[]) => unknown): void {
 }
 
 handle('device:discover', () => discoverLive())
+/** Flydigi: read-only identify handshake (docs/flydigi.md). No write path exists. */
+handle('flydigi:identify', (path: string) => {
+  if (typeof path !== 'string' || path.length === 0) throw new Error('flydigi: refusing identify without a device path')
+  return fdIdentify(path)
+})
 handle('leadjoy:readMain', (path: string) => ljReadMainSnapshot(path))
 handle('leadjoy:readSlot', (req: { path: string; slot: number }) => {
   if (typeof req?.path !== 'string' || req.path.length === 0) throw new Error('leadjoy: refusing read without a device path')
@@ -242,7 +248,8 @@ function createWindow(): void {
 
 app.whenReady().then(() => {
   session.defaultSession.setPermissionRequestHandler((_wc, permission, callback) => {
-    // WebHID for Flydigi Apex 5 (interrupt-OUT reports node-hid cannot send).
+    // WebHID for Flydigi pads (kept for a future WebHID transport; the
+    // identify handshake itself goes through node-hid in main/flydigi.ts).
     // requestDevice still needs a user gesture; this only stops auto-deny.
     // (cast: Electron's Permission union predates the 'hid' literal.)
     callback((permission as string) === 'hid')

@@ -19,6 +19,7 @@ import {
   VENDOR_USAGE,
   VENDOR_USAGE_PAGE
 } from '../shared/protocol'
+import { isFlydigiInterface } from '../shared/flydigi'
 
 export interface Candidate {
   path: string
@@ -96,6 +97,8 @@ const PREFERRED_PIDS = new Set([
   0x103d, 0x10ff, 0x090d,
   // LeadJoy Saber Plus (detect-only)
   0x3519,
+  // Flydigi Apex / Vader (detect-only)
+  0x2501, 0x2502, 0x2401, 0x2412,
 ])
 
 function listDevices(): Device[] {
@@ -106,7 +109,7 @@ function listDevices(): Device[] {
   }
 }
 
-/** All vendor interfaces, no handle opened: GameSir 0xFFF0 plus LeadJoy MI_04 (0xFF80/0x0001). */
+/** All vendor interfaces, no handle opened: GameSir 0xFFF0, LeadJoy MI_04 (0xFF80/0x0001), Flydigi 0xFFA0. */
 export function discover(): Candidate[] {
   const isGameSir = (d: { vendorId?: number; usagePage?: number; usage?: number }): boolean =>
     d.vendorId === VENDOR_ID && d.usagePage === VENDOR_USAGE_PAGE && d.usage === VENDOR_USAGE
@@ -117,7 +120,7 @@ export function discover(): Candidate[] {
       (d) =>
         typeof d.path === 'string' &&
         d.path.length > 0 &&
-        (isGameSir(d) || isLeadJoy(d))
+        (isGameSir(d) || isLeadJoy(d) || isFlydigiInterface(d))
     )
     .map((d) => ({
       path: d.path as string,
