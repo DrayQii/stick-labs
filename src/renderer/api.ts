@@ -9,6 +9,7 @@ export interface Candidate {
 import type { DeepPollResult } from '@shared/deeppoll'
 import type { LjButtonTarget, LjSnapshot, LjStickPatch } from '@shared/leadjoy'
 import type { FdIdentifyResult } from '@shared/flydigi'
+import type { FxSnapshot, FxPatch } from '@shared/flydigi-xinput'
 export interface DeviceInfo {
   firmware: string
   dongle: string
@@ -74,6 +75,16 @@ interface LabApi {
   deeppoll(vid: number, pid: number, seconds?: number): Promise<DeepPollResult>
   /** Flydigi: read-only identify handshake (model, firmware, connection, battery). */
   flydigiIdentify(path: string): Promise<FdIdentifyResult>
+  /** Flydigi Direwolf 4 (DInput mode, plain HID): read a config slot. Space Station must be closed. */
+  flydigiXRead(cfgId?: number): Promise<FxSnapshot>
+  /** Which mode the Direwolf is in right now (cheap; no traffic to the pad). */
+  flydigiXMode(): Promise<'dinput' | 'xinput' | 'none'>
+  /** Switch the pad from DInput back to XInput mode; it drops off the bus and returns as an Xbox 360 pad. */
+  flydigiXToXInput(): Promise<{ switched: boolean }>
+  /** Make a config slot (0-based) the one the pad runs. */
+  flydigiXActivate(cfgId: number): Promise<FxSnapshot>
+  /** Verified write (rolled back on mismatch); `save` persists across replug. */
+  flydigiXWrite(patch: FxPatch): Promise<{ verified: boolean; restored: boolean; saved: boolean; changedPacks: number }>
   /** LeadJoy Saber Plus: read-only Main-slot snapshot (sticks stay locked). */
   leadjoyReadMain(path: string): Promise<LjSnapshot>
   /** LeadJoy slot snapshot (Main 0 / Sub1 1 / Sub2 2). */

@@ -9,6 +9,8 @@ import { discover, discoverLive } from './hid'
 import { ljReadButtonTable, ljReadMainSnapshot, ljReadSnapshot, ljWriteButtonVerified, ljWriteStickVerified, ljWriteTriggerVerified } from './leadjoy'
 import type { LjButtonTarget, LjStickPatch } from '../shared/leadjoy'
 import { fdIdentify } from './flydigi'
+import { fxHidActivate, fxHidMode, fxHidRead, fxHidSwitchToXInput, fxHidWrite, fxHidStop } from './flydigi-hid'
+import type { FxPatch } from '../shared/flydigi-xinput'
 import { ljButtonWriteRecord } from '../shared/leadjoy'
 import { steamInfo, exportApexDeadzones, listInstalledGames, exportDeadzonesToGames } from './steam'
 import { PROFILE_LENGTH } from '../shared/protocol'
@@ -116,6 +118,44 @@ handle('device:discover', () => discoverLive())
 handle('flydigi:identify', (path: string) => {
   if (typeof path !== 'string' || path.length === 0) throw new Error('flydigi: refusing identify without a device path')
   return fdIdentify(path)
+})
+/** Flydigi Direwolf 4 in DInput mode (04B4:2412): config over plain HID, no driver or admin (docs/flydigi.md). */
+const cfgOk = (v: unknown): boolean => v === undefined || (Number.isInteger(v) && (v as number) >= 0 && (v as number) <= 7)
+handle('flydigix:read', (cfgId?: number) => {
+  if (!cfgOk(cfgId)) throw new Error('flydigi: config id must be 0..7')
+  return fxHidRead(cfgId)
+})
+handle('flydigix:mode', () => fxHidMode())
+handle('flydigix:toXInput', () => fxHidSwitchToXInput())
+handle('flydigix:activate', (cfgId: number) => {
+  if (!Number.isInteger(cfgId) || cfgId < 0 || cfgId > 7) throw new Error('flydigi: config id must be 0..7')
+  return fxHidActivate(cfgId)
+})
+handle('flydigix:write', (patch: FxPatch) => {
+  const byte = (v: unknown): boolean => Number.isInteger(v) && (v as number) >= 0 && (v as number) <= 255
+  if (!patch || typeof patch !== 'object') throw new Error('flydigi: empty patch')
+  if (!cfgOk(patch.cfgId)) throw new Error('flydigi: config id must be 0..7')
+  if (patch.leftCenter !== undefined && !byte(patch.leftCenter)) throw new Error('flydigi: leftCenter must be 0..255')
+  if (patch.rightCenter !== undefined && !byte(patch.rightCenter)) throw new Error('flydigi: rightCenter must be 0..255')
+  for (const c of [patch.leftCurve, patch.rightCurve]) {
+    if (c && !(Array.isArray(c.points) && c.points.length === 9 && [...c.points, c.type, c.circularity, c.edge].every(byte))) {
+      throw new Error('flydigi: a curve needs 9 points and type/circularity/edge as bytes 0..255')
+    }
+  }
+  for (const t of [patch.leftTrigger, patch.rightTrigger]) {
+    if (t && !Object.values(t).every(byte)) throw new Error('flydigi: trigger values must be bytes 0..255')
+  }
+  if (patch.keys !== undefined) {
+    if (typeof patch.keys !== 'object' || patch.keys === null) throw new Error('flydigi: keys must be an object')
+    for (const [id, target] of Object.entries(patch.keys)) {
+      if (!byte(Number(id)) || !byte(target)) throw new Error('flydigi: key ids and targets must be bytes 0..255')
+    }
+  }
+  const v = patch.vibration
+  if (v && ![v.left?.min, v.left?.max, v.left?.scale, v.right?.min, v.right?.max, v.right?.scale].every(byte)) {
+    throw new Error('flydigi: vibration values must be 0..255')
+  }
+  return fxHidWrite(patch)
 })
 handle('leadjoy:readMain', (path: string) => ljReadMainSnapshot(path))
 handle('leadjoy:readSlot', (req: { path: string; slot: number }) => {
@@ -241,6 +281,14 @@ function createWindow(): void {
   })
   if (process.env.ELECTRON_RENDERER_URL) void window_.loadURL(process.env.ELECTRON_RENDERER_URL)
   else void window_.loadFile(join(__dirname, '../renderer/index.html'))
+  if (!app.isPackaged) {
+    // The menu bar is hidden, so give dev runs an explicit devtools shortcut.
+    window_.webContents.on('before-input-event', (_e, input) => {
+      if (input.type === 'keyDown' && (input.key === 'F12' || (input.control && input.shift && input.key.toLowerCase() === 'i'))) {
+        window_?.webContents.toggleDevTools()
+      }
+    })
+  }
   window_.on('closed', () => {
     window_ = null
   })
@@ -296,4 +344,7 @@ app.on('window-all-closed', () => {
   controller.disconnect()
   if (process.platform !== 'darwin') app.quit()
 })
-app.on('before-quit', () => controller.disconnect())
+app.on('before-quit', () => {
+  controller.disconnect()
+  fxHidStop()
+})

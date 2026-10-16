@@ -174,17 +174,17 @@ export const MODELS: ReadonlyArray<ControllerModel> = [
   },
   {
     id: 'FlydigiV1',
-    marketingName: 'Flydigi (early model)',
+    marketingName: 'Flydigi (DInput mode)',
     vendorId: 0x04b4,
     usagePage: 0,
     usage: 0,
     pids: [0x2412],
-    productHints: ['Flydigi'],
+    productHints: ['Flydigi', 'Direwolf'],
     reportRates: [],
     profileLength: 0,
     dumpLength: 0,
     support: 'detect-only',
-    supportNote: 'Early Flydigi pad (Apex 2 / Vader 2 era, interface 2). Named from its USB product string only; tuning is locked.'
+    supportNote: 'Flydigi V1 protocol (VID 0x04B4, interface 2): older pads and the Direwolf 4 in DInput mode. Identified over the read-only 0xEC get-info; tuning is locked.'
   }
 ]
 

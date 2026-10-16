@@ -58,11 +58,13 @@ export function fdUsesUnnumberedReports(vendorId: number, productId: number): bo
   return vendorId === FD_VID_V2 && (productId === FD_PID_V2_VADER || productId === FD_PID_V2_APEX6)
 }
 
-/** One command report, padded to report-ID + 32 bytes (Windows wants the full length). */
+/**
+ * One command report, unpadded exactly as SDL sends it. hidapi on Windows
+ * zero-pads short writes up to the interface's output report length; padding
+ * here instead would overrun a shorter report and fail the write.
+ */
 function command(cmd: number, args: number[], unnumbered: boolean): Uint8Array {
-  const out = new Uint8Array(1 + FD_REPLY_LEN)
-  out.set([unnumbered ? 0x00 : FD_CMD_REPORT_ID, FD_MAGIC1, FD_MAGIC2, cmd, ...args])
-  return out
+  return new Uint8Array([unnumbered ? 0x00 : FD_CMD_REPORT_ID, FD_MAGIC1, FD_MAGIC2, cmd, ...args])
 }
 
 export const fdCheckArchitecture = (unnumbered: boolean): Uint8Array => command(FD_CMD_CHECK_ARCH, [0, 0], unnumbered)
@@ -120,6 +122,9 @@ export function fdNameFromProduct(product: string | undefined): string | null {
   if (p.includes('VADER4')) return 'Flydigi Vader 4 Pro'
   if (p.includes('VADER3')) return 'Flydigi Vader 3'
   if (p.includes('VADER2')) return 'Flydigi Vader 2'
+  if (p.includes('DIREWOLF4')) return 'Flydigi Direwolf 4'
+  if (p.includes('DIREWOLF3')) return 'Flydigi Direwolf 3'
+  if (p.includes('DIREWOLF')) return 'Flydigi Direwolf'
   return null
 }
 
@@ -184,10 +189,58 @@ export function fdParseThirdPartyAllowed(reply: Uint8Array): boolean | null {
   return d[9] === 1
 }
 
+// ---------------------------------------------------------------------------
+// V1 (VID 0x04B4 PID 0x2412, interface 2) — older pads and the Direwolf 4 in
+// DInput mode. Space Station's log shows it sending exactly this on MI_02:
+// "WriteData 0xEC: 05-EC-00-00-00-00-00-00-00-00-00-00-00-00-00".
+// Reply (SDL InitControllerV1): 32 bytes, [15] = 0xEC, [3] device id,
+// [5..8] serial, [9..10] firmware LE, [13] 0 wireless / 1 wired (fw ≥ 0x6400).
+// ---------------------------------------------------------------------------
+
+export const FD_V1_CMD_REPORT_ID = 0x05
+export const FD_V1_CMD_GET_INFO = 0xec
+
+/** V1 get-info, byte-identical to Space Station's 15-byte write. */
+export const fdV1GetInfo = (): Uint8Array => {
+  const out = new Uint8Array(15)
+  out[0] = FD_V1_CMD_REPORT_ID
+  out[1] = FD_V1_CMD_GET_INFO
+  return out
+}
+
+export interface FdV1Info {
+  deviceId: number
+  modelName: string
+  firmware: number
+  firmwareText: string
+  serial: string
+  connection: FdConnection
+}
+
+/** Decode a V1 get-info reply; null when the frame is not one. */
+export function fdParseV1Info(reply: Uint8Array, product?: string): FdV1Info | null {
+  if (reply.length < 32 || reply[15] !== FD_V1_CMD_GET_INFO) return null
+  const deviceId = reply[3]
+  const firmware = reply[9] | (reply[10] << 8)
+  const serial = Array.from(reply.subarray(5, 9), (b) => b.toString(16).padStart(2, '0')).join('')
+  let connection: FdConnection = 'unknown'
+  if (firmware >= 0x6400) connection = reply[13] === 0 ? 'wireless' : reply[13] === 1 ? 'wired' : 'unknown'
+  return {
+    deviceId,
+    modelName: fdModelName(deviceId, product),
+    firmware,
+    firmwareText: `0x${firmware.toString(16).padStart(4, '0').toUpperCase()}`,
+    serial,
+    connection
+  }
+}
+
 /** Result of the identify handshake, as returned over IPC. */
 export interface FdIdentifyResult {
-  /** Null on V1 pads (no V2 handshake) or when the pad did not answer. */
+  /** V2 get-info reply; null on V1 pads or when the pad did not answer. */
   info: FdInfo | null
+  /** V1 get-info reply (04B4:2412); null on V2 pads or no answer. */
+  v1: FdV1Info | null
   /** Name from the info reply, else the USB product string. */
   modelName: string
   /** Space Station's "allow third-party apps" toggle; null when unknown. */
