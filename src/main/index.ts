@@ -9,7 +9,7 @@ import { discover, discoverLive } from './hid'
 import { ljReadButtonTable, ljReadMainSnapshot, ljReadSnapshot, ljWriteButtonVerified, ljWriteStickVerified, ljWriteTriggerVerified } from './leadjoy'
 import type { LjButtonTarget, LjStickPatch } from '../shared/leadjoy'
 import { fdIdentify } from './flydigi'
-import { fxHidActivate, fxHidMode, fxHidRead, fxHidSwitchToXInput, fxHidWrite, fxHidStop } from './flydigi-hid'
+import { fxHidActivate, fxHidMode, fxHidRead, fxHidSetReportRate, fxHidSwitchToXInput, fxHidWrite, fxHidStop } from './flydigi-hid'
 import type { FxPatch } from '../shared/flydigi-xinput'
 import { ljButtonWriteRecord } from '../shared/leadjoy'
 import { steamInfo, exportApexDeadzones, listInstalledGames, exportDeadzonesToGames } from './steam'
@@ -124,6 +124,10 @@ const cfgOk = (v: unknown): boolean => v === undefined || (Number.isInteger(v) &
 handle('flydigix:read', (cfgId?: number) => {
   if (!cfgOk(cfgId)) throw new Error('flydigi: config id must be 0..7')
   return fxHidRead(cfgId)
+})
+handle('flydigix:setRate', (code: number) => {
+  if (![1, 2, 4, 8].includes(code)) throw new Error('flydigi: polling-rate code must be 1, 2, 4 or 8')
+  return fxHidSetReportRate(code)
 })
 handle('flydigix:mode', () => fxHidMode())
 handle('flydigix:toXInput', () => fxHidSwitchToXInput())

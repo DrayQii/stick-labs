@@ -14,6 +14,11 @@ import {
   fxDeadzonePoints,
   fxFromDInput,
   fxDInputSwitchToXInput,
+  fxHzFromReportRate,
+  fxIsHardwareAck,
+  fxReadHardware,
+  fxReportRateFromAck,
+  fxSetReportRate,
   fxToDInput,
   fxReadConfigId,
   fxWriteStart,
@@ -154,6 +159,18 @@ const swapPack = fxDiffPacks(blob, swapped)
 check('then B->A matches Space Station', swapPack.length === 1 && hex(swapPack[0].packs[0]) === '00 00 ff 00 00 05 00 00 04 00', hex(swapPack[0].packs[0]))
 check('clearing a remap restores the default entry', hex(fxSetKeyTarget(aToB, 4, FX_KEY_DEFAULT)) === hex(blob))
 check('non-Direwolf key refused', (() => { try { fxSetKeyTarget(blob, 30, 4); return false } catch { return true } })())
+
+// --- polling rate (device settings) ---
+check('hardware-read frame (XInput form)', hex(fxReadHardware()) === 'a5 50 07 00 00 00 00 00 00 00 00 00 00 00 00')
+check('hardware-read frame (DInput form)', hex(fxToDInput(fxReadHardware())) === '05 f2 03 00 00 00 00 00 00 00 00 00 00 00 00')
+check('set-rate frame (500 Hz = code 2)', hex(fxToDInput(fxSetReportRate(2))) === '05 50 0a 02 00 00 00 00 00 00 00 00 00 00 00')
+// Space Station's real XInput ack for this pad: ... A5 50 07 01 00 01 0F 01 01 01 11 01 00 ... = report rate code 1 (1000 Hz)
+const hwXi = fxParseAck(h2('00 14 00 00 00 00 00 00 00 00 00 02 00 01 a5 50 07 01 00 01 0f 01 01 01 11 01 00 00 00 00 00 00'))
+check('real XInput hardware ack: report rate code 1 = 1000 Hz', !!hwXi && fxIsHardwareAck(hwXi) && fxReportRateFromAck(hwXi) === 1 && fxHzFromReportRate(1) === 1000)
+// The same block as a DInput reply (Space Station's DInput parser reads it at data[4..], i.e. report bytes 5..)
+const hwDi = fxFromDInput(h2('04 ff f0 f2 03 01 00 01 0f 01 01 01 11 01 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00'))
+check('DInput hardware reply normalises to the same ack', hwDi.length === 1 && fxIsHardwareAck(hwDi[0]) && fxReportRateFromAck(hwDi[0]) === 1)
+check('rate codes: 1, 2, 4, 8 = 1000, 500, 250, 125 Hz', [1, 2, 4, 8].map((c) => fxHzFromReportRate(c)).join() === '1000,500,250,125' && fxHzFromReportRate(3) === null)
 
 // Ack parsing / blob assembly from real reply shapes.
 const rep = (cmd: number, data: number[]): Uint8Array => {

@@ -150,6 +150,34 @@ export function fxRunFrames(run: FxWriteRun, cfgId: number): Uint8Array[] {
   return [fxWriteStart(run.startPack, run.packs.length, cfgId), ...run.packs.map((p, i) => fxWritePack(p, i))]
 }
 
+// --- device settings: polling rate (not part of the config blob) ---
+
+export const FX_SUB_READ_HW = 0x07
+export const FX_SUB_REPORT_RATE = 0x0a
+
+/** Report-rate codes Space Station uses, and the polling rate each means (Direwolf 4: no 8K gears). */
+export const FX_REPORT_RATES: ReadonlyArray<{ code: number; hz: number }> = [
+  { code: 1, hz: 1000 },
+  { code: 2, hz: 500 },
+  { code: 4, hz: 250 },
+  { code: 8, hz: 125 }
+]
+
+/** Read the device-settings block (sleep time, report rate, …). */
+export const fxReadHardware = (): Uint8Array => frame(FX_CMD_SAVE, FX_SUB_READ_HW)
+/** Set the polling rate by code (see FX_REPORT_RATES). */
+export const fxSetReportRate = (code: number): Uint8Array => frame(FX_CMD_SAVE, FX_SUB_REPORT_RATE, code)
+
+/**
+ * Device-settings reply (`A5 50 07 …`): data[0] = 7, then the block Space Station parses at
+ * XInput ack[17..26]: [1] mapping switch (0 = on), [2] stick debounce (0 = on), [3] auto
+ * calibration (0 = on), [4] sleep time, [5] quick switch, [6] report rate code, [7] precision,
+ * [8] sensitivity, [9] rebound (0 = on). Only the report rate is used so far.
+ */
+export const fxIsHardwareAck = (ack: FxAck): boolean => ack.cmd === FX_CMD_SAVE && ack.data[0] === FX_SUB_READ_HW
+export const fxReportRateFromAck = (ack: FxAck): number => ack.data[6]
+export const fxHzFromReportRate = (code: number): number | null => FX_REPORT_RATES.find((r) => r.code === code)?.hz ?? null
+
 // --- DInput mode (04B4:2412, vendor interface 2): same commands over plain HID ---
 //
 // Space Station's DInputProtocol sends report 0x05 with different command bytes
@@ -178,6 +206,10 @@ export function fxToDInput(frame: Uint8Array): Uint8Array {
       f[1] = 0x22
       return f
     case FX_CMD_SAVE:
+      if (frame[2] === FX_SUB_READ_HW) {
+        f[1] = 0xf2
+        f[2] = 0x03
+      }
       return f
     default:
       throw new Error(`fx: no DInput form for command 0x${frame[1].toString(16)}`)
@@ -205,6 +237,7 @@ export function fxFromDInput(r: Uint8Array): FxAck[] {
   if (r[15] === 0xeb) return [{ cmd: FX_CMD_READ_CFG_ACK, data: Uint8Array.of(r[3], ...r.subarray(5, 15)) }]
   if (r[15] === 0xea) return [{ cmd: FX_CMD_WRITE_START, data: new Uint8Array(0) }, { cmd: FX_CMD_WRITE_PACK, data: new Uint8Array(0) }]
   if (r[3] === 0xaa && r[4] === 0xac) return [{ cmd: FX_CMD_READ_CFG_ID, data: Uint8Array.of(r[5], r[6], r[7]) }]
+  if (r[3] === 0xf2 && r[4] === 0x03) return [{ cmd: FX_CMD_SAVE, data: Uint8Array.of(FX_SUB_READ_HW, ...r.subarray(5, 15)) }]
   if (r[3] === FX_CMD_SAVE) return [{ cmd: FX_CMD_SAVE, data: Uint8Array.of(r[4], 1) }]
   return []
 }
@@ -462,6 +495,8 @@ export interface FxSnapshot {
   curves: { left: FxCurve; right: FxCurve }
   triggers: { left: FxTriggerRaw; right: FxTriggerRaw }
   keys: FxKeyEntry[]
+  /** Polling-rate code from the device settings (FX_REPORT_RATES), or null if the read failed. */
+  reportRate: number | null
 }
 
 export interface FxPatch {

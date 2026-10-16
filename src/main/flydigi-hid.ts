@@ -36,6 +36,11 @@ import {
   fxDInputSwitchToXInput,
   fxDiffPacks,
   fxEncodeVibration,
+  fxIsHardwareAck,
+  fxReadHardware,
+  fxReportRateFromAck,
+  fxSetReportRate,
+  FX_REPORT_RATES,
   fxFromDInput,
   fxReadConfig,
   fxReadConfigId,
@@ -227,8 +232,28 @@ async function writeBlob(cfgId: number, from: Uint8Array, to: Uint8Array): Promi
   }
 }
 
-function snapshot(cfgId: number, activeCfgId: number, cfgCount: number, blob: Uint8Array): FxSnapshot {
-  return { cfgId, activeCfgId, cfgCount, dataVersion: fxDataVersion(blob), vibration: fxDecodeVibration(blob), sticks: fxDecodeSticks(blob), curves: fxDecodeCurves(blob), triggers: fxDecodeTriggers(blob), keys: fxDecodeKeys(blob) }
+/** Current polling-rate code from the device settings, or null if the pad did not answer. */
+async function readReportRate(): Promise<number | null> {
+  acks = []
+  await sendFrame(fxReadHardware())
+  const a = await waitAck(FX_CMD_SAVE, fxIsHardwareAck)
+  return a ? fxReportRateFromAck(a) : null
+}
+
+async function snapshot(cfgId: number, activeCfgId: number, cfgCount: number, blob: Uint8Array): Promise<FxSnapshot> {
+  const reportRate = await readReportRate()
+  return {
+    cfgId,
+    activeCfgId,
+    cfgCount,
+    dataVersion: fxDataVersion(blob),
+    vibration: fxDecodeVibration(blob),
+    sticks: fxDecodeSticks(blob),
+    curves: fxDecodeCurves(blob),
+    triggers: fxDecodeTriggers(blob),
+    keys: fxDecodeKeys(blob),
+    reportRate
+  }
 }
 
 /** Serialise sessions: the pad answers one command at a time. */
@@ -245,7 +270,22 @@ export function fxHidRead(cfgId?: number): Promise<FxSnapshot> {
   return exclusive(async () => {
     await ensureOpen()
     const r = await readBlob(cfgId)
-    return snapshot(r.cfgId, r.activeCfgId, r.cfgCount, r.blob)
+    return await snapshot(r.cfgId, r.activeCfgId, r.cfgCount, r.blob)
+  })
+}
+
+/**
+ * Set the polling rate (code from FX_REPORT_RATES) and confirm by reading the device
+ * settings back. Space Station sends no ack for this command, so readback is the check.
+ */
+export function fxHidSetReportRate(code: number): Promise<{ verified: boolean; reportRate: number | null }> {
+  return exclusive(async () => {
+    if (!FX_REPORT_RATES.some((r) => r.code === code)) throw new Error(`flydigi: ${code} is not a polling-rate code (1, 2, 4 or 8)`)
+    await ensureOpen()
+    await sendFrame(fxSetReportRate(code))
+    await sleep(400)
+    const reportRate = await readReportRate()
+    return { verified: reportRate === code, reportRate }
   })
 }
 
@@ -261,7 +301,7 @@ export function fxHidActivate(cfgId: number): Promise<FxSnapshot> {
     }
     const after = await readBlob(cfgId)
     if (after.activeCfgId !== cfgId) throw new Error(`flydigi: the pad still reports config ${after.activeCfgId + 1} active`)
-    return snapshot(after.cfgId, after.activeCfgId, after.cfgCount, after.blob)
+    return await snapshot(after.cfgId, after.activeCfgId, after.cfgCount, after.blob)
   })
 }
 

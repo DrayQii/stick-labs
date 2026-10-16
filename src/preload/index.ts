@@ -42,6 +42,7 @@ const api = {
     call<DeepPollResult>('diag:deeppoll', vid, pid, seconds),
   flydigiIdentify: (path: string) => call<FdIdentifyResult>('flydigi:identify', path),
   flydigiXRead: (cfgId?: number) => call<FxSnapshot>('flydigix:read', cfgId),
+  flydigiXSetRate: (code: number) => call<{ verified: boolean; reportRate: number | null }>('flydigix:setRate', code),
   flydigiXMode: () => call<'dinput' | 'xinput' | 'none'>('flydigix:mode'),
   flydigiXToXInput: () => call<{ switched: boolean }>('flydigix:toXInput'),
   flydigiXActivate: (cfgId: number) => call<FxSnapshot>('flydigix:activate', cfgId),
