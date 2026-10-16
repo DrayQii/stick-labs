@@ -902,3 +902,213 @@ table.tbl tbody tr:hover {
   background: var(--line-2);
   border: 2px solid var(--bg);
 }
+
+/* Flydigi connect card: sits inside the "Connect a controller" panel and fills it */
+.msg.fx-panel {
+  padding: 0;
+  overflow: hidden;
+  text-align: left;
+}
+.fx-card {
+  width: 100%;
+  min-height: 300px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr);
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+  padding: 0;
+}
+.fx-card:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+.fx-card-body {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 14px;
+  padding: 32px 36px;
+  border-right: 1px solid var(--line-2);
+}
+.fx-card-brand,
+.fx-cell-k,
+.fx-cell-v,
+.fx-card-cta {
+  font-family: 'JetBrains Mono', 'Cascadia Mono', Consolas, monospace;
+  text-transform: uppercase;
+}
+.fx-battery-fill[data-charging] {
+  background: var(--warn);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .fx-battery-fill[data-charging] {
+    animation: fx-charge 1.6s ease-in-out infinite;
+  }
+}
+@keyframes fx-charge {
+  50% { opacity: 0.45; }
+}
+.fx-probe {
+  font-family: 'JetBrains Mono', 'Cascadia Mono', Consolas, monospace;
+  font-size: 9px;
+  line-height: 1.4;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-3);
+  word-break: break-all;
+}
+.fx-card-brand {
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  color: var(--text-3);
+}
+.fx-card-name {
+  font-size: clamp(34px, 5vw, 56px);
+  font-weight: 900;
+  line-height: 0.9;
+  letter-spacing: -0.045em;
+  text-transform: uppercase;
+}
+.fx-card-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1px;
+  background: var(--line-2);
+  border: 1px solid var(--line-2);
+}
+.fx-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  background: var(--bg-1);
+}
+.fx-cell-k {
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  color: var(--text-3);
+}
+.fx-cell-v {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  letter-spacing: 0.06em;
+  color: var(--text);
+}
+.fx-battery-bar {
+  width: 28px;
+  height: 11px;
+  border: 1.5px solid var(--text-3);
+  padding: 1px;
+}
+.fx-battery-fill {
+  display: block;
+  height: 100%;
+  background: var(--good);
+}
+.fx-card-cta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 14px;
+  background: var(--accent);
+  color: var(--on-accent);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  transition: background 0.2s ease, color 0.2s ease;
+}
+.fx-card:hover:not(:disabled) .fx-card-cta {
+  background: var(--text);
+}
+.fx-card:active:not(:disabled) .fx-card-cta {
+  transform: translateY(1px);
+}
+.fx-card-pic {
+  position: relative;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  overflow: hidden;
+  padding: 20px;
+}
+.fx-card-pic img {
+  position: relative;
+  width: 100%;
+  max-width: 420px;
+  object-fit: contain;
+  /* the photo has a black backdrop: screen keeps only the pad on the dark panel */
+  mix-blend-mode: screen;
+}
+.fx-corner {
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  border-color: var(--text-3);
+  border-style: solid;
+  border-width: 0;
+}
+.fx-corner.tl { top: 12px; left: 12px; border-top-width: 1px; border-left-width: 1px; }
+.fx-corner.tr { top: 12px; right: 12px; border-top-width: 1px; border-right-width: 1px; }
+.fx-corner.bl { bottom: 12px; left: 12px; border-bottom-width: 1px; border-left-width: 1px; }
+.fx-corner.br { bottom: 12px; right: 12px; border-bottom-width: 1px; border-right-width: 1px; }
+.fx-scan {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 1px;
+  background: var(--accent);
+  opacity: 0;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .fx-card-body > * {
+    animation: fx-rise 0.6s cubic-bezier(0.16, 1, 0.3, 1) backwards;
+  }
+  .fx-card-body > *:nth-child(2) { animation-delay: 0.06s; }
+  .fx-card-body > *:nth-child(3) { animation-delay: 0.12s; }
+  .fx-card-body > *:nth-child(4) { animation-delay: 0.18s; }
+  .fx-card-pic img {
+    animation:
+      fx-slide 0.9s cubic-bezier(0.16, 1, 0.3, 1) backwards,
+      fx-float 7s ease-in-out 0.9s infinite;
+  }
+  .fx-scan {
+    animation: fx-sweep 5s linear 1s infinite;
+  }
+  .fx-card:hover:not(:disabled) .fx-card-arrows {
+    animation: fx-nudge 0.7s ease-in-out infinite;
+  }
+}
+@keyframes fx-rise {
+  from { opacity: 0; transform: translateY(10px); }
+}
+@keyframes fx-slide {
+  from { opacity: 0; transform: translateX(32px) scale(0.96); }
+}
+@keyframes fx-float {
+  50% { transform: translateY(-6px); }
+}
+@keyframes fx-sweep {
+  0% { top: 0; opacity: 0; }
+  8% { opacity: 0.7; }
+  45% { top: 100%; opacity: 0.7; }
+  50%, 100% { top: 100%; opacity: 0; }
+}
+@keyframes fx-nudge {
+  50% { transform: translateX(4px); }
+}
+@media (max-width: 760px) {
+  .fx-card {
+    grid-template-columns: 1fr;
+  }
+  .fx-card-body {
+    border-right: 0;
+    border-top: 1px solid var(--line-2);
+    order: 2;
+  }
+}
