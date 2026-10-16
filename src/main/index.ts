@@ -2,7 +2,8 @@
  * G7 Stick Lab — stick-only Electron main. No remap/macros/lighting code.
  * IPC: discover/connect, profile 1-4 read/write (verified), switch, calibration.
  */
-import { app, BrowserWindow, dialog, ipcMain, session, shell } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, session, shell, Tray } from 'electron'
+import { TRAY_ICON_PNG_BASE64 } from './trayIcon'
 import { join } from 'node:path'
 import { Controller, type DeviceInfo } from './controller'
 import { Transport } from './hid'
@@ -282,12 +283,72 @@ app.whenReady().then(() => {
       console.error(`[updater] disabled: ${(err as Error).message}`)
     }
   }
+  // Close to tray: hiding keeps the app (and the pad's config session) alive.
+  window_?.on('close', (event) => {
+    if (!quitting) {
+      event.preventDefault()
+      window_?.hide()
+    }
+  })
+  createTray()
+
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
+    window_?.show()
   })
 })
+
+let quitting = false
+let tray: Tray | null = null
+
+/** Tray icon + menu. Quit here is the only path that really exits the app. */
+function createTray(): void {
+  if (tray) return
+  const icon = nativeImage.createFromDataURL(`data:image/png;base64,${TRAY_ICON_PNG_BASE64}`)
+  tray = new Tray(icon)
+  tray.setToolTip('Stick Labs')
+  tray.setContextMenu(
+    Menu.buildFromTemplate([
+      {
+        label: 'Show Stick Labs',
+        click: () => {
+          window_?.show()
+          window_?.focus()
+        }
+      },
+      { type: 'separator' },
+      { label: 'Quit', click: () => app.quit() }
+    ])
+  )
+  tray.on('click', () => {
+    window_?.show()
+    window_?.focus()
+  })
+}
+
 app.on('window-all-closed', () => {
-  controller.disconnect()
-  if (process.platform !== 'darwin') app.quit()
+  // With close-to-tray the window is hidden rather than destroyed, so this only
+  // matters on the way out; quitting is handled below.
+  if (process.platform !== 'darwin') return
 })
-app.on('before-quit', () => controller.disconnect())
+
+/**
+ * Leaving config mode with save=true is what commits the profile on the pad —
+ * without it the session state can be dropped when the socket closes, which is
+ * how settings appear to revert once the app is closed. Hold the quit until that
+ * frame has gone out, then exit for real.
+ */
+app.on('before-quit', (event) => {
+  if (quitting) return
+  quitting = true
+  event.preventDefault()
+  void (async () => {
+    try {
+      await controller.exitConfig(true)
+    } catch {
+      /* device already gone — nothing to save */
+    }
+    controller.disconnect()
+    app.quit()
+  })()
+})
