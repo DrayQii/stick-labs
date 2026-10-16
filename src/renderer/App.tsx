@@ -25,6 +25,7 @@ import { LANGS, LangContext, tr, useLangState, useT } from './i18n'
 import { THEMES, ThemeContext, useThemeState } from './theme'
 import type { DeepPollResult } from '@shared/deeppoll'
 import { useFlydigi } from './useFlydigi'
+import { FlydigiCard } from './FlydigiCard'
 import { FxButtons, FxDevice, FxProfiles, FxSticks } from './FlydigiSections'
 import { LJ_HID_KEYS, LJ_MOUSE_BUTTONS, LJ_MAP_GAMEPAD, LJ_MAP_KEYBOARD, LJ_MAP_MOUSE, LJ_SHAPES, LJ_PHYSICAL, ljCurveZones, ljFitZones, ljLinearCurve, ljPercentToWire, ljSampleDesign, ljTargetLabel, type LjButtonTarget, type LjSnapshot, type LjStickZones, type LjTriggerZones } from '@shared/leadjoy'
 
@@ -3126,18 +3127,12 @@ export default function App(): JSX.Element {
               <h3>{t('msg.connect')}</h3>
               <p>{t('msg.models')} {t('msg.connectBody')}</p>
               {(fxDInputCandidates.length > 0 || fxXInputDetected) && (
-                <div className="stack" style={{ gap: 8, marginTop: 14, alignItems: 'center' }}>
+                <div className="stack" style={{ gap: 10, marginTop: 14, alignItems: 'stretch' }}>
                   <span className="label">Flydigi</span>
                   {fxDInputCandidates.map((c) => (
-                    <button key={c.path} className="btn" disabled={fx.busy} onClick={() => void connect(c.path)}>
-                      Flydigi Direwolf 4 (DInput mode)
-                    </button>
+                    <FlydigiCard key={c.path} mode="DInput" busy={fx.busy} onConnect={() => void connect(c.path)} />
                   ))}
-                  {fxXInputDetected && (
-                    <button className="btn" disabled={fx.busy} onClick={() => void connectFlydigi(null)} title="The pad is in XInput mode: connecting switches it to DInput (Windows asks permission once)">
-                      Flydigi Direwolf 4 (XInput mode)
-                    </button>
-                  )}
+                  {fxXInputDetected && <FlydigiCard mode="XInput" busy={fx.busy} onConnect={() => void connectFlydigi(null)} />}
                 </div>
               )}
             </div>
