@@ -17,15 +17,17 @@ interface Mapping {
   rt: string
 }
 const STANDARD: Mapping = { lx: 0, ly: 1, rx: 2, ry: 3, lt: 'b6', rt: 'b7' }
+/** Direwolf 4 in DInput mode (10 axes): X Y Z, then Rx/Ry rest at -1 (the triggers), Rz is the right stick's Y, axis 9 is the d-pad hat. Inferred from rest values; confirm by moving each control. */
+const DINPUT: Mapping = { lx: 0, ly: 1, rx: 2, ry: 5, lt: 'a3', rt: 'a4' }
 const MAP_KEY = 'sticklab.flydigi.liveMap'
-const loadMap = (): Mapping => {
+const loadMap = (): Mapping | null => {
   try {
     const m = JSON.parse(window.localStorage.getItem(MAP_KEY) ?? 'null') as Mapping | null
     if (m && [m.lx, m.ly, m.rx, m.ry].every((v) => Number.isInteger(v)) && typeof m.lt === 'string' && typeof m.rt === 'string') return m
   } catch {
     /* use the default */
   }
-  return STANDARD
+  return null
 }
 
 interface Live {
@@ -77,11 +79,13 @@ function Bar(props: { label: string; value: number }): JSX.Element {
 export default function FlydigiLiveView(): JSX.Element {
   const [live, setLive] = useState<Live | null>(null)
   const raf = useRef(0)
-  const [map, setMapState] = useState<Mapping>(loadMap)
-  const setMap = (m: Mapping): void => {
-    setMapState(m)
+  // null = use the default for the pad's layout; a pick is remembered.
+  const [saved, setSaved] = useState<Mapping | null>(loadMap)
+  const setMap = (m: Mapping | null): void => {
+    setSaved(m)
     try {
-      window.localStorage.setItem(MAP_KEY, JSON.stringify(m))
+      if (m) window.localStorage.setItem(MAP_KEY, JSON.stringify(m))
+      else window.localStorage.removeItem(MAP_KEY)
     } catch {
       /* not remembered */
     }
@@ -105,6 +109,7 @@ export default function FlydigiLiveView(): JSX.Element {
   if (!live) {
     return <div className="hint">No gamepad seen by the system. Plug the pad in and move a stick (the browser only reports a pad after its first input).</div>
   }
+  const map = saved ?? (live.standard || live.axes.length < 6 ? STANDARD : DINPUT)
   const a = (i: number): number => live.axes[i] ?? 0
   const trig = (src: string): number => (src.startsWith('a') ? (a(Number(src.slice(1))) + 1) / 2 : (live.buttons[Number(src.slice(1))]?.value ?? 0))
   const axisOpts = live.axes.map((_, i) => (
@@ -159,8 +164,8 @@ export default function FlydigiLiveView(): JSX.Element {
         {pick('RY', 'ry', axisOpts)}
         {pick('LT', 'lt', trigOpts)}
         {pick('RT', 'rt', trigOpts)}
-        <button className="btn ghost sm" onClick={() => setMap(STANDARD)}>
-          Standard
+        <button className="btn ghost sm" onClick={() => setMap(null)}>
+          Default
         </button>
       </div>
       <div className="row" style={{ gap: 4, flexWrap: 'wrap' }}>
