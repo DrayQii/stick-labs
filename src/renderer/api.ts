@@ -8,6 +8,7 @@ export interface Candidate {
 }
 import type { DeepPollResult } from '@shared/deeppoll'
 import type { LjButtonTarget, LjSnapshot, LjStickPatch } from '@shared/leadjoy'
+import type { FdIdentifyResult } from '@shared/flydigi'
 export interface DeviceInfo {
   firmware: string
   dongle: string
@@ -71,6 +72,8 @@ interface LabApi {
   /** MARIUS board — read-only preview scaffold. No write path exists. */
   /** Kernel USB poll check (elevated ETW trace, UAC prompts once per run). */
   deeppoll(vid: number, pid: number, seconds?: number): Promise<DeepPollResult>
+  /** Flydigi: read-only identify handshake (model, firmware, connection, battery). */
+  flydigiIdentify(path: string): Promise<FdIdentifyResult>
   /** LeadJoy Saber Plus: read-only Main-slot snapshot (sticks stay locked). */
   leadjoyReadMain(path: string): Promise<LjSnapshot>
   /** LeadJoy slot snapshot (Main 0 / Sub1 1 / Sub2 2). */

@@ -2549,6 +2549,26 @@ export default function App(): JSX.Element {
         setConnected(saber)
         setConnPath(saber ? path : null)
         setMsg(`${pre.marketingName} detected — ${pre.supportNote}`)
+        if (pre.id.startsWith('Flydigi')) {
+          // Read-only handshake: names the exact pad and firmware. Tuning
+          // stays locked (no Space Station config capture yet).
+          try {
+            const fd = await api().flydigiIdentify(path)
+            const parts = [fd.modelName]
+            if (fd.info) {
+              parts.push(`firmware ${fd.info.firmwareText}`)
+              if (fd.info.connection !== 'unknown') parts.push(fd.info.connection)
+              if (fd.info.batteryPercent !== null) parts.push(`battery ${fd.info.batteryPercent}%${fd.info.power === 'charging' ? ' (charging)' : ''}`)
+            }
+            setModel({ ...pre, marketingName: fd.modelName })
+            const takeover = fd.thirdPartyAllowed === false
+              ? ' Turn on "Allow third-party apps to take over mappings" in Flydigi Space Station for live input.'
+              : ''
+            setMsg(`${parts.join(' · ')} — detected. Tuning is locked for Flydigi pads until their config protocol is captured.${takeover}`)
+          } catch (e) {
+            setErr((e as Error).message)
+          }
+        }
         if (saber) {
           setLjBusy(true)
           try {

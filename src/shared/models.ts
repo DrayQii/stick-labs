@@ -143,6 +143,48 @@ export const MODELS: ReadonlyArray<ControllerModel> = [
     dumpLength: 680,
     support: 'detect-only',
     supportNote: 'Third protocol family (680-byte profile, 32-byte single-byte stick packets, no resolution/anti-jitter bytes, 0xFD calibration). Layout mapped from the GameSir bundle — tuning locked until a live dump proves it.'
+  },
+  {
+    id: 'FlydigiApex',
+    marketingName: 'Flydigi Apex',
+    vendorId: 0x37d7,
+    usagePage: 0xffa0,
+    usage: 0,
+    pids: [0x2501, 0x2502],
+    productHints: ['Flydigi Apex', 'APEX'],
+    reportRates: [],
+    profileLength: 0,
+    dumpLength: 0,
+    support: 'detect-only',
+    supportNote: 'Identified over the read-only Flydigi handshake (model, firmware, connection, battery). Tuning is locked: Space Station\u2019s config protocol has not been captured yet (docs/flydigi.md).'
+  },
+  {
+    id: 'FlydigiVader',
+    marketingName: 'Flydigi Vader',
+    vendorId: 0x37d7,
+    usagePage: 0xffa0,
+    usage: 0,
+    pids: [0x2401],
+    productHints: ['Flydigi Vader', 'VADER'],
+    reportRates: [],
+    profileLength: 0,
+    dumpLength: 0,
+    support: 'detect-only',
+    supportNote: 'Identified over the read-only Flydigi handshake (model, firmware, connection, battery). Tuning is locked: Space Station\u2019s config protocol has not been captured yet (docs/flydigi.md).'
+  },
+  {
+    id: 'FlydigiV1',
+    marketingName: 'Flydigi (early model)',
+    vendorId: 0x04b4,
+    usagePage: 0,
+    usage: 0,
+    pids: [0x2412],
+    productHints: ['Flydigi'],
+    reportRates: [],
+    profileLength: 0,
+    dumpLength: 0,
+    support: 'detect-only',
+    supportNote: 'Early Flydigi pad (Apex 2 / Vader 2 era, interface 2). Named from its USB product string only; tuning is locked.'
   }
 ]
 
