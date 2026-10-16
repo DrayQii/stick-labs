@@ -38,6 +38,82 @@
   box-sizing: border-box;
 }
 
+/* ---------------------------------------------------------------------------
+   Restyle stage 2 — rhythm, hierarchy and control shape.
+   Appended deliberately: same-specificity rules here win over the originals
+   above, so the component markup stays exactly where it is. Spacing, type and
+   radii only — no layout or positioning changes.
+   --------------------------------------------------------------------------- */
+
+.card {
+  padding: 20px;
+  border-radius: var(--radius);
+  background: var(--bg-2);
+}
+
+.card h3 {
+  margin: 0 0 10px;
+  font-size: 15px;
+  font-weight: 650;
+  letter-spacing: 0.01em;
+  color: var(--text);
+}
+
+.hint,
+.note,
+.card > .note {
+  line-height: 1.55;
+  color: var(--text-2);
+}
+
+.btn {
+  border-radius: var(--radius-sm);
+  padding: 8px 14px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+.btn.sm {
+  padding: 6px 11px;
+  font-size: 12.5px;
+}
+
+.choice {
+  gap: 8px;
+}
+
+.choice-btn {
+  border-radius: var(--radius-sm);
+  padding: 9px 15px;
+}
+
+.choice-btn .choice-label {
+  font-weight: 600;
+}
+
+.pill {
+  border-radius: 999px;
+  padding: 3px 9px;
+  font-size: 11.5px;
+  font-weight: 600;
+}
+
+.input,
+select.input {
+  border-radius: var(--radius-sm);
+  padding: 7px 10px;
+}
+
+.label {
+  color: var(--text-2);
+  font-weight: 600;
+}
+
+.status-bar {
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+
 html,
 body,
 #root {
