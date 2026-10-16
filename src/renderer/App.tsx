@@ -2867,6 +2867,29 @@ export default function App(): JSX.Element {
       }) ||
       (ljDraft.trigger !== null && JSON.stringify(ljDraft.trigger) !== JSON.stringify(ljPadZones)))
 
+  // One auto-commit attempt per distinct draft. The pad writes live (proven),
+  // so the staging window is the only place work can be lost — closing it.
+  const ljAutoTried = useRef('')
+
+  /**
+   * LeadJoy edits apply themselves: ~400 ms after the last change the same
+   * commit the topbar Write runs fires on its own (vendor parity — no Write
+   * press needed, nothing pending to lose on a disconnect). Dragging a curve
+   * re-arms the timer so a burst collapses into one write, and the attempted
+   * signature stops a failing write from retrying in a loop — a failure stays
+   * staged and visible instead, where the Write button can retry it.
+   */
+  useEffect(() => {
+    if (!isLj || !ljPath || ljBusy || !ljDirty) return
+    const signature = JSON.stringify(ljDraft)
+    if (signature === ljAutoTried.current) return
+    const timer = window.setTimeout(() => {
+      ljAutoTried.current = signature
+      void writeLeadJoyDraft()
+    }, 400)
+    return () => window.clearTimeout(timer)
+  }, [isLj, ljPath, ljBusy, ljDirty, ljDraft])
+
   // Live sticks for the Saber Plus come from the system Gamepad API: its own
   // HID node hands raw readers nothing (stub/needs a vendor command), but
   // Windows exposes it as a standard gamepad, so the cross moves with no
