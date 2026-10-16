@@ -936,6 +936,10 @@ table.tbl tbody tr:hover {
 .fx-card-brand,
 .fx-cell-k,
 .fx-cell-v,
+.fx-card-cta {
+  font-family: 'JetBrains Mono', 'Cascadia Mono', Consolas, monospace;
+  text-transform: uppercase;
+}
 .fx-battery-fill[data-charging] {
   background: var(--warn);
 }
@@ -955,10 +959,6 @@ table.tbl tbody tr:hover {
   text-transform: uppercase;
   color: var(--text-3);
   word-break: break-all;
-}
-.fx-card-cta {
-  font-family: 'JetBrains Mono', 'Cascadia Mono', Consolas, monospace;
-  text-transform: uppercase;
 }
 .fx-card-brand {
   font-size: 11px;
