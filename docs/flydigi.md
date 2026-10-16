@@ -47,11 +47,15 @@ Plain HID only. The pad must be in **DInput mode** (USB `04B4:2412`, vendor inte
 usage page `0xFFA0`) and Flydigi Space Station must be **closed**: launching it switches the
 pad back to XInput (`045E:028E`). No driver, no Space Station DLL and no admin rights are used.
 
-Getting the pad into DInput mode is the one thing Stick Labs cannot do by itself: from
-XInput mode the only known way is the legacy `A5 17` frame sent through Space Station's Xbox 360
-filter driver (`XboxComm64.dll`), run once. The mode then survives replugs until Space Station
-runs again. The sections below that mention the driver describe how the protocol was first
-captured and proven; the app no longer uses that path.
+Getting the pad into DInput mode: from XInput mode the only known way is the legacy `A5 17`
+frame sent through Space Station's Xbox 360 filter driver (`XboxComm64.dll`). Stick Labs does
+this on "Read pad" when it finds the pad in XInput mode (USB `045E:028E`, serial
+`FLYDIGI_DIREWOLF_4`): it launches `scripts/flydigi-switch-to-dinput.py` elevated (one UAC
+prompt), which sends that single frame, then waits for `04B4:2412`. It needs python on PATH
+(or `FLYDIGI_PYTHON`), Space Station installed but not running, and nothing else. The mode then
+survives replugs until Space Station runs again. "Switch to XInput" (`05 ED`, plain HID) puts
+the pad back for games and closes the Direwolf screen. The sections below that mention the
+driver describe how the protocol was first captured; the config traffic itself is plain HID.
 
 ## Direwolf 4 (field notes from a Space Station 4.2.0.9 service log)
 

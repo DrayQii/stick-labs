@@ -75,7 +75,7 @@ function Num(props: { label: string; value: number; min: number; max: number; on
   )
 }
 
-export default function FlydigiPanel(): JSX.Element {
+export default function FlydigiPanel(props: { onClose?: () => void }): JSX.Element {
   const [snap, setSnap] = useState<FxSnapshot | null>(null)
   const [vib, setVib] = useState<FxVibration | null>(null)
   const [left, setLeft] = useState(0)
@@ -99,7 +99,7 @@ export default function FlydigiPanel(): JSX.Element {
 
   async function load(cfgId?: number): Promise<void> {
     setBusy(true)
-    setMsg(null)
+    setMsg({ kind: 'ok', text: 'Reading the pad… if it is in XInput mode, Windows will ask permission to switch it to DInput (this takes a few seconds).' })
     try {
       adopt(await api().flydigiXRead(cfgId))
       setMsg({ kind: 'ok', text: cfgId === undefined ? 'Read the active config from the pad.' : `Read config ${cfgId + 1}.` })
@@ -121,7 +121,7 @@ export default function FlydigiPanel(): JSX.Element {
       const r = await api().flydigiXToXInput()
       if (r.switched) {
         setSnap(null)
-        setMsg({ kind: 'ok', text: 'Switched: the pad is now in XInput mode (an Xbox 360 controller).' })
+        props.onClose?.()
       } else {
         setMsg({ kind: 'err', text: 'The pad did not leave DInput mode. Unplug and replug it, or check it in Windows Device Manager.' })
       }
@@ -191,7 +191,7 @@ export default function FlydigiPanel(): JSX.Element {
       <h3>Flydigi Direwolf 4</h3>
       <div className="hint" style={{ margin: '6px 0 12px' }}>
         Config 1…4 are the onboard slots (Space Station&apos;s 配置1…4); • marks the one the pad is running.{' '}
-        Plain HID: the pad must be in DInput mode (USB 04B4:2412). Close Flydigi Space Station first — launching it switches the pad back to XInput.
+        Plain HID in DInput mode (USB 04B4:2412). If the pad is in XInput mode, Read pad switches it for you (Windows asks permission once per switch); Switch to XInput puts it back for games. Keep Flydigi Space Station closed — launching it switches the pad back to XInput.
       </div>
       <div className="row" style={{ gap: 8 }}>
         <button className="btn" disabled={busy} onClick={() => void load(snap?.cfgId)}>

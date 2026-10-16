@@ -6,10 +6,16 @@
  * answers with `04 FF F0 …` reports. No driver, no Space Station, no admin.
  * Every write is read back; a mismatch is rolled back to the config captured
  * just before the write. Framing: src/shared/flydigi-xinput.ts, docs/flydigi.md.
+ *
+ * The one exception: if the pad is in XInput mode, "Read pad" first switches it to
+ * DInput by launching scripts/flydigi-switch-to-dinput.py elevated (UAC prompt).
+ * That helper is the only thing that touches Space Station's filter driver.
  */
 import { app } from 'electron'
 import HIDModule, { type HID as HIDInstance } from 'node-hid'
-import { mkdirSync, writeFileSync } from 'node:fs'
+import { spawn, spawnSync } from 'node:child_process'
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
   FX_CMD_READ_CFG_ACK,
@@ -88,6 +94,67 @@ function open(): void {
   } catch (e) {
     throw new Error(`flydigi: cannot open the DInput interface (${(e as Error).message}). Close Flydigi Space Station and retry.`)
   }
+}
+
+/** A Direwolf 4 in XInput mode (Xbox 360 identity, serial FLYDIGI_DIREWOLF_4). */
+function xinputDirewolfPresent(): boolean {
+  try {
+    return HIDModule.devices().some((d) => d.vendorId === 0x045e && d.productId === 0x028e && /DIREWOLF_4/i.test(d.serialNumber ?? ''))
+  } catch {
+    return false
+  }
+}
+
+function spaceStationRunning(): boolean {
+  try {
+    const r = spawnSync('tasklist', ['/FO', 'CSV', '/NH'], { encoding: 'utf8', windowsHide: true })
+    return /SpaceStationService\.exe|Flydigi Space Station\.exe/i.test(r.stdout ?? '')
+  } catch {
+    return false
+  }
+}
+
+const psq = (v: string): string => `'${v.replace(/'/g, "''")}'`
+
+/** Switch an XInput-mode Direwolf to DInput via the elevated helper, then wait for 04B4:2412. */
+async function switchToDInput(): Promise<void> {
+  if (spaceStationRunning()) {
+    throw new Error('flydigi: Flydigi Space Station (or its background service) is running. Close it fully, then press Read pad again.')
+  }
+  const script = join(__dirname, '../../scripts/flydigi-switch-to-dinput.py')
+  const out = join(tmpdir(), `flydigi-switch-${Date.now()}.json`)
+  const py = process.env.FLYDIGI_PYTHON ?? 'python'
+  const ps =
+    `$p = Start-Process -FilePath ${psq(py)} -ArgumentList @(${psq(`"${script}"`)}, '--out', ${psq(`"${out}"`)}) ` +
+    `-Verb RunAs -WindowStyle Hidden -PassThru -Wait; exit $p.ExitCode`
+  const code = await new Promise<number>((resolve) => {
+    const c = spawn('powershell', ['-NoProfile', '-NonInteractive', '-Command', ps], { windowsHide: true })
+    c.on('error', () => resolve(-1))
+    c.on('exit', (n) => resolve(n ?? -1))
+  })
+  let detail: string | null = null
+  try {
+    if (existsSync(out)) {
+      const r = JSON.parse(readFileSync(out, 'utf8')) as { ok: boolean; error?: string }
+      if (!r.ok) detail = r.error ?? 'the helper reported a failure'
+      rmSync(out, { force: true })
+    }
+  } catch {
+    /* fall through to the generic messages */
+  }
+  if (detail) throw new Error(`flydigi: switching to DInput failed: ${detail}`)
+  if (code !== 0) throw new Error('flydigi: switching to DInput did not run — the Windows permission prompt was declined, or python could not be started (set FLYDIGI_PYTHON).')
+  for (let i = 0; i < 48; i++) {
+    if (dinputPath()) return
+    await sleep(250)
+  }
+  throw new Error('flydigi: the switch was sent but the pad did not appear as 04B4:2412. Unplug and replug it and try again.')
+}
+
+/** Open the vendor interface, switching the pad into DInput mode first if it is in XInput mode. */
+async function ensureOpen(): Promise<void> {
+  if (dinputPath() === null && xinputDirewolfPresent()) await switchToDInput()
+  open()
 }
 
 function close(): void {
@@ -170,7 +237,7 @@ function exclusive<T>(fn: () => Promise<T>): Promise<T> {
 
 export function fxHidRead(cfgId?: number): Promise<FxSnapshot> {
   return exclusive(async () => {
-    open()
+    await ensureOpen()
     const r = await readBlob(cfgId)
     return snapshot(r.cfgId, r.activeCfgId, r.cfgCount, r.blob)
   })
@@ -179,7 +246,7 @@ export function fxHidRead(cfgId?: number): Promise<FxSnapshot> {
 /** Make a config slot the one the pad runs, then read it back to confirm. */
 export function fxHidActivate(cfgId: number): Promise<FxSnapshot> {
   return exclusive(async () => {
-    open()
+    await ensureOpen()
     const before = await readBlob(cfgId)
     if (before.activeCfgId !== cfgId) {
       acks = []
@@ -194,7 +261,7 @@ export function fxHidActivate(cfgId: number): Promise<FxSnapshot> {
 
 export function fxHidWrite(patch: FxPatch): Promise<{ verified: boolean; restored: boolean; saved: boolean; changedPacks: number }> {
   return exclusive(async () => {
-    open()
+    await ensureOpen()
     const { cfgId, activeCfgId, blob: before } = await readBlob(patch.cfgId)
     try {
       const dir = join(app.getPath('userData'), 'flydigi-backups')

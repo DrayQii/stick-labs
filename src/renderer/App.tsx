@@ -3780,7 +3780,7 @@ export default function App(): JSX.Element {
               <div className="msg"><h3>{t('cal.connectTitle')}</h3><p>{t('cal.connectBody')}</p></div>
             )
           )}
-          {tab === 'flydigi' && <FlydigiPanel />}
+          {tab === 'flydigi' && <FlydigiPanel onClose={() => setTab('sticks')} />}
           {tab === 'language' && (
             <LanguagePanel />
           )}
