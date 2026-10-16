@@ -2559,6 +2559,9 @@ export default function App(): JSX.Element {
               parts.push(`firmware ${fd.info.firmwareText}`)
               if (fd.info.connection !== 'unknown') parts.push(fd.info.connection)
               if (fd.info.batteryPercent !== null) parts.push(`battery ${fd.info.batteryPercent}%${fd.info.power === 'charging' ? ' (charging)' : ''}`)
+            } else if (fd.v1) {
+              parts.push(`firmware ${fd.v1.firmwareText}`, `device id ${fd.v1.deviceId}`, `serial ${fd.v1.serial}`)
+              if (fd.v1.connection !== 'unknown') parts.push(fd.v1.connection)
             }
             setModel({ ...pre, marketingName: fd.modelName })
             const takeover = fd.thirdPartyAllowed === false

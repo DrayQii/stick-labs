@@ -18,6 +18,9 @@ import {
   fdParseInfo,
   fdParseThirdPartyAllowed,
   fdUsesUnnumberedReports,
+  fdNameFromProduct,
+  fdParseV1Info,
+  fdV1GetInfo,
   isFlydigiInterface
 } from '../src/shared/flydigi.ts'
 import { identifyModel } from '../src/shared/models.ts'
@@ -46,10 +49,10 @@ function reply(cmd: number, set: Record<number, number>, withId = false): Uint8A
   return out
 }
 
-// --- commands (SDL byte-for-byte, padded to report-ID + 32) ---
+// --- commands (SDL byte-for-byte, unpadded: hidapi pads to the report length) ---
 const info = fdGetInfo(false)
 check('get-info bytes', hex(info.subarray(0, 6)) === '03 5a a5 01 02 00', hex(info.subarray(0, 6)))
-check('commands padded to 33 bytes', info.length === 33 && fdGetStatus(false).length === 33)
+check('commands are unpadded (SDL lengths)', info.length === 6 && fdGetStatus(false).length === 4)
 check('check-arch bytes', hex(fdCheckArchitecture(false).subarray(0, 6)) === '03 5a a5 07 00 00')
 check('get-status bytes', hex(fdGetStatus(false).subarray(0, 4)) === '03 5a a5 10')
 check('unnumbered pads zero the report ID', fdGetInfo(true)[0] === 0x00 && fdGetInfo(true)[1] === 0x5a)
@@ -94,9 +97,22 @@ check('V2 gamepad page not matched', !isFlydigiInterface({ vendorId: 0x37d7, pro
 check('V1 only on interface 2', isFlydigiInterface({ vendorId: 0x04b4, productId: 0x2412, interface: 2 }) && !isFlydigiInterface({ vendorId: 0x04b4, productId: 0x2412, interface: 0 }))
 check('other Cypress devices ignored', !isFlydigiInterface({ vendorId: 0x04b4, productId: 0x1234, interface: 2 }))
 
+// --- V1 (04B4:2412 / Direwolf 4 in DInput mode) ---
+check('V1 get-info matches Space Station write', hex(fdV1GetInfo()) === '05 ec 00 00 00 00 00 00 00 00 00 00 00 00 00', hex(fdV1GetInfo()))
+const v1r = new Uint8Array(32)
+v1r[3] = 19; v1r.set([0x17, 0x21, 0x39, 0x38], 5); v1r[9] = 0x10; v1r[10] = 0x64; v1r[13] = 1; v1r[15] = 0xec
+const v1 = fdParseV1Info(v1r)
+check('V1 reply decoded (id, serial, fw LE, wired)', v1?.deviceId === 19 && v1?.serial === '17213938' && v1?.firmware === 0x6410 && v1?.connection === 'wired', JSON.stringify(v1))
+check('V1 id 19 is Apex 2', v1?.modelName === 'Flydigi Apex 2')
+const old = new Uint8Array(v1r); old[10] = 0x60
+check('V1 fw < 0x6400 leaves connection unknown', fdParseV1Info(old)?.connection === 'unknown')
+check('V1 parser needs [15] = 0xEC', fdParseV1Info(new Uint8Array(32)) === null)
+check('Direwolf 4 named from product string', fdNameFromProduct('Flydigi Direwolf 4') === 'Flydigi Direwolf 4')
+
 // --- registry ---
 check('Apex PID → FlydigiApex (detect-only)', identifyModel(undefined, 0x2501)?.id === 'FlydigiApex' && identifyModel(undefined, 0x2501)?.support === 'detect-only')
 check('Vader PID → FlydigiVader', identifyModel(undefined, 0x2401)?.id === 'FlydigiVader')
+check('04B4:2412 → FlydigiV1', identifyModel(undefined, 0x2412)?.id === 'FlydigiV1')
 check('GameSir PIDs unaffected', identifyModel(undefined, 0x10c5)?.id === 'G7ProCE')
 
 if (failures > 0) {

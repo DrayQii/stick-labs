@@ -40,3 +40,18 @@ captured and proven with readback.
 5. Filter `usb.idVendor == 0x37d7` and export the `5A A5 …` interrupt
    transfers. The read command for the config page and the write/ack pair
    give the record layout; a readback after the write proves it.
+
+## Direwolf 4 (field notes from a Space Station 4.2.0.9 service log)
+
+Space Station's internal code for it is `fp4`. It shows up under one of two USB identities:
+
+| Mode | USB identity | How Space Station talks to it |
+|---|---|---|
+| DInput | `04B4:2412`, HID MI_00–MI_03 | `DInputProtocol` on **MI_02**: report `0x05`, get-info `0xEC` (`05 EC 00…`, 15 bytes), the same V1 path SDL uses. Stick Labs runs this read-only handshake. |
+| XInput | `045E:028E`, serial `Flydigi_Direwolf_4` | `XInputProtocol` through Space Station's own **Xbox 360 filter driver** (`Init Xbox360 filter`). Replies come back inside Xbox 360 input reports (`00 14 … 01 A5 <cmd> <data>`). Not reachable from plain HID. |
+
+XInput-mode command IDs seen (reads only): heartbeat `0x10`, read current
+mapping config id `0x20`, extra info `0x30`, mapping config versions / hardware
+function status `0x50`, read UID `0xA0`; plus `EnableRawDataTransportIn`.
+Example UID reply: `… 01 A5 A0 17 21 39 38 89 2A 4B 43 30 FF FF FF FF`.
+Config writes were not exercised in the log; capture them next.
