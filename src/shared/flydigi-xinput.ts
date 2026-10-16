@@ -236,6 +236,19 @@ export interface FxCurve {
   edge: number
 }
 
+/**
+ * Curve points Space Station writes for a stick deadzone of `d` (its slider,
+ * 0..100; the same value goes in the main record's centre byte). The ramp ends
+ * at 150 and rises 12.5 per ninth, steepened by 1/(1 - d/100) and clamped at 0;
+ * 100 is flat 50. Fitted to Space Station's log (d = 0, 5, 10, 20, 50, 100, 13):
+ * exact for 0/10/20/50/100, within 1 on a few points at 5 and 13 (its rounding).
+ */
+export function fxDeadzonePoints(d: number): number[] {
+  if (d >= 100) return Array(FX_CURVE_POINTS).fill(50)
+  const k = 1 - Math.max(0, d) / 100
+  return Array.from({ length: FX_CURVE_POINTS }, (_, i) => Math.max(0, Math.min(255, Math.round(150 - (12.5 * (8 - i)) / k))))
+}
+
 export function fxDecodeCurves(blob: Uint8Array): { left: FxCurve; right: FxCurve } {
   const rec = (o: number): FxCurve => ({
     type: blob[o],

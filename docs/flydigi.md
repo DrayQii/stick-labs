@@ -120,12 +120,13 @@ Proven on a Direwolf 4 (2026-10-16, via `XboxComm64.dll` `InitXboxMonitorRes` /
 Stick curves (blob 790..814, V3.1 extra; verified against a real read):
 per stick 12 bytes: `type` (0 Default, 3 Custom; 1/2 presets not decoded),
 nine curve points, `circularity` (1 Circular, 0 Rectangle), `edge` (raw).
-Left stick at 790, right at 802. Space Station computes the points itself from
-its deadzone setting and writes them with the main joystick record's `center`
-byte (109+1 / 116+1): on this pad centre 13 gave a 35..150 linear ramp,
-centre -13 gave 63..150, the untouched stock ramp is 50..150. The exact
-formula from the deadzone slider to centre/start is not decoded; Stick Labs
-edits the raw points and centre.
+Left stick at 790, right at 802. Space Station computes the points itself from its deadzone slider (plain
+number, 0..100) and writes them with the main joystick record's `center` byte
+(109+1 / 116+1), which equals the slider value. Fitted to its log (slider 0, 5,
+10, 20, 50, 100, 13): `point[i] = clamp0(round(150 - 12.5 * (8 - i) / (1 - d/100)))`,
+and 100 is flat 50. Exact for 0/10/20/50/100, within 1 on a few points at 5 and
+13 (its rounding). Negative centres were also seen (-13 gave 63..150) and do not
+follow this formula; not used.
 
 Decompiled sources stay out of the repo.
 

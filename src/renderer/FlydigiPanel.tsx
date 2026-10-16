@@ -7,7 +7,7 @@
  * back on mismatch.
  */
 import { useState } from 'react'
-import { FX_CURVE_CUSTOM, FX_CURVE_DEFAULT, FX_CURVE_DEFAULT_POINTS, type FxCurve, type FxSnapshot, type FxVibration } from '@shared/flydigi-xinput'
+import { FX_CURVE_CUSTOM, FX_CURVE_DEFAULT, FX_CURVE_DEFAULT_POINTS, fxDeadzonePoints, type FxCurve, type FxSnapshot, type FxVibration } from '@shared/flydigi-xinput'
 import { api } from './api'
 
 const sc = (b: number): number => (b > 127 ? b - 256 : b)
@@ -89,8 +89,8 @@ export default function FlydigiPanel(): JSX.Element {
   const adopt = (s: FxSnapshot): void => {
     setSnap(s)
     setVib(s.vibration)
-    setLeft(sc(s.sticks.left.center))
-    setRight(sc(s.sticks.right.center))
+    setLeft(Math.max(0, sc(s.sticks.left.center)))
+    setRight(Math.max(0, sc(s.sticks.right.center)))
     setCurves(s.curves)
   }
 
@@ -135,6 +135,11 @@ export default function FlydigiPanel(): JSX.Element {
     }
   }
 
+  const setDeadzone = (side: 'left' | 'right', d: number): void => {
+    ;(side === 'left' ? setLeft : setRight)(d)
+    setCurves((c) => (c ? { ...c, [side]: { ...c[side], type: FX_CURVE_CUSTOM, points: fxDeadzonePoints(d) } } : c))
+  }
+
   const setMotor = (side: 'left' | 'right', patch: Partial<FxVibration['left']>): void =>
     setVib((v) => (v ? { ...v, [side]: { ...v[side], ...patch } } : v))
 
@@ -166,13 +171,16 @@ export default function FlydigiPanel(): JSX.Element {
           <div>
             <h4>Sticks</h4>
             <div className="hint" style={{ margin: '4px 0 8px' }}>
-              Space Station derives the curve from its deadzone setting: it writes <i>center</i> plus nine curve points (the stock ramp is 50…150; a deadzone just moves the ramp&apos;s start). Both are raw bytes here, and the mapping from Space Station&apos;s deadzone slider to centre/start is not decoded.
+              Same number as Space Station&apos;s deadzone slider. It sets the stick&apos;s centre byte and regenerates the curve exactly as Space Station does (within 1 on a few points). Fine-tune the curve below if you want something else; moving the deadzone again regenerates it.
             </div>
-            <Num label="Left stick centre" value={left} min={-127} max={127} onChange={setLeft} />
-            <Num label="Right stick centre" value={right} min={-127} max={127} onChange={setRight} />
+            <Num label="Left stick deadzone" value={left} min={0} max={100} onChange={(d) => setDeadzone('left', d)} />
+            <Num label="Right stick deadzone" value={right} min={0} max={100} onChange={(d) => setDeadzone('right', d)} />
             <div style={{ height: 10 }} />
+            <details style={{ marginTop: 6 }}>
+              <summary className="label" style={{ cursor: 'pointer' }}>Advanced: raw curve points</summary>
             <CurveEditor title="Left stick curve" curve={curves.left} onChange={(c) => setCurves({ ...curves, left: c })} />
             <CurveEditor title="Right stick curve" curve={curves.right} onChange={(c) => setCurves({ ...curves, right: c })} />
+            </details>
           </div>
 
           <div>

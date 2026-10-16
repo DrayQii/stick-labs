@@ -10,6 +10,7 @@ import {
   FX_CURVE_CUSTOM,
   FX_CURVE_DEFAULT,
   FX_CURVE_DEFAULT_POINTS,
+  fxDeadzonePoints,
   fxDecodeCurves,
   fxDecodeSticks,
   fxDecodeVibration,
@@ -71,6 +72,23 @@ const bumped = fxSetCurve(blob, 1, { ...curves.right, type: FX_CURVE_CUSTOM, poi
 const cdiff = fxDiffPacks(blob, bumped)
 check('right curve edit spans packs 80..81', cdiff.length === 1 && cdiff[0].startPack === 80 && cdiff[0].packs.length === 2, JSON.stringify(cdiff.map((r) => [r.startPack, r.packs.length])))
 check('curve edit leaves the rest of the blob alone', bumped.slice(0, 802).every((v, i) => v === blob[i]) && bumped.slice(815).every((v, i) => v === blob[815 + i]))
+
+// Deadzone -> curve, against Space Station's logged writes (left stick, slider value -> points).
+const dzObs: Record<number, number[]> = {
+  0: [50, 63, 75, 88, 100, 113, 125, 138, 150],
+  5: [45, 58, 71, 84, 97, 110, 123, 137, 150],
+  10: [39, 53, 67, 81, 94, 108, 122, 136, 150],
+  13: [35, 49, 64, 78, 92, 106, 121, 135, 150],
+  20: [25, 41, 56, 72, 88, 103, 119, 134, 150],
+  50: [0, 0, 0, 25, 50, 75, 100, 125, 150],
+  100: [50, 50, 50, 50, 50, 50, 50, 50, 50]
+}
+for (const [d, want] of Object.entries(dzObs)) {
+  const got = fxDeadzonePoints(Number(d))
+  const maxErr = Math.max(...got.map((v, i) => Math.abs(v - want[i])))
+  check(`deadzone ${d} -> curve (max error ${maxErr})`, maxErr <= 1, got.join())
+}
+check('deadzone 0, 10, 20, 50, 100 are exact', [0, 10, 20, 50, 100].every((d) => fxDeadzonePoints(d).join() === dzObs[d].join()))
 
 // Ack parsing / blob assembly from real reply shapes.
 const rep = (cmd: number, data: number[]): Uint8Array => {
