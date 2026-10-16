@@ -1,4 +1,5 @@
 import { useContext, useEffect, useRef, useState } from 'react'
+import type { FdV1Info } from '@shared/flydigi'
 import { api, b64ToBytes, bytesToB64, type Candidate, type DeviceInfo, type DeviceStats, type LiveSample, type PingResult } from './api'
 import { AIM_CURVES } from '@shared/aimcurves'
 import { parseProfile, serializeProfile, fun, stick, button, trigger, LINEAR_CURVE, looksLikeCEProfile, type Packet, type Profile } from '@shared/profile'
@@ -2195,6 +2196,20 @@ export default function App(): JSX.Element {
   // in XInput mode (an Xbox 360 identity) it is only known through the pad-mode poll.
   const fxDInputCandidates = visibleCandidates.filter((c) => identifyModel(c.product, c.productId)?.id === 'FlydigiV1')
   const fxXInputDetected = !fx.active && fx.mode === 'xinput' && !candidates.some((c) => c.productId === 0x2412)
+  // Read-only get-info probe (once per pad) so the card can show what the pad reports about itself.
+  const [fxProbe, setFxProbe] = useState<Record<string, FdV1Info | null>>({})
+  const fxProbed = useRef(new Set<string>())
+  useEffect(() => {
+    if (connected || fx.busy) return
+    for (const c of fxDInputCandidates) {
+      if (fxProbed.current.has(c.path)) continue
+      fxProbed.current.add(c.path)
+      void api()
+        .flydigiIdentify(c.path)
+        .then((r) => setFxProbe((p) => ({ ...p, [c.path]: r.v1 })))
+        .catch(() => setFxProbe((p) => ({ ...p, [c.path]: null })))
+    }
+  }, [connected, fx.busy, fxDInputCandidates])
   const showFxCard = !connected && (fxDInputCandidates.length > 0 || fxXInputDetected)
   const [measuring, setMeasuring] = useState<{ left: number; suggestion: { dev: number; pct10: number } | null } | null>(null)
   const wanderRef = useRef(0)
@@ -3129,7 +3144,7 @@ export default function App(): JSX.Element {
           {showFxCard && (
             <div className="msg fx-panel">
               {fxDInputCandidates.map((c) => (
-                <FlydigiCard key={c.path} mode="DInput" busy={fx.busy} onConnect={() => void connect(c.path)} />
+                <FlydigiCard key={c.path} mode="DInput" busy={fx.busy} probeHex={fxProbe[c.path]?.rawHex ?? null} onConnect={() => void connect(c.path)} />
               ))}
               {fxXInputDetected && <FlydigiCard mode="XInput" busy={fx.busy} onConnect={() => void connectFlydigi(null)} />}
             </div>

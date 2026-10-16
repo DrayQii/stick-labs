@@ -6,9 +6,11 @@ export function FlydigiCard(props: {
   mode: 'DInput' | 'XInput'
   busy: boolean
   batteryPercent?: number | null
+  /** Raw get-info reply from the pad, shown while the battery byte is still unconfirmed. */
+  probeHex?: string | null
   onConnect: () => void
 }): JSX.Element {
-  const { mode, busy, batteryPercent = null, onConnect } = props
+  const { mode, busy, batteryPercent = null, probeHex = null, onConnect } = props
   const pct = batteryPercent === null ? null : Math.max(0, Math.min(100, batteryPercent))
   return (
     <button
@@ -34,6 +36,7 @@ export function FlydigiCard(props: {
             </span>
           </span>
         </span>
+        {pct === null && probeHex && <span className="fx-probe">Reply {probeHex}</span>}
         <span className="fx-card-cta">
           <span>{busy ? 'Working' : mode === 'XInput' ? 'Switch and connect' : 'Connect'}</span>
           <span className="fx-card-arrows" aria-hidden>&gt;&gt;&gt;</span>

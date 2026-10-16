@@ -215,6 +215,8 @@ export interface FdV1Info {
   firmwareText: string
   serial: string
   connection: FdConnection
+  /** The whole 32-byte reply as hex, kept so the battery byte can be located from real captures. */
+  rawHex: string
 }
 
 /** Decode a V1 get-info reply; null when the frame is not one. */
@@ -231,7 +233,8 @@ export function fdParseV1Info(reply: Uint8Array, product?: string): FdV1Info | n
     firmware,
     firmwareText: `0x${firmware.toString(16).padStart(4, '0').toUpperCase()}`,
     serial,
-    connection
+    connection,
+    rawHex: Array.from(reply.subarray(0, 32), (b) => b.toString(16).padStart(2, '0')).join(' ')
   }
 }
 
