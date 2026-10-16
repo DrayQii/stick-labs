@@ -9,7 +9,7 @@ import { discover, discoverLive } from './hid'
 import { ljReadButtonTable, ljReadMainSnapshot, ljReadSnapshot, ljWriteButtonVerified, ljWriteStickVerified, ljWriteTriggerVerified } from './leadjoy'
 import type { LjButtonTarget, LjStickPatch } from '../shared/leadjoy'
 import { fdIdentify } from './flydigi'
-import { fxHidActivate, fxHidMode, fxHidPollingRate, fxHidRead, fxHidSwitchToXInput, fxHidWrite, fxHidStop } from './flydigi-hid'
+import { fxHidActivate, fxHidBackup, fxHidBackups, fxHidRestore, fxHidMode, fxHidPollingRate, fxHidRead, fxHidSwitchToXInput, fxHidWrite, fxHidStop } from './flydigi-hid'
 import type { FxPatch } from '../shared/flydigi-xinput'
 import { ljButtonWriteRecord } from '../shared/leadjoy'
 import { steamInfo, exportApexDeadzones, listInstalledGames, exportDeadzonesToGames } from './steam'
@@ -161,6 +161,15 @@ handle('flydigix:write', (patch: FxPatch) => {
     throw new Error('flydigi: vibration values must be 0..255')
   }
   return fxHidWrite(patch)
+})
+handle('flydigix:backups', () => fxHidBackups())
+handle('flydigix:backup', (cfgId?: number) => {
+  if (!cfgOk(cfgId)) throw new Error('flydigi: config id must be 0..7')
+  return fxHidBackup(cfgId)
+})
+handle('flydigix:restore', (req: { name: string; save?: boolean }) => {
+  if (typeof req?.name !== 'string') throw new Error('flydigi: restore needs a backup name')
+  return fxHidRestore(req.name, req.save === true)
 })
 handle('leadjoy:readMain', (path: string) => ljReadMainSnapshot(path))
 handle('leadjoy:readSlot', (req: { path: string; slot: number }) => {

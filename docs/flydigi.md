@@ -149,6 +149,12 @@ designer exposes it as a raw 0..255 field. To pin it down: set Space Station's
 outer-threshold slider to two or three values, read the config each time
 (`A5 21` / `05 EB`) and compare blob 801 and 813 (and the main records at 109..122).
 
+Backups: every write and restore first saves the slot's 840-byte blob to
+`userData/flydigi-backups/fp4-cfg<N>-<ISO time>.bin` (N is 0-based); the panel lists them and can
+back up on demand. Restore writes a file back to its own slot through the normal verified path
+(rolled back on a mismatch), refuses a file whose data version differs from the pad's, and backs up
+the slot's current contents first.
+
 Decompiled sources stay out of the repo.
 
 Capture notes: USBPcap's `usb.idVendor` field only exists in the descriptor

@@ -15,10 +15,11 @@
 import { app } from 'electron'
 import HIDModule, { type HID as HIDInstance } from 'node-hid'
 import { spawn, spawnSync } from 'node:child_process'
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
+  FX_BLOB_LEN,
   FX_CMD_READ_CFG_ACK,
   FX_CMD_READ_CFG_ID,
   FX_CMD_SAVE,
@@ -282,17 +283,102 @@ export function fxHidActivate(cfgId: number): Promise<FxSnapshot> {
   })
 }
 
+const backupDir = (): string => join(app.getPath('userData'), 'flydigi-backups')
+const BACKUP_NAME = /^fp4-cfg([0-7])-(\d{4}-\d\d-\d\dT\d\d-\d\d-\d\d-\d+Z)\.bin$/
+
+/** Save a config blob to userData/flydigi-backups; returns the file name, or null if it could not be written. */
+function backupBlob(cfgId: number, blob: Uint8Array): string | null {
+  try {
+    const dir = backupDir()
+    mkdirSync(dir, { recursive: true })
+    const name = `fp4-cfg${cfgId}-${new Date().toISOString().replace(/[:.]/g, '-')}.bin`
+    writeFileSync(join(dir, name), blob)
+    return name
+  } catch {
+    return null // a failed backup must not block a write the rollback still covers
+  }
+}
+
+export interface FxBackup {
+  name: string
+  cfgId: number
+  /** ISO time the backup was taken. */
+  time: string
+}
+
+/** Backups on disk, newest first. */
+export function fxHidBackups(): FxBackup[] {
+  let names: string[] = []
+  try {
+    names = readdirSync(backupDir())
+  } catch {
+    return []
+  }
+  const out: FxBackup[] = []
+  for (const name of names) {
+    const m = BACKUP_NAME.exec(name)
+    if (m) out.push({ name, cfgId: Number(m[1]), time: m[2].replace(/T(\d\d)-(\d\d)-(\d\d)-(\d+)Z$/, 'T$1:$2:$3.$4Z') })
+  }
+  return out.sort((a, b) => (a.time < b.time ? 1 : a.time > b.time ? -1 : 0))
+}
+
+/** Read a config slot (the active one when omitted) and save it as a backup file. */
+export function fxHidBackup(cfgId?: number): Promise<FxBackup> {
+  return exclusive(async () => {
+    await ensureOpen()
+    const r = await readBlob(cfgId)
+    const name = backupBlob(r.cfgId, r.blob)
+    if (!name) throw new Error('flydigi: could not write the backup file')
+    return fxHidBackups().find((b) => b.name === name)!
+  })
+}
+
+/**
+ * Write `want` over `before` in slot `cfgId`, read it back, roll back on a mismatch, and (when asked,
+ * and the slot is the active one) save to the pad.
+ */
+async function commit(
+  cfgId: number,
+  activeCfgId: number,
+  before: Uint8Array,
+  want: Uint8Array,
+  save: boolean | undefined
+): Promise<{ verified: boolean; restored: boolean; saved: boolean; changedPacks: number }> {
+  const changedPacks = fxDiffPacks(before, want).reduce((n, r) => n + r.packs.length, 0)
+  if (changedPacks === 0) return { verified: true, restored: false, saved: false, changedPacks }
+
+  await writeBlob(cfgId, before, want)
+  const { blob: after } = await readBlob(cfgId)
+  const verified = after.length === want.length && after.every((v, i) => v === want[i])
+  if (!verified) {
+    // Roll the changed packs back to what was there before and re-check.
+    let restored = false
+    try {
+      await writeBlob(cfgId, after, before)
+      const { blob: again } = await readBlob(cfgId)
+      restored = again.every((v, i) => v === before[i])
+    } catch {
+      /* report below */
+    }
+    return { verified: false, restored, saved: false, changedPacks }
+  }
+
+  let saved = false
+  // 0x50 03 saves the pad's current config; saving a non-active slot is not proven, so skip it.
+  if (save && cfgId === activeCfgId) {
+    acks = []
+    await sendFrame(fxSave(fxDataVersion(after)))
+    const a = await waitAck(FX_CMD_SAVE, (x) => x.data[0] === 3, 12000)
+    saved = !!a && fxSaveAcked(a)
+  }
+  return { verified: true, restored: false, saved, changedPacks }
+}
+
 export function fxHidWrite(patch: FxPatch): Promise<{ verified: boolean; restored: boolean; saved: boolean; changedPacks: number }> {
   return exclusive(async () => {
     await ensureOpen()
     const { cfgId, activeCfgId, blob: before } = await readBlob(patch.cfgId)
-    try {
-      const dir = join(app.getPath('userData'), 'flydigi-backups')
-      mkdirSync(dir, { recursive: true })
-      writeFileSync(join(dir, `fp4-cfg${cfgId}-${new Date().toISOString().replace(/[:.]/g, '-')}.bin`), before)
-    } catch {
-      /* a failed backup must not block a write the rollback still covers */
-    }
+    backupBlob(cfgId, before)
 
     let want = before
     if (patch.vibration) want = fxEncodeVibration(want, patch.vibration)
@@ -303,34 +389,27 @@ export function fxHidWrite(patch: FxPatch): Promise<{ verified: boolean; restore
     for (const [id, target] of Object.entries(patch.keys ?? {})) want = fxSetKeyTarget(want, Number(id), target)
     if (patch.leftTrigger) want = fxSetTrigger(want, 0, patch.leftTrigger)
     if (patch.rightTrigger) want = fxSetTrigger(want, 1, patch.rightTrigger)
-    const changedPacks = fxDiffPacks(before, want).reduce((n, r) => n + r.packs.length, 0)
-    if (changedPacks === 0) return { verified: true, restored: false, saved: false, changedPacks }
+    return commit(cfgId, activeCfgId, before, want, patch.save)
+  })
+}
 
-    await writeBlob(cfgId, before, want)
-    const { blob: after } = await readBlob(cfgId)
-    const verified = after.length === want.length && after.every((v, i) => v === want[i])
-    if (!verified) {
-      // Roll the changed packs back to what was there before and re-check.
-      let restored = false
-      try {
-        await writeBlob(cfgId, after, before)
-        const { blob: again } = await readBlob(cfgId)
-        restored = again.every((v, i) => v === before[i])
-      } catch {
-        /* report below */
-      }
-      return { verified: false, restored, saved: false, changedPacks }
-    }
-
-    let saved = false
-    // 0x50 03 saves the pad's current config; saving a non-active slot is not proven, so skip it.
-    if (patch.save && cfgId === activeCfgId) {
-      acks = []
-      await sendFrame(fxSave(fxDataVersion(after)))
-      const a = await waitAck(FX_CMD_SAVE, (x) => x.data[0] === 3, 12000)
-      saved = !!a && fxSaveAcked(a)
-    }
-    return { verified: true, restored: false, saved, changedPacks }
+/**
+ * Write a backup file back to the slot it was taken from. The slot's current contents are backed up
+ * first, so a restore can itself be undone. Only files from the backup folder are accepted.
+ */
+export function fxHidRestore(name: string, save: boolean): Promise<{ verified: boolean; restored: boolean; saved: boolean; changedPacks: number; cfgId: number }> {
+  return exclusive(async () => {
+    const m = BACKUP_NAME.exec(name)
+    if (!m) throw new Error('flydigi: not a backup file name')
+    const cfgId = Number(m[1])
+    const want = new Uint8Array(readFileSync(join(backupDir(), name)))
+    if (want.length !== FX_BLOB_LEN) throw new Error(`flydigi: backup is ${want.length} bytes, expected ${FX_BLOB_LEN}`)
+    await ensureOpen()
+    const { activeCfgId, cfgCount, blob: before } = await readBlob(cfgId)
+    if (cfgId >= Math.max(cfgCount, 1)) throw new Error(`flydigi: the pad has no config ${cfgId + 1}`)
+    if (fxDataVersion(want) !== fxDataVersion(before)) throw new Error('flydigi: the backup is from a different config data version than the pad; not restoring it')
+    backupBlob(cfgId, before)
+    return { ...(await commit(cfgId, activeCfgId, before, want, save)), cfgId }
   })
 }
 

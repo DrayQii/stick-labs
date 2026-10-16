@@ -63,6 +63,14 @@ export default function FlydigiPanel(props: { onClose?: () => void }): JSX.Eleme
     }
   }, [])
   const [msg, setMsg] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null)
+  const [backups, setBackups] = useState<{ name: string; cfgId: number; time: string }[]>([])
+  const refreshBackups = (): void => {
+    api()
+      .flydigiXBackups()
+      .then(setBackups)
+      .catch(() => undefined)
+  }
+  useEffect(refreshBackups, [])
 
   const adopt = (s: FxSnapshot): void => {
     setSnap(s)
@@ -149,6 +157,43 @@ export default function FlydigiPanel(props: { onClose?: () => void }): JSX.Eleme
     }
   }
 
+  async function backupNow(): Promise<void> {
+    if (!snap) return
+    setBusy(true)
+    setMsg(null)
+    try {
+      await api().flydigiXBackup(snap.cfgId)
+      refreshBackups()
+      setMsg({ kind: 'ok', text: `Config ${snap.cfgId + 1} backed up.` })
+    } catch (e) {
+      setMsg({ kind: 'err', text: (e as Error).message })
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function restore(b: { name: string; cfgId: number; time: string }): Promise<void> {
+    if (!window.confirm(`Restore the backup from ${new Date(b.time).toLocaleString()} to config ${b.cfgId + 1}?\n\nThe slot's current contents are backed up first, so this can be undone.`)) return
+    setBusy(true)
+    setMsg(null)
+    try {
+      const r = await api().flydigiXRestore(b.name, save)
+      if (!r.verified) {
+        setMsg({ kind: 'err', text: r.restored ? 'Readback mismatch — rolled back to what the slot held before.' : 'Readback mismatch and the rollback could not be confirmed. Re-read the pad.' })
+      } else if (r.changedPacks === 0) {
+        setMsg({ kind: 'ok', text: `Config ${r.cfgId + 1} already matches this backup.` })
+      } else {
+        setMsg({ kind: 'ok', text: `Config ${r.cfgId + 1} restored and verified${save && r.saved ? ', saved to the pad.' : ' — live only, not saved.'}` })
+      }
+      adopt(await api().flydigiXRead(r.cfgId))
+      refreshBackups()
+    } catch (e) {
+      setMsg({ kind: 'err', text: (e as Error).message })
+    } finally {
+      setBusy(false)
+    }
+  }
+
   async function apply(): Promise<void> {
     if (!snap || !vib || !curves || !triggers) return
     setBusy(true)
@@ -174,6 +219,7 @@ export default function FlydigiPanel(props: { onClose?: () => void }): JSX.Eleme
         setMsg({ kind: 'ok', text: `Written and verified (${r.changedPacks} pack${r.changedPacks === 1 ? '' : 's'})${save && snap.cfgId === snap.activeCfgId ? (r.saved ? ', saved to the pad.' : ', but the save was not acknowledged.') : ' — live only, not saved.'}` })
       }
       adopt(await api().flydigiXRead(snap.cfgId))
+      refreshBackups()
     } catch (e) {
       setMsg({ kind: 'err', text: (e as Error).message })
     } finally {
@@ -362,6 +408,32 @@ export default function FlydigiPanel(props: { onClose?: () => void }): JSX.Eleme
                 <Num label="Maximum" value={vib[side].max} min={0} max={255} onChange={(v) => setMotor(side, { max: Math.max(v, vib[side].min) })} />
               </div>
             ))}
+          </div>
+
+          <div>
+            <h4>Backups</h4>
+            <div className="hint" style={{ margin: '4px 0 8px' }}>
+              A copy of the slot is saved before every write and restore. Restoring puts a backup back into the slot it came from (this uses the Save to pad option below). Files live in Stick Labs&apos; data folder under flydigi-backups.
+            </div>
+            <button className="btn ghost sm" disabled={busy} onClick={() => void backupNow()}>
+              Back up config {snap.cfgId + 1} now
+            </button>
+            {backups.length === 0 ? (
+              <div className="hint" style={{ marginTop: 8 }}>No backups yet.</div>
+            ) : (
+              <div className="stack" style={{ gap: 4, marginTop: 8, maxHeight: 220, overflowY: 'auto' }}>
+                {backups.map((b) => (
+                  <div key={b.name} className="row spread" style={{ gap: 8 }}>
+                    <span className="mono">
+                      Config {b.cfgId + 1} · {new Date(b.time).toLocaleString()}
+                    </span>
+                    <button className="btn ghost sm" disabled={busy} onClick={() => void restore(b)}>
+                      Restore
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           <div className="row" style={{ gap: 12, alignItems: 'center' }}>
