@@ -1,4 +1,5 @@
 import { useContext, useEffect, useRef, useState } from 'react'
+import type { FdV1Info } from '@shared/flydigi'
 import { api, b64ToBytes, bytesToB64, type Candidate, type DeviceInfo, type DeviceStats, type LiveSample, type PingResult } from './api'
 import { AIM_CURVES } from '@shared/aimcurves'
 import { parseProfile, serializeProfile, fun, stick, button, trigger, LINEAR_CURVE, looksLikeCEProfile, type Packet, type Profile } from '@shared/profile'
@@ -23,6 +24,7 @@ import { LANGS, LangContext, tr, useLangState, useT } from './i18n'
 import { THEMES, ThemeContext, useThemeState } from './theme'
 import type { DeepPollResult } from '@shared/deeppoll'
 import { useFlydigi } from './useFlydigi'
+import { FlydigiCard } from './FlydigiCard'
 import { FxButtons, FxDevice, FxProfiles, FxSticks } from './FlydigiSections'
 import { LJ_HID_KEYS, LJ_MOUSE_BUTTONS, LJ_MAP_GAMEPAD, LJ_MAP_KEYBOARD, LJ_MAP_MOUSE, LJ_SHAPES, LJ_PHYSICAL, ljCurveZones, ljFitZones, ljLinearCurve, ljPercentToWire, ljSampleDesign, ljTargetLabel, type LjButtonTarget, type LjSnapshot, type LjStickZones, type LjTriggerZones } from '@shared/leadjoy'
 
@@ -2502,9 +2504,11 @@ export default function App(): JSX.Element {
   const visibleCandidates = (
     candidates.some((c) => c.live === true) ? candidates.filter((c) => c.live === true || c.live === null || c.path === connPath) : candidates
   ).filter((c) => !(c.productId === 0x0575 && hasDirectPad))
-  const preferredCandidates = visibleCandidates.filter((c) => c.preferred)
-  const primaryCandidates = preferredCandidates.length > 0 ? preferredCandidates : visibleCandidates
-  const otherCandidates = preferredCandidates.length > 0 ? visibleCandidates.filter((c) => !c.preferred) : []
+  // Flydigi pads get their own card (FlydigiCard) instead of a plain candidate button.
+  const listedCandidates = visibleCandidates.filter((c) => identifyModel(c.product, c.productId)?.id !== 'FlydigiV1')
+  const preferredCandidates = listedCandidates.filter((c) => c.preferred)
+  const primaryCandidates = preferredCandidates.length > 0 ? preferredCandidates : listedCandidates
+  const otherCandidates = preferredCandidates.length > 0 ? listedCandidates.filter((c) => !c.preferred) : []
   const [connected, setConnected] = useState(false)
   const [info, setInfo] = useState<DeviceInfo | null>(null)
   // LeadJoy Saber Plus — surfaced through the same UI as the GameSir pads.
@@ -2554,6 +2558,25 @@ export default function App(): JSX.Element {
   useEffect(() => {
     if (fx.active && (tab === 'calibrate' || tab === 'lab')) setTab('sticks')
   }, [fx.active, tab])
+  // The Direwolf is offered in the Connect a controller card: in DInput mode it is a normal HID candidate,
+  // in XInput mode (an Xbox 360 identity) it is only known through the pad-mode poll.
+  const fxDInputCandidates = visibleCandidates.filter((c) => identifyModel(c.product, c.productId)?.id === 'FlydigiV1')
+  const fxXInputDetected = !fx.active && fx.mode === 'xinput' && !candidates.some((c) => c.productId === 0x2412)
+  // Read-only get-info probe (once per pad) so the card can show what the pad reports about itself.
+  const [fxProbe, setFxProbe] = useState<Record<string, FdV1Info | null>>({})
+  const fxProbed = useRef(new Set<string>())
+  useEffect(() => {
+    if (connected || fx.busy) return
+    for (const c of fxDInputCandidates) {
+      if (fxProbed.current.has(c.path)) continue
+      fxProbed.current.add(c.path)
+      void api()
+        .flydigiIdentify(c.path)
+        .then((r) => setFxProbe((p) => ({ ...p, [c.path]: r.v1 })))
+        .catch(() => setFxProbe((p) => ({ ...p, [c.path]: null })))
+    }
+  }, [connected, fx.busy, fxDInputCandidates])
+  const showFxCard = !connected && (fxDInputCandidates.length > 0 || fxXInputDetected)
   const [measuring, setMeasuring] = useState<{ left: number; suggestion: { dev: number; pct10: number } | null } | null>(null)
   const wanderRef = useRef(0)
   const modelLenRef = useRef(PROFILE_LENGTH)
@@ -3365,11 +3388,6 @@ export default function App(): JSX.Element {
               </div>
             </details>
           )}
-          {!fx.active && fx.mode === 'xinput' && !candidates.some((c) => c.productId === 0x2412) && (
-            <button className="btn sm" disabled={fx.busy} onClick={() => void connectFlydigi(null)} title="The pad is in XInput mode: connecting switches it to DInput (Windows asks permission once)">
-              Flydigi Direwolf 4 (XInput mode)
-            </button>
-          )}
           {connected && (
             <button
               className="btn ghost sm"
@@ -3524,8 +3542,16 @@ export default function App(): JSX.Element {
           {fx.dirty && <div className="note warn">{t('msg.dirty')}</div>}
           {msg && <div className="note">{msg}</div>}
           {(isLj ? ljDirty : dirty) && <div className="note warn">{t('msg.dirty')}</div>}
-          {!connected && (
+          {!connected && !showFxCard && (
             <div className="msg"><h3>{t('msg.connect')}</h3><p>{t('msg.models')} {t('msg.connectBody')}</p></div>
+          )}
+          {showFxCard && (
+            <div className="msg fx-panel">
+              {fxDInputCandidates.map((c) => (
+                <FlydigiCard key={c.path} mode="DInput" busy={fx.busy} batteryPercent={fxProbe[c.path]?.batteryPercent ?? null} charging={fxProbe[c.path]?.power === 'charging'} probeHex={fxProbe[c.path]?.rawHex ?? null} onConnect={() => void connect(c.path)} />
+              ))}
+              {fxXInputDetected && <FlydigiCard mode="XInput" busy={fx.busy} onConnect={() => void connectFlydigi(null)} />}
+            </div>
           )}
           {isLj && (
             <>
