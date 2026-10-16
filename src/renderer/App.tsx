@@ -2195,6 +2195,7 @@ export default function App(): JSX.Element {
   // in XInput mode (an Xbox 360 identity) it is only known through the pad-mode poll.
   const fxDInputCandidates = visibleCandidates.filter((c) => identifyModel(c.product, c.productId)?.id === 'FlydigiV1')
   const fxXInputDetected = !fx.active && fx.mode === 'xinput' && !candidates.some((c) => c.productId === 0x2412)
+  const showFxCard = !connected && (fxDInputCandidates.length > 0 || fxXInputDetected)
   const [measuring, setMeasuring] = useState<{ left: number; suggestion: { dev: number; pct10: number } | null } | null>(null)
   const wanderRef = useRef(0)
   const modelLenRef = useRef(PROFILE_LENGTH)
@@ -3089,7 +3090,7 @@ export default function App(): JSX.Element {
           </div>
           )}
         </header>
-        <div className="content">
+        <div className={`content${showFxCard ? ' content-fill' : ''}`}>
           {showSafety && (
             <div className="card" style={{ marginBottom: 16, borderColor: 'var(--warn)' }}>
               <h3>{t('safety.title')}</h3>
@@ -3122,20 +3123,16 @@ export default function App(): JSX.Element {
           {fx.dirty && <div className="note warn">{t('msg.dirty')}</div>}
           {msg && <div className="note">{msg}</div>}
           {(isLj ? ljDirty : dirty) && <div className="note warn">{t('msg.dirty')}</div>}
-          {!connected && (
-            <div className="msg">
-              <h3>{t('msg.connect')}</h3>
-              <p>{t('msg.models')} {t('msg.connectBody')}</p>
-              {(fxDInputCandidates.length > 0 || fxXInputDetected) && (
-                <div className="stack" style={{ gap: 10, marginTop: 14, alignItems: 'stretch' }}>
-                  <span className="label">Flydigi</span>
-                  {fxDInputCandidates.map((c) => (
-                    <FlydigiCard key={c.path} mode="DInput" busy={fx.busy} onConnect={() => void connect(c.path)} />
-                  ))}
-                  {fxXInputDetected && <FlydigiCard mode="XInput" busy={fx.busy} onConnect={() => void connectFlydigi(null)} />}
-                </div>
-              )}
-            </div>
+          {!connected && !showFxCard && (
+            <div className="msg"><h3>{t('msg.connect')}</h3><p>{t('msg.models')} {t('msg.connectBody')}</p></div>
+          )}
+          {showFxCard && (
+            <>
+              {fxDInputCandidates.map((c) => (
+                <FlydigiCard key={c.path} mode="DInput" busy={fx.busy} onConnect={() => void connect(c.path)} />
+              ))}
+              {fxXInputDetected && <FlydigiCard mode="XInput" busy={fx.busy} onConnect={() => void connectFlydigi(null)} />}
+            </>
           )}
           {isLj && (
             <>

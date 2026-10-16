@@ -903,58 +903,61 @@ table.tbl tbody tr:hover {
   border: 2px solid var(--bg);
 }
 
-/* Flydigi connect card */
-.fx-card {
+/* Flydigi connect card: fills the content area */
+.content.content-fill {
   display: flex;
-  width: 100%;
-  box-sizing: border-box;
+  flex-direction: column;
+}
+.fx-card {
+  flex: 1;
+  min-height: 320px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr);
   align-items: center;
-  gap: 18px;
-  padding: 14px 20px;
+  gap: 24px;
+  padding: 40px 56px;
   border: 1px solid var(--line-2);
   border-radius: var(--radius);
-  background: var(--bg-2);
+  background: radial-gradient(ellipse at 75% 50%, var(--bg-3), var(--bg-1) 70%);
   color: var(--text);
   text-align: left;
   cursor: pointer;
+  transition: border-color 0.25s cubic-bezier(0.16, 1, 0.3, 1);
 }
 .fx-card:hover:not(:disabled) {
   border-color: var(--accent);
-  background: var(--bg-3);
 }
 .fx-card:disabled {
   opacity: 0.6;
   cursor: default;
 }
-.fx-card-pic {
-  color: var(--accent-2);
-  display: flex;
-}
 .fx-card-body {
-  flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 16px;
 }
 .fx-card-name {
-  font-size: 15px;
+  font-size: 30px;
   font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
 }
 .fx-card-row {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 12px;
+  gap: 14px;
 }
 .fx-battery {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   color: var(--text-3);
-  font-size: 12px;
+  font-size: 13px;
 }
 .fx-battery-bar {
-  width: 28px;
-  height: 12px;
+  width: 30px;
+  height: 13px;
   border: 1.5px solid var(--text-3);
   border-radius: 3px;
   padding: 1px;
@@ -966,6 +969,37 @@ table.tbl tbody tr:hover {
   border-radius: 1px;
 }
 .fx-card-cta {
-  font-size: 12px;
-  color: var(--accent-2);
+  align-self: flex-start;
+  margin-top: 8px;
+  padding: 10px 20px;
+  border-radius: var(--radius-sm);
+  background: var(--accent);
+  color: var(--on-accent);
+  font-size: 14px;
+  font-weight: 600;
+}
+.fx-card:active:not(:disabled) .fx-card-cta {
+  transform: scale(0.98);
+}
+.fx-card-pic {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 0;
+}
+.fx-card-pic img {
+  width: 100%;
+  max-width: 400px;
+  max-height: 100%;
+  object-fit: contain;
+  filter: drop-shadow(0 24px 32px rgba(7, 2, 4, 0.55));
+}
+@media (max-width: 760px) {
+  .fx-card {
+    grid-template-columns: 1fr;
+    padding: 28px;
+  }
+  .fx-card-pic {
+    order: -1;
+  }
 }
