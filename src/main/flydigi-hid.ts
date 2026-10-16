@@ -129,20 +129,36 @@ function spaceStationRunning(): boolean {
 const psq = (v: string): string => `'${v.replace(/'/g, "''")}'`
 
 /**
- * Run scripts/flydigi-xinput-helper.py elevated (it talks to Space Station's filter driver,
- * so the pad must be in XInput mode and Space Station closed) and return its result.
+ * Run a helper script from scripts/ and return its result. The default helper talks to Space
+ * Station's filter driver, so the pad must be in XInput mode and Space Station closed. `elevate`
+ * runs it through a UAC prompt; without it the script is spawned as the current user, and exit
+ * code 3 (access denied) comes back as `denied` so the caller can retry elevated.
  */
-async function runHelper(args: string[]): Promise<{ reportRate: number | null }> {
+async function runHelper(
+  args: string[],
+  opts: { script?: string; elevate?: boolean } = {}
+): Promise<{ reportRate: number | null; denied?: boolean }> {
+  const { script: name = 'flydigi-xinput-helper.py', elevate = true } = opts
   if (spaceStationRunning()) {
     throw new Error('flydigi: Flydigi Space Station (or its background service) is running. Close it fully, then try again.')
   }
-  const script = join(__dirname, '../../scripts/flydigi-xinput-helper.py')
+  const script = join(__dirname, '../../scripts', name)
   const out = join(tmpdir(), `flydigi-helper-${Date.now()}.json`)
   const py = process.env.FLYDIGI_PYTHON ?? 'python'
-  const list = [`"${script}"`, '--out', `"${out}"`, ...args].map(psq).join(', ')
-  const ps = `$p = Start-Process -FilePath ${psq(py)} -ArgumentList @(${list}) -Verb RunAs -WindowStyle Hidden -PassThru -Wait; exit $p.ExitCode`
+  const full = [script, '--out', out, ...args]
   const code = await new Promise<number>((resolve) => {
-    const c = spawn('powershell', ['-NoProfile', '-NonInteractive', '-Command', ps], { windowsHide: true })
+    const c = elevate
+      ? spawn(
+          'powershell',
+          [
+            '-NoProfile',
+            '-NonInteractive',
+            '-Command',
+            `$p = Start-Process -FilePath ${psq(py)} -ArgumentList @(${full.map((a) => psq(`"${a}"`)).join(', ')}) -Verb RunAs -WindowStyle Hidden -PassThru -Wait; exit $p.ExitCode`
+          ],
+          { windowsHide: true }
+        )
+      : spawn(py, full, { windowsHide: true })
     c.on('error', () => resolve(-1))
     c.on('exit', (n) => resolve(n ?? -1))
   })
@@ -155,6 +171,7 @@ async function runHelper(args: string[]): Promise<{ reportRate: number | null }>
   } catch {
     /* fall through to the generic messages */
   }
+  if (!elevate && code === 3) return { reportRate: null, denied: true }
   if (parsed && !parsed.ok) throw new Error(`flydigi: ${parsed.error ?? 'the helper reported a failure'}`)
   if (code !== 0 || !parsed) {
     throw new Error('flydigi: the helper did not run — the Windows permission prompt was declined, or python could not be started (set FLYDIGI_PYTHON).')
@@ -171,8 +188,29 @@ async function waitFor(cond: () => boolean, ms: number): Promise<boolean> {
   return cond()
 }
 
-/** Switch an XInput-mode Direwolf to DInput via the elevated helper, then wait for 04B4:2412. */
+/**
+ * Experimental, opt-in with FLYDIGI_USBDK=1: send the switch frame as a raw USB transfer through
+ * UsbDk (scripts/flydigi-usbdk-switch.py). Runs as the current user first and only asks for
+ * elevation if UsbDk refuses. Returns whether the pad re-enumerated as 04B4:2412.
+ */
+async function switchViaUsbDk(): Promise<boolean> {
+  const extra = (process.env.FLYDIGI_USBDK_ARGS ?? '').split(/\s+/).filter(Boolean)
+  const script = { script: 'flydigi-usbdk-switch.py' }
+  try {
+    let r = await runHelper(extra, { ...script, elevate: false })
+    if (r.denied) r = await runHelper(extra, { ...script, elevate: true })
+  } catch (e) {
+    console.warn(`flydigi: UsbDk switch failed, falling back to Space Station's driver (${(e as Error).message})`)
+    return false
+  }
+  if (await waitFor(() => dinputPath() !== null, 12000)) return true
+  console.warn("flydigi: the UsbDk transfer was accepted but the pad did not switch, falling back to Space Station's driver")
+  return false
+}
+
+/** Switch an XInput-mode Direwolf to DInput (UsbDk if opted in, else the elevated helper), then wait for 04B4:2412. */
 async function switchToDInput(): Promise<void> {
+  if (process.env.FLYDIGI_USBDK === '1' && (await switchViaUsbDk())) return
   await runHelper(['--to-dinput'])
   if (!(await waitFor(() => dinputPath() !== null, 12000))) {
     throw new Error('flydigi: the switch was sent but the pad did not appear as 04B4:2412. Unplug and replug it and try again.')

@@ -57,6 +57,20 @@ survives replugs until Space Station runs again. "Switch to XInput" (`05 ED`, pl
 the pad back for games and closes the Direwolf screen. The sections below that mention the
 driver describe how the protocol was first captured; the config traffic itself is plain HID.
 
+### Experimental: switching through UsbDk (unverified)
+
+Opt-in alternative to Space Station's filter driver for the XInput -> DInput switch. Set `FLYDIGI_USBDK=1` before
+starting the app; on "Read pad" it runs `scripts/flydigi-usbdk-switch.py`, which sends `A5 17` as a raw USB transfer
+through libusb's UsbDk backend. It runs as the current user first and only retries elevated if UsbDk reports access
+denied; any failure (or the pad not re-enumerating as `04B4:2412`) falls back to the Space Station helper above.
+Needs UsbDk installed, `libusb-1.0.dll` (`FLYDIGI_LIBUSB`, `pip install libusb-package`, or on PATH) and python.
+
+Not known yet: which endpoint and transfer type the pad accepts (the filter driver's wire traffic was never captured).
+The script defaults to a 15-byte interrupt OUT on endpoint `0x01`, interface 0 (the usual Xbox 360 OUT pipe).
+`--dump` lists the real descriptors; `FLYDIGI_USBDK_ARGS` passes `--ep`, `--len`, `--iface` or
+`--method ctrl --ctrl REQTYPE,REQUEST,VALUE,INDEX` through to try the alternatives. While UsbDk holds the device the
+Xbox driver is detached from it, so this does not "keep xusb bound" during the transfer.
+
 Where the work stands and what is left is in **Direwolf 4: status and next steps** at the end of this file.
 
 ## Direwolf 4 (field notes from a Space Station 4.2.0.9 service log)
