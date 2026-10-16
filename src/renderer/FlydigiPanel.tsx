@@ -1,10 +1,9 @@
 /**
- * Flydigi Direwolf 4 (XInput mode) tuning — vibration and stick centre.
+ * Flydigi Direwolf 4 tuning: config slots, sticks, triggers, buttons, vibration.
  *
- * Talks to Space Station's Xbox 360 filter driver through the main-process
- * sidecar (docs/flydigi.md). The app must run elevated with Space Station and
- * its service closed. Every write is read back by the main process and rolled
- * back on mismatch.
+ * Plain HID: the pad must be in DInput mode (USB 04B4:2412) with Flydigi Space
+ * Station closed (docs/flydigi.md). Every write is read back by the main
+ * process and rolled back on mismatch.
  */
 import { useState } from 'react'
 import { FX_KEY_DEFAULT, FX_KEY_NAMES, FX_KEY_ORDER, FX_CURVE_CUSTOM, FX_CURVE_DEFAULT, FX_CURVE_DEFAULT_POINTS, fxDeadzonePoints, fxTriggerRange, type FxCurve, type FxSnapshot, type FxTriggerRaw, type FxVibration } from '@shared/flydigi-xinput'
@@ -170,11 +169,7 @@ export default function FlydigiPanel(): JSX.Element {
       <h3>Flydigi Direwolf 4</h3>
       <div className="hint" style={{ margin: '6px 0 12px' }}>
         Config 1…4 are the onboard slots (Space Station&apos;s 配置1…4); • marks the one the pad is running.{' '}
-        {snap?.transport === 'hid'
-          ? 'Connected over plain HID (DInput mode): no driver, Space Station or admin needed.'
-          : snap?.transport === 'filter'
-            ? 'XInput mode through Space Station’s filter driver: run Stick Labs as Administrator and close Space Station and its background service.'
-            : 'DInput mode (04B4:2412) needs nothing else; XInput mode needs Stick Labs run as Administrator with Space Station and its service closed.'}
+        Plain HID: the pad must be in DInput mode (USB 04B4:2412). Close Flydigi Space Station first — launching it switches the pad back to XInput.
       </div>
       <div className="row" style={{ gap: 8 }}>
         <button className="btn" disabled={busy} onClick={() => void load(snap?.cfgId)}>

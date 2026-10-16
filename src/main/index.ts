@@ -9,7 +9,7 @@ import { discover, discoverLive } from './hid'
 import { ljReadButtonTable, ljReadMainSnapshot, ljReadSnapshot, ljWriteButtonVerified, ljWriteStickVerified, ljWriteTriggerVerified } from './leadjoy'
 import type { LjButtonTarget, LjStickPatch } from '../shared/leadjoy'
 import { fdIdentify } from './flydigi'
-import { fxXInputActivate, fxXInputRead, fxXInputWrite, fxXInputStop } from './flydigi-xinput'
+import { fxHidActivate, fxHidRead, fxHidWrite, fxHidStop } from './flydigi-hid'
 import type { FxPatch } from '../shared/flydigi-xinput'
 import { ljButtonWriteRecord } from '../shared/leadjoy'
 import { steamInfo, exportApexDeadzones, listInstalledGames, exportDeadzonesToGames } from './steam'
@@ -119,15 +119,15 @@ handle('flydigi:identify', (path: string) => {
   if (typeof path !== 'string' || path.length === 0) throw new Error('flydigi: refusing identify without a device path')
   return fdIdentify(path)
 })
-/** Flydigi Direwolf 4 (XInput mode): config via Space Station's filter driver (docs/flydigi.md). Needs elevation. */
+/** Flydigi Direwolf 4 in DInput mode (04B4:2412): config over plain HID, no driver or admin (docs/flydigi.md). */
 const cfgOk = (v: unknown): boolean => v === undefined || (Number.isInteger(v) && (v as number) >= 0 && (v as number) <= 7)
 handle('flydigix:read', (cfgId?: number) => {
   if (!cfgOk(cfgId)) throw new Error('flydigi: config id must be 0..7')
-  return fxXInputRead(cfgId)
+  return fxHidRead(cfgId)
 })
 handle('flydigix:activate', (cfgId: number) => {
   if (!Number.isInteger(cfgId) || cfgId < 0 || cfgId > 7) throw new Error('flydigi: config id must be 0..7')
-  return fxXInputActivate(cfgId)
+  return fxHidActivate(cfgId)
 })
 handle('flydigix:write', (patch: FxPatch) => {
   const byte = (v: unknown): boolean => Number.isInteger(v) && (v as number) >= 0 && (v as number) <= 255
@@ -153,7 +153,7 @@ handle('flydigix:write', (patch: FxPatch) => {
   if (v && ![v.left?.min, v.left?.max, v.left?.scale, v.right?.min, v.right?.max, v.right?.scale].every(byte)) {
     throw new Error('flydigi: vibration values must be 0..255')
   }
-  return fxXInputWrite(patch)
+  return fxHidWrite(patch)
 })
 handle('leadjoy:readMain', (path: string) => ljReadMainSnapshot(path))
 handle('leadjoy:readSlot', (req: { path: string; slot: number }) => {
@@ -344,5 +344,5 @@ app.on('window-all-closed', () => {
 })
 app.on('before-quit', () => {
   controller.disconnect()
-  fxXInputStop()
+  fxHidStop()
 })

@@ -1,16 +1,18 @@
 /**
- * Flydigi XInput-mode config protocol (Direwolf 4, "fp4").
+ * Flydigi Direwolf 4 ("fp4") config protocol.
  *
- * Source: read from Space Station's own service code (Flydigi.ControllerSDK,
- * XInputProtocol) and proven on a Direwolf 4: read, write, readback and save
- * (docs/flydigi.md). Fixture: fixtures/flydigi/fp4-cfg1.bin is a real read.
+ * Source: Space Station's own service code (Flydigi.ControllerSDK), proven on a
+ * Direwolf 4 by readback (docs/flydigi.md). Fixture: fixtures/flydigi/fp4-cfg1.bin
+ * is a real read.
  *
- * Transport (not here): commands are 15-byte buffers handed to Space
- * Station's Xbox 360 filter driver (XboxComm64.dll WriteData2Usb); replies
- * arrive inside 32-byte Xbox 360 input reports with A5 at [14], cmd at [15].
+ * Commands are written here in Space Station's XInput form (`A5 <cmd> …`, replies
+ * `… A5 <cmd> …` inside Xbox 360 reports) because that is how they were first
+ * captured; fxToDInput / fxFromDInput translate to the plain-HID form Stick Labs
+ * actually sends (report 0x05, replies `04 FF F0 …`). The XInput form is no longer
+ * a transport, only the canonical in-memory shape.
  *
  * The config is one blob split into 10-byte packs (V3.1: 84 packs = 840
- * bytes). A write sends only changed packs: 0x23 start, then 0x24 per pack.
+ * bytes). A write sends only changed packs: start, then one command per pack.
  */
 
 export const FX_ENDPOINT_TAG = 0xa5
@@ -437,8 +439,6 @@ export function fxSetKeyTarget(blob: Uint8Array, id: number, target: number): Ui
 // --- session-level shapes shared with the renderer ---
 
 export interface FxSnapshot {
-  /** 'hid' = DInput mode over plain HID; 'filter' = XInput mode through Space Station's driver. */
-  transport: 'hid' | 'filter'
   /** Config slot shown (0-based; Space Station's 配置1 is 0). */
   cfgId: number
   /** Slot the pad is currently running, and how many slots it has. */

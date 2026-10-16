@@ -75,7 +75,7 @@ interface LabApi {
   deeppoll(vid: number, pid: number, seconds?: number): Promise<DeepPollResult>
   /** Flydigi: read-only identify handshake (model, firmware, connection, battery). */
   flydigiIdentify(path: string): Promise<FdIdentifyResult>
-  /** Flydigi Direwolf 4 (XInput mode): read the live config. Needs an elevated app, Space Station closed. */
+  /** Flydigi Direwolf 4 (DInput mode, plain HID): read a config slot. Space Station must be closed. */
   flydigiXRead(cfgId?: number): Promise<FxSnapshot>
   /** Make a config slot (0-based) the one the pad runs. */
   flydigiXActivate(cfgId: number): Promise<FxSnapshot>

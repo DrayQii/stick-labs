@@ -41,6 +41,18 @@ captured and proven with readback.
    transfers. The read command for the config page and the write/ack pair
    give the record layout; a readback after the write proves it.
 
+## Direwolf 4: how Stick Labs talks to it (current)
+
+Plain HID only. The pad must be in **DInput mode** (USB `04B4:2412`, vendor interface 2,
+usage page `0xFFA0`) and Flydigi Space Station must be **closed**: launching it switches the
+pad back to XInput (`045E:028E`). No driver, no Space Station DLL and no admin rights are used.
+
+Getting the pad into DInput mode is the one thing Stick Labs cannot do by itself: from
+XInput mode the only known way is the legacy `A5 17` frame sent through Space Station's Xbox 360
+filter driver (`XboxComm64.dll`), run once. The mode then survives replugs until Space Station
+runs again. The sections below that mention the driver describe how the protocol was first
+captured and proven; the app no longer uses that path.
+
 ## Direwolf 4 (field notes from a Space Station 4.2.0.9 service log)
 
 Space Station's internal code for it is `fp4`. It shows up under one of two USB identities:
@@ -153,12 +165,9 @@ indexes include the report id):
 | write pack | `05 22 <10 bytes> A0 <packNum>` | `[15]=EA` |
 | save / activate | `05 50 03 <ver lo/hi>` / `05 50 05 <cfgId>` | `[3]=50 [4]=sub` (shape not yet captured) |
 
-Read verified on hardware: configs 0 and 1 came back byte-for-byte in the
-layout above (deadzone 20 on config id 1 matched the fitted curve). Writes and
-the save/apply acks over this path are built from Space Station's DInput
-command classes and still need a hardware check. Stick Labs auto-selects
-this transport when `04B4:2412` interface 2 is present, otherwise the
-XInput filter sidecar.
+Verified on a Direwolf 4 over this path: config reads (byte-for-byte in the layout above),
+writes with readback (deadzone, vibration, triggers, button remaps), the save (`05 50 03`,
+survives a replug) and make-active (`05 50 05`). This is the only transport Stick Labs uses.
 
 Trigger records (blob 123..136, 7 bytes per trigger: `type, zero, p1x, p1y, p2x, p2y, end`).
 Verified from Space Station's log acks after sliders Start 20/50/100 and End 200/110:
