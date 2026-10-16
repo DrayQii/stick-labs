@@ -2190,6 +2190,10 @@ export default function App(): JSX.Element {
   useEffect(() => {
     if (fx.active && (tab === 'calibrate' || tab === 'lab')) setTab('sticks')
   }, [fx.active, tab])
+  // The Direwolf is offered in the Connect a controller card: in DInput mode it is a normal HID candidate,
+  // in XInput mode (an Xbox 360 identity) it is only known through the pad-mode poll.
+  const fxDInputCandidates = visibleCandidates.filter((c) => identifyModel(c.product, c.productId)?.id === 'FlydigiV1')
+  const fxXInputDetected = !fx.active && fx.mode === 'xinput' && !candidates.some((c) => c.productId === 0x2412)
   const [measuring, setMeasuring] = useState<{ left: number; suggestion: { dev: number; pct10: number } | null } | null>(null)
   const wanderRef = useRef(0)
   const modelLenRef = useRef(PROFILE_LENGTH)
@@ -2957,7 +2961,7 @@ export default function App(): JSX.Element {
           >
             {t('side.copy')}
           </button>
-          {visibleCandidates.map((c) => {
+          {visibleCandidates.filter((c) => identifyModel(c.product, c.productId)?.id !== 'FlydigiV1').map((c) => {
             const known = identifyModel(c.product, c.productId)
             return (
               <button key={c.path} className="btn sm" onClick={() => void connect(c.path)}>
@@ -2965,11 +2969,6 @@ export default function App(): JSX.Element {
               </button>
             )
           })}
-          {!fx.active && fx.mode === 'xinput' && !candidates.some((c) => c.productId === 0x2412) && (
-            <button className="btn sm" disabled={fx.busy} onClick={() => void connectFlydigi(null)} title="The pad is in XInput mode: connecting switches it to DInput (Windows asks permission once)">
-              Flydigi Direwolf 4 (XInput mode)
-            </button>
-          )}
           {connected && (
             <button
               className="btn ghost sm"
@@ -3123,7 +3122,25 @@ export default function App(): JSX.Element {
           {msg && <div className="note">{msg}</div>}
           {(isLj ? ljDirty : dirty) && <div className="note warn">{t('msg.dirty')}</div>}
           {!connected && (
-            <div className="msg"><h3>{t('msg.connect')}</h3><p>{t('msg.models')} {t('msg.connectBody')}</p></div>
+            <div className="msg">
+              <h3>{t('msg.connect')}</h3>
+              <p>{t('msg.models')} {t('msg.connectBody')}</p>
+              {(fxDInputCandidates.length > 0 || fxXInputDetected) && (
+                <div className="stack" style={{ gap: 8, marginTop: 14, alignItems: 'center' }}>
+                  <span className="label">Flydigi</span>
+                  {fxDInputCandidates.map((c) => (
+                    <button key={c.path} className="btn" disabled={fx.busy} onClick={() => void connect(c.path)}>
+                      Flydigi Direwolf 4 (DInput mode)
+                    </button>
+                  ))}
+                  {fxXInputDetected && (
+                    <button className="btn" disabled={fx.busy} onClick={() => void connectFlydigi(null)} title="The pad is in XInput mode: connecting switches it to DInput (Windows asks permission once)">
+                      Flydigi Direwolf 4 (XInput mode)
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
           )}
           {isLj && (
             <>
