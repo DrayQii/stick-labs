@@ -79,6 +79,35 @@ Consequences for this app (changed 2026-10-15 after a user report):
 - `stick.isRawState` was renamed `stick.isNeutralState` so the codebase stops
   describing the calibrated identity (or the legacy bypass) as "raw".
 
+## Stick resolution: 12-bit is the ceiling (live, 2026-10-15)
+
+The vendor app offers exactly five steps — `["256","128","64","32","<16"]`,
+rendered by `formatStickResolutionBubble` — stored as `stick_resolution = 4 -
+index`, and its own log shows the pair (`stickResolution: 4` ↔ wire
+`stick_resolution: 0`, `gamesir_connect\logs\renderer.log`). So index 4 / wire 0
+= 12-bit is the **end** of the encoding, not the middle. Product page: 12-bit
+ADC.
+
+Live test on the T3CE (fw 0243, profile 1, 1935-byte blob, the byte at offset 48
+= Fun+16), with a full profile backup, a parse→serialize round-trip check that
+refuses anything but a one-byte change, and every write verified + re-read:
+
+| wire | meaning | pad stored it | XInput jitter at rest (distinct values per axis) |
+| ---- | ------- | ------------- | ------------------------------------------------ |
+| 0 | 12-bit (finest documented) | yes | 47 / 72 / 75 / 68 |
+| 1 | 11-bit | yes | 5 / 5 / 8 / 8 |
+| 4 | 8-bit | yes | 2 / 2 / 1 / 1 (output collapses to plateaus) |
+| 255 | "13-bit" (signed −1 in the same formula) | **yes, byte-exact** | 48 / 72 / 75 / 68 — same as 12-bit |
+
+So the ladder is real and monotone on hardware, and the field is **not clamped**
+— the firmware stores any byte, including ones its own app never produces. At
+255 nothing changes: as fine as 12-bit, no finer. The method has a floor that
+matters: at 12-bit the local pitch is already below one XInput count, so a
+genuinely finer step would look identical — this test can prove *storage* and
+rule out *coarsening*, not prove a gain. Verdict: more than 12-bit is not a
+supported mode; the Device tab stays 8–12 and the codec's `EXTENDED_BITS` /
+`bitsToWireRaw` stay unused. (Vendor-stated 12-bit ADC is the physical limit.)
+
 ## Motherboard note
 
 No public source names the MCU or ADC part numbers on the Tarantula 8K
