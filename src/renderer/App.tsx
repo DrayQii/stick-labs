@@ -2013,7 +2013,7 @@ const ljSameTarget = (a: LjButtonTarget | null, b: LjButtonTarget | null): boole
  * and the deadzone card and the designer edit one image. Edits stage upward;
  * the topbar Write commits the side and reads it back.
  */
-function LjLiveCard({ live }: { live: { lx: number; ly: number; rx: number; ry: number } | null }): JSX.Element {
+function LjLiveCard({ live, windows }: { live: { lx: number; ly: number; rx: number; ry: number } | null; windows?: Array<{ begin: number; end: number; beginAnti: number } | null> }): JSX.Element {
   const t = useT()
   return (
     <div className="card">
@@ -3308,7 +3308,13 @@ export default function App(): JSX.Element {
                 return (
                   <div className="two" style={{ alignItems: 'start' }}>
                     <div className="stack" style={{ gap: 16 }}>
-                      <LjLiveCard live={ljLive} />
+                      <LjLiveCard
+                  live={ljLive}
+                  windows={([0, 1] as const).map((s) => {
+                    const z = ljCurveZones(toPairs(ljDraft.sticks[s] ?? ljPadGrid(s)))
+                    return { begin: z.start, end: z.end, beginAnti: z.antiStart }
+                  })}
+                />
                       <LjZonesCard points={pts} onChange={(next) => stageLjStick(side, next)} />
                       <LjOuterCard points={pts} onChange={(next) => stageLjStick(side, next)} />
                     </div>
