@@ -17,6 +17,7 @@ import {
   FX_CMD_WRITE_PACK,
   FX_CMD_WRITE_START,
   fxAssembleBlob,
+  fxCfgCountFromAck,
   fxCfgIdFromAck,
   fxDataVersion,
   fxDecodeCurves,
@@ -143,18 +144,21 @@ async function waitAck(cmd: number, pred: (a: FxAck) => boolean = () => true, ms
   return null
 }
 
-async function readBlob(): Promise<{ cfgId: number; blob: Uint8Array }> {
+async function readBlob(want?: number): Promise<{ cfgId: number; activeCfgId: number; cfgCount: number; blob: Uint8Array }> {
   acks = []
   await sendFrame(fxReadConfigId())
   const idAck = await waitAck(FX_CMD_READ_CFG_ID)
   if (!idAck) throw new Error('flydigi: no reply to read-config-id (is the pad in USB mode?)')
-  const cfgId = fxCfgIdFromAck(idAck)
+  const activeCfgId = fxCfgIdFromAck(idAck)
+  const cfgCount = fxCfgCountFromAck(idAck)
+  const cfgId = want ?? activeCfgId
+  if (cfgId >= Math.max(cfgCount, 1)) throw new Error(`flydigi: the pad has ${cfgCount} configs (0..${cfgCount - 1}), asked for ${cfgId}`)
   acks = []
   await sendFrame(fxReadConfig(cfgId))
   await sleep(READ_SETTLE_MS)
   const blob = fxAssembleBlob(acks.filter((a) => a.cmd === FX_CMD_READ_CFG_ACK))
   if (!blob) throw new Error('flydigi: incomplete config read; try again')
-  return { cfgId, blob }
+  return { cfgId, activeCfgId, cfgCount, blob }
 }
 
 async function writeBlob(cfgId: number, from: Uint8Array, to: Uint8Array): Promise<void> {
@@ -171,8 +175,8 @@ async function writeBlob(cfgId: number, from: Uint8Array, to: Uint8Array): Promi
   }
 }
 
-function snapshot(cfgId: number, blob: Uint8Array): FxSnapshot {
-  return { cfgId, dataVersion: fxDataVersion(blob), vibration: fxDecodeVibration(blob), sticks: fxDecodeSticks(blob), curves: fxDecodeCurves(blob) }
+function snapshot(cfgId: number, activeCfgId: number, cfgCount: number, blob: Uint8Array): FxSnapshot {
+  return { cfgId, activeCfgId, cfgCount, dataVersion: fxDataVersion(blob), vibration: fxDecodeVibration(blob), sticks: fxDecodeSticks(blob), curves: fxDecodeCurves(blob) }
 }
 
 /** Serialise sessions: the pad answers one command at a time. */
@@ -185,18 +189,18 @@ function exclusive<T>(fn: () => Promise<T>): Promise<T> {
   return run
 }
 
-export function fxXInputRead(): Promise<FxSnapshot> {
+export function fxXInputRead(cfgId?: number): Promise<FxSnapshot> {
   return exclusive(async () => {
     await start()
-    const { cfgId, blob } = await readBlob()
-    return snapshot(cfgId, blob)
+    const r = await readBlob(cfgId)
+    return snapshot(r.cfgId, r.activeCfgId, r.cfgCount, r.blob)
   })
 }
 
 export function fxXInputWrite(patch: FxPatch): Promise<{ verified: boolean; restored: boolean; saved: boolean; changedPacks: number }> {
   return exclusive(async () => {
     await start()
-    const { cfgId, blob: before } = await readBlob()
+    const { cfgId, activeCfgId, blob: before } = await readBlob(patch.cfgId)
     try {
       const dir = join(app.getPath('userData'), 'flydigi-backups')
       mkdirSync(dir, { recursive: true })
@@ -215,14 +219,14 @@ export function fxXInputWrite(patch: FxPatch): Promise<{ verified: boolean; rest
     if (changedPacks === 0) return { verified: true, restored: false, saved: false, changedPacks }
 
     await writeBlob(cfgId, before, want)
-    const { blob: after } = await readBlob()
+    const { blob: after } = await readBlob(cfgId)
     const verified = after.length === want.length && after.every((v, i) => v === want[i])
     if (!verified) {
       // Roll the changed packs back to what was there before and re-check.
       let restored = false
       try {
         await writeBlob(cfgId, after, before)
-        const { blob: again } = await readBlob()
+        const { blob: again } = await readBlob(cfgId)
         restored = again.every((v, i) => v === before[i])
       } catch {
         /* report below */
@@ -231,7 +235,8 @@ export function fxXInputWrite(patch: FxPatch): Promise<{ verified: boolean; rest
     }
 
     let saved = false
-    if (patch.save) {
+    // 0x50 03 saves the pad's current config; saving a non-active slot is not proven, so skip it.
+    if (patch.save && cfgId === activeCfgId) {
       acks = []
       await sendFrame(fxSave(fxDataVersion(after)))
       const a = await waitAck(FX_CMD_SAVE, (x) => x.data[0] === 3, 12000)

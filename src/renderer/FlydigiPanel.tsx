@@ -94,12 +94,12 @@ export default function FlydigiPanel(): JSX.Element {
     setCurves(s.curves)
   }
 
-  async function load(): Promise<void> {
+  async function load(cfgId?: number): Promise<void> {
     setBusy(true)
     setMsg(null)
     try {
-      adopt(await api().flydigiXRead())
-      setMsg({ kind: 'ok', text: 'Read the live config from the pad.' })
+      adopt(await api().flydigiXRead(cfgId))
+      setMsg({ kind: 'ok', text: cfgId === undefined ? 'Read the active config from the pad.' : `Read config ${cfgId + 1}.` })
     } catch (e) {
       setMsg({ kind: 'err', text: (e as Error).message })
     } finally {
@@ -115,6 +115,7 @@ export default function FlydigiPanel(): JSX.Element {
       const r = await api().flydigiXWrite({
         vibration: vib,
         leftCenter: left & 0xff,
+        cfgId: snap.cfgId,
         rightCenter: right & 0xff,
         leftCurve: curves.left,
         rightCurve: curves.right,
@@ -125,9 +126,9 @@ export default function FlydigiPanel(): JSX.Element {
       } else if (r.changedPacks === 0) {
         setMsg({ kind: 'ok', text: 'Nothing to change.' })
       } else {
-        setMsg({ kind: 'ok', text: `Written and verified (${r.changedPacks} pack${r.changedPacks === 1 ? '' : 's'})${save ? (r.saved ? ', saved to the pad.' : ', but the save was not acknowledged.') : ' — live only, not saved.'}` })
+        setMsg({ kind: 'ok', text: `Written and verified (${r.changedPacks} pack${r.changedPacks === 1 ? '' : 's'})${save && snap.cfgId === snap.activeCfgId ? (r.saved ? ', saved to the pad.' : ', but the save was not acknowledged.') : ' — live only, not saved.'}` })
       }
-      adopt(await api().flydigiXRead())
+      adopt(await api().flydigiXRead(snap.cfgId))
     } catch (e) {
       setMsg({ kind: 'err', text: (e as Error).message })
     } finally {
@@ -147,16 +148,25 @@ export default function FlydigiPanel(): JSX.Element {
     <div className="card" style={{ marginTop: 16 }}>
       <h3>Flydigi Direwolf 4</h3>
       <div className="hint" style={{ margin: '6px 0 12px' }}>
-        XInput mode only. Run Stick Labs as Administrator and close Flydigi Space Station and its background service first — they hold the driver this uses.
+        Config 1…4 are the onboard slots (Space Station&apos;s 配置1…4); • marks the one the pad is running. XInput mode only. Run Stick Labs as Administrator and close Flydigi Space Station and its background service first — they hold the driver this uses.
       </div>
       <div className="row" style={{ gap: 8 }}>
-        <button className="btn" disabled={busy} onClick={() => void load()}>
-          {snap ? 'Re-read pad' : 'Read pad'}
+        <button className="btn" disabled={busy} onClick={() => void load(snap?.cfgId)}>
+          {snap ? 'Re-read' : 'Read pad'}
         </button>
         {snap && (
-          <span className="mono" style={{ alignSelf: 'center' }}>
-            config {snap.cfgId} · data v{'0x' + snap.dataVersion.toString(16)}
-          </span>
+          <>
+            <div className="row" style={{ gap: 6 }}>
+              {Array.from({ length: Math.max(snap.cfgCount, 1) }, (_, i) => (
+                <button key={i} className={`choice-btn${snap.cfgId === i ? ' active' : ''}`} disabled={busy} onClick={() => void load(i)} title={i === snap.activeCfgId ? 'The pad is running this config' : undefined}>
+                  Config {i + 1}{i === snap.activeCfgId ? ' •' : ''}
+                </button>
+              ))}
+            </div>
+            <span className="mono" style={{ alignSelf: 'center' }}>
+              data v{'0x' + snap.dataVersion.toString(16)}
+            </span>
+          </>
         )}
       </div>
 
@@ -202,7 +212,7 @@ export default function FlydigiPanel(): JSX.Element {
           <div className="row" style={{ gap: 12, alignItems: 'center' }}>
             <label className="row" style={{ gap: 6 }}>
               <input type="checkbox" checked={save} onChange={(e) => setSave(e.target.checked)} />
-              <span>Save to pad (survives replug)</span>
+              <span>Save to pad (survives replug){snap.cfgId !== snap.activeCfgId ? ' — only for the active config; this slot is written live only' : ''}</span>
             </label>
             <button className="btn primary" disabled={busy} onClick={() => void apply()}>
               Apply

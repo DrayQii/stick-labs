@@ -41,7 +41,7 @@ const api = {
   deeppoll: (vid: number, pid: number, seconds?: number) =>
     call<DeepPollResult>('diag:deeppoll', vid, pid, seconds),
   flydigiIdentify: (path: string) => call<FdIdentifyResult>('flydigi:identify', path),
-  flydigiXRead: () => call<FxSnapshot>('flydigix:read'),
+  flydigiXRead: (cfgId?: number) => call<FxSnapshot>('flydigix:read', cfgId),
   flydigiXWrite: (patch: FxPatch) =>
     call<{ verified: boolean; restored: boolean; saved: boolean; changedPacks: number }>('flydigix:write', patch),
   leadjoyReadMain: (path: string) => call<LjSnapshot>('leadjoy:readMain', path),

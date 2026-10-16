@@ -78,6 +78,8 @@ export function fxParseAck(report: Uint8Array): FxAck | null {
 }
 
 export const fxCfgIdFromAck = (ack: FxAck): number => ack.data[0]
+/** Slot count from a 0x20 reply (`A5 20 <id> A0 <count>`). */
+export const fxCfgCountFromAck = (ack: FxAck): number => ack.data[2]
 export const fxSaveAcked = (ack: FxAck): boolean => ack.cmd === FX_CMD_SAVE && ack.data[0] === FX_SUB_SAVE && ack.data[1] === 1
 
 /** Pack count a read-config reply announces (first pack, index 0). */
@@ -274,7 +276,11 @@ export function fxSetCurve(blob: Uint8Array, side: 0 | 1, curve: FxCurve): Uint8
 // --- session-level shapes shared with the renderer ---
 
 export interface FxSnapshot {
+  /** Config slot shown (0-based; Space Station's 配置1 is 0). */
   cfgId: number
+  /** Slot the pad is currently running, and how many slots it has. */
+  activeCfgId: number
+  cfgCount: number
   dataVersion: number
   vibration: FxVibration
   sticks: { left: FxStickRaw; right: FxStickRaw }
@@ -282,6 +288,8 @@ export interface FxSnapshot {
 }
 
 export interface FxPatch {
+  /** Slot to edit (0-based); defaults to the pad's active slot. */
+  cfgId?: number
   vibration?: FxVibration
   leftCenter?: number
   rightCenter?: number

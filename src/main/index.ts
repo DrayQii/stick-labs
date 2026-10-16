@@ -120,10 +120,15 @@ handle('flydigi:identify', (path: string) => {
   return fdIdentify(path)
 })
 /** Flydigi Direwolf 4 (XInput mode): config via Space Station's filter driver (docs/flydigi.md). Needs elevation. */
-handle('flydigix:read', () => fxXInputRead())
+const cfgOk = (v: unknown): boolean => v === undefined || (Number.isInteger(v) && (v as number) >= 0 && (v as number) <= 7)
+handle('flydigix:read', (cfgId?: number) => {
+  if (!cfgOk(cfgId)) throw new Error('flydigi: config id must be 0..7')
+  return fxXInputRead(cfgId)
+})
 handle('flydigix:write', (patch: FxPatch) => {
   const byte = (v: unknown): boolean => Number.isInteger(v) && (v as number) >= 0 && (v as number) <= 255
   if (!patch || typeof patch !== 'object') throw new Error('flydigi: empty patch')
+  if (!cfgOk(patch.cfgId)) throw new Error('flydigi: config id must be 0..7')
   if (patch.leftCenter !== undefined && !byte(patch.leftCenter)) throw new Error('flydigi: leftCenter must be 0..255')
   if (patch.rightCenter !== undefined && !byte(patch.rightCenter)) throw new Error('flydigi: rightCenter must be 0..255')
   for (const c of [patch.leftCurve, patch.rightCurve]) {

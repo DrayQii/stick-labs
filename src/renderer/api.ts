@@ -76,7 +76,7 @@ interface LabApi {
   /** Flydigi: read-only identify handshake (model, firmware, connection, battery). */
   flydigiIdentify(path: string): Promise<FdIdentifyResult>
   /** Flydigi Direwolf 4 (XInput mode): read the live config. Needs an elevated app, Space Station closed. */
-  flydigiXRead(): Promise<FxSnapshot>
+  flydigiXRead(cfgId?: number): Promise<FxSnapshot>
   /** Verified write (rolled back on mismatch); `save` persists across replug. */
   flydigiXWrite(patch: FxPatch): Promise<{ verified: boolean; restored: boolean; saved: boolean; changedPacks: number }>
   /** LeadJoy Saber Plus: read-only Main-slot snapshot (sticks stay locked). */
