@@ -29,6 +29,10 @@ const api = {
   setStickCenter: (stick: number, direction: number) => call<boolean>('device:stickCenter', stick, direction),
   openExternal: (url: string) => call<boolean>('system:openExternal', url),
   version: () => call<string>('system:version'),
+  updateStatus: () =>
+    call<{ state: 'idle' | 'checking' | 'downloading' | 'ready' | 'current' | 'error'; version?: string; percent?: number; message?: string }>('update:status'),
+  updateCheck: () => call<boolean>('update:check'),
+  updateInstall: () => call<boolean>('update:install'),
   steamInfo: () =>
     call<{ steamPath: string | null; userId: string | null; apexInstalled: boolean; apexAppId: number; steamRunning: boolean }>('steam:info'),
   steamExport: (left: { begin: number; end: number }, right: { begin: number; end: number }, mouseRate?: number | null, curveExp?: number | null) =>
@@ -58,8 +62,6 @@ const api = {
     call<{ verified: boolean; restored: boolean }>('leadjoy:writeButton', req),
   leadjoyWriteStick: (req: { path: string; slot: number; side: number; patch: LjStickPatch }) =>
     call<{ verified: boolean; restored: boolean }>('leadjoy:writeStick', req),
-  leadjoyWriteTrigger: (req: { path: string; slot: number; zones: { leftInner: number; leftOuter: number; rightInner: number; rightOuter: number } }) =>
-    call<{ verified: boolean; restored: boolean }>('leadjoy:writeTrigger', req),
   on: (channel: string, fn: (payload: any) => void): (() => void) => {
     const listener = (_e: unknown, payload: unknown): void => fn(payload)
     ipcRenderer.on(channel, listener)

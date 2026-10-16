@@ -1,5 +1,5 @@
 // CoD-style Dynamic preset: byte shape + write-path quantization, pinned.
-import { AIM_CURVES } from '../src/renderer/App'
+import { AIM_CURVES } from '../src/shared/aimcurves'
 import { resampleCurve } from '../src/shared/sticklab'
 
 let failed = 0

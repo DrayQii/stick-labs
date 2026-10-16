@@ -25,11 +25,11 @@ export const THEMES: ReadonlyArray<AppTheme> = [
     id: 'default',
     label: 'Default',
     vars: {
-      '--bg': '#14090d', '--bg-1': '#1e1015', '--bg-2': '#2a151c', '--bg-3': '#361b24',
-      '--line': '#40222c', '--line-2': '#552c38',
-      '--text': '#f7ecef', '--text-2': '#c9a3ad', '--text-3': '#8f6470',
-      '--accent': '#f43f52', '--accent-2': '#ff8fa0', '--on-accent': '#07101d',
-      '--good': '#3ecf8e', '--warn': '#f5b544', '--bad': '#ff6b6b', '--violet': '#a78bfa'
+      '--bg': '#0f1115', '--bg-1': '#161920', '--bg-2': '#1c2028', '--bg-3': '#232833',
+      '--line': '#2c323d', '--line-2': '#3b4352',
+      '--text': '#e9ecf1', '--text-2': '#a9b1be', '--text-3': '#737c8b',
+      '--accent': '#f43f52', '--accent-2': '#ff8fa0', '--on-accent': '#ffffff',
+      '--good': '#3ecf8e', '--warn': '#e8b356', '--bad': '#ff6b6b', '--violet': '#a78bfa'
     }
   },
   {

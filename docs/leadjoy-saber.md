@@ -78,10 +78,11 @@ the topbar (Main/Sub1/Sub2, same spot as P1–P4), and edits stage until the
 topbar Write commits them. The Sticks tab mirrors the GameSir Sticks tab card
 for card — live cross, dead zone + anti-deadzone, outer threshold, custom
 curve designer, shape (gates: Circle / Rounded rectangle). Buttons (all 22
-ids, 1:1 remaps), stick curves / deadzones / gate and trigger deadzones are
-all writable, each record written live, acked and read back
-(`leadjoy:writeButton` / `writeStick` / `writeTrigger`); a mismatch restores
-the old value. Records that are not decoded for this pad (report-rate,
+ids, 1:1 remaps) and stick curves / deadzones / gate are writable, each record
+written live, acked and read back (`leadjoy:writeButton` / `writeStick`); a
+mismatch restores the old value. Trigger deadzones are displayed read-only:
+record 90/91 has a fixture-tested codec, but runtime writes stay disabled until
+a no-op rewrite is proven with live hardware readback. Records that are not decoded for this pad (report-rate,
 resolution) stay untouched and say so in the Device tab.
 
 This pad has no separate deadzone/anti bytes, so the GameSir card's four

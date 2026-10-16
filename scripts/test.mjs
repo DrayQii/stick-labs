@@ -2,7 +2,8 @@
  * Test runner: bundles the TS tests with esbuild, then executes them in Node.
  * Keeps us free of a separate ts-node/tsx dependency.
  *
- *   node scripts/test.mjs
+ *   node scripts/test.mjs                 (safe default suite)
+ *   node scripts/test.mjs tests/leadjoy.ts (one or more named tests)
  */
 import { build } from 'esbuild'
 import { writeFileSync, rmSync, mkdirSync } from 'node:fs'
@@ -14,19 +15,28 @@ const here = dirname(fileURLToPath(import.meta.url))
 const root = join(here, '..')
 
 const tests = process.argv.slice(2)
-// Hardware tests (device.ts, gearsweep.ts, inspect.ts) are opt-in — they need a
-// controller attached and, for gearsweep, GameSir Connect closed.
+// Keep the default suite to deterministic codec/model tests. Live hardware and
+// system-integration probes stay opt-in and must be named explicitly.
 const entry =
   tests.length > 0
     ? tests
     : [
-        'tests/roundtrip.ts',
-        'tests/commands.ts',
-        'tests/sticks.ts',
-        'tests/writeguard.ts',
-        'tests/autoswitch.ts',
-        'tests/backup.ts',
-        'tests/foreground.ts'
+        'tests/rawbytes.ts',
+        'tests/models.ts',
+        'tests/t3ce.ts',
+        'tests/c2.ts',
+        'tests/leadjoy.ts',
+        'tests/curveidentity.ts',
+        'tests/splinecurve.ts',
+        'tests/splinemode.ts',
+        'tests/linearity.ts',
+        'tests/linearstack.ts',
+        'tests/curvemodels.ts',
+        'tests/dynamic.ts',
+        'tests/writeverify.ts',
+        'tests/buttonremap.ts',
+        'tests/centertrim.ts',
+        'tests/steamcfg.ts'
       ]
 
 // Must live inside the project so node can resolve node_modules (ESM does not

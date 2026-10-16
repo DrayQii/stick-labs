@@ -2,11 +2,13 @@
  * G7 Stick Lab — stick-only Electron main. No remap/macros/lighting code.
  * IPC: discover/connect, profile 1-4 read/write (verified), switch, calibration.
  */
-import { app, BrowserWindow, dialog, ipcMain, session, shell } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, session, shell, Tray } from 'electron'
+import { TRAY_ICON_PNG_BASE64 } from './trayIcon'
 import { join } from 'node:path'
 import { Controller, type DeviceInfo } from './controller'
+import { Transport } from './hid'
 import { discover, discoverLive } from './hid'
-import { ljReadButtonTable, ljReadMainSnapshot, ljReadSnapshot, ljWriteButtonVerified, ljWriteStickVerified, ljWriteTriggerVerified } from './leadjoy'
+import { ljReadButtonTable, ljReadMainSnapshot, ljReadSnapshot, ljWriteButtonVerified, ljWriteStickVerified } from './leadjoy'
 import type { LjButtonTarget, LjStickPatch } from '../shared/leadjoy'
 import { fdIdentify } from './flydigi'
 import { fxHidActivate, fxHidBackup, fxHidBackups, fxHidRestore, fxHidMode, fxHidPollingRate, fxHidRead, fxHidSwitchToXInput, fxHidWrite, fxHidStop } from './flydigi-hid'
@@ -16,8 +18,20 @@ import { steamInfo, exportApexDeadzones, listInstalledGames, exportDeadzonesToGa
 import { PROFILE_LENGTH } from '../shared/protocol'
 import { runDeepPoll } from './deeppoll'
 
-const controller = new Controller()
+const controller = new Controller(new Transport(), discover)
 let window_: BrowserWindow | null = null
+
+// A second launch should reveal the existing tray instance instead of
+// creating another Electron process and another tray icon.
+const hasSingleInstanceLock = app.requestSingleInstanceLock()
+if (!hasSingleInstanceLock) {
+  app.quit()
+} else {
+  app.on('second-instance', () => {
+    if (app.isReady()) showMainWindow()
+    else void app.whenReady().then(showMainWindow)
+  })
+}
 
 function send(channel: string, ...args: unknown[]): void {
   if (window_ && !window_.isDestroyed()) window_.webContents.send(channel, ...args)
@@ -206,12 +220,6 @@ handle('leadjoy:writeStick', async (req: { path: string; slot: number; side: num
   if (side !== 0 && side !== 1) throw new Error(`leadjoy: side ${side} is not left/right`)
   return ljWriteStickVerified(path, slot, side, (patch ?? {}) as LjStickPatch)
 })
-handle('leadjoy:writeTrigger', async (req: { path: string; slot: number; zones: { leftInner: number; leftOuter: number; rightInner: number; rightOuter: number } }) => {
-  const { path, slot, zones } = req ?? {}
-  if (typeof path !== 'string' || path.length === 0) throw new Error('leadjoy: refusing write without a device path')
-  if (slot !== 0 && slot !== 1 && slot !== 2) throw new Error(`leadjoy: slot ${slot} is not Main/Sub1/Sub2`)
-  return ljWriteTriggerVerified(path, slot, zones)
-})
 handle('device:connect', async (path: string): Promise<DeviceInfo> => {
   sessionEpoch++
   const info = await controller.connect(path)
@@ -318,7 +326,15 @@ function createWindow(): void {
   })
 }
 
+function showMainWindow(): void {
+  if (!window_ || window_.isDestroyed()) createWindow()
+  if (window_?.isMinimized()) window_.restore()
+  window_?.show()
+  window_?.focus()
+}
+
 app.whenReady().then(() => {
+  if (!hasSingleInstanceLock) return
   session.defaultSession.setPermissionRequestHandler((_wc, permission, callback) => {
     // WebHID for Flydigi pads (kept for a future WebHID transport; the
     // identify handshake itself goes through node-hid in main/flydigi.ts).
@@ -338,37 +354,126 @@ app.whenReady().then(() => {
   createWindow()
 
   // Self-update from GitHub Releases (packaged builds only — never in dev).
+  // Silent by design: no dialogs. State is pushed to the renderer, which shows
+  // the update button + badge in the sidebar; installing is the user's click.
   if (app.isPackaged) {
     try {
       const { autoUpdater } = require('electron-updater') as typeof import('electron-updater')
       autoUpdater.autoDownload = true
-      void autoUpdater.checkForUpdatesAndNotify()
-      autoUpdater.on('update-downloaded', () => {
-        if (!window_ || window_.isDestroyed()) return
-        void dialog
-          .showMessageBox(window_, {
-            type: 'info',
-            buttons: ['Restart now', 'Later'],
-            defaultId: 0,
-            message: 'Stick Labs update downloaded — restart to install it?'
-          })
-          .then(({ response }) => {
-            if (response === 0) autoUpdater.quitAndInstall()
-          })
+      const push = (): void => send('update:status', updateStatus)
+      autoUpdater.on('checking-for-update', () => {
+        updateStatus = { state: 'checking' }
+        push()
       })
+      autoUpdater.on('update-available', (info) => {
+        updateStatus = { state: 'downloading', version: info?.version, percent: 0 }
+        push()
+      })
+      autoUpdater.on('update-not-available', () => {
+        updateStatus = { state: 'current' }
+        push()
+      })
+      autoUpdater.on('download-progress', (p) => {
+        updateStatus = { state: 'downloading', version: updateStatus.version, percent: Math.round(p?.percent ?? 0) }
+        push()
+      })
+      autoUpdater.on('update-downloaded', (info) => {
+        updateStatus = { state: 'ready', version: info?.version }
+        push()
+      })
+      autoUpdater.on('error', (err) => {
+        updateStatus = { state: 'error', message: err?.message ?? 'update check failed' }
+        push()
+      })
+      updateCheck = () => autoUpdater.checkForUpdates()
+      updateInstall = () => autoUpdater.quitAndInstall()
+      void autoUpdater.checkForUpdates().catch(() => undefined)
     } catch (err) {
       console.error(`[updater] disabled: ${(err as Error).message}`)
     }
   }
+  // Close to tray: hiding keeps the app (and the pad's config session) alive.
+  window_?.on('close', (event) => {
+    if (!quitting) {
+      event.preventDefault()
+      window_?.hide()
+    }
+  })
+  createTray()
+
   app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow()
+    showMainWindow()
   })
 })
-app.on('window-all-closed', () => {
-  controller.disconnect()
-  if (process.platform !== 'darwin') app.quit()
+
+let quitting = false
+let tray: Tray | null = null
+
+/** Tray icon + menu. Quit here is the only path that really exits the app. */
+function createTray(): void {
+  if (tray) return
+  const icon = nativeImage.createFromDataURL(`data:image/png;base64,${TRAY_ICON_PNG_BASE64}`)
+  tray = new Tray(icon)
+  tray.setToolTip('Stick Labs')
+  tray.setContextMenu(
+    Menu.buildFromTemplate([
+      {
+        label: 'Show Stick Labs',
+        click: showMainWindow
+      },
+      { type: 'separator' },
+      { label: 'Quit', click: () => app.quit() }
+    ])
+  )
+  tray.on('click', showMainWindow)
+}
+
+// --- self-update surface (no dialogs; the renderer shows it) ----------------
+interface UpdateStatus {
+  state: 'idle' | 'checking' | 'downloading' | 'ready' | 'current' | 'error'
+  version?: string
+  percent?: number
+  message?: string
+}
+let updateStatus: UpdateStatus = { state: 'idle' }
+let updateCheck: (() => unknown) | null = null
+let updateInstall: (() => unknown) | null = null
+
+handle('update:status', () => updateStatus)
+handle('update:check', async () => {
+  if (!updateCheck) throw new Error('updates are handled by the packaged app — this build checks nothing')
+  await updateCheck()
+  return true
 })
-app.on('before-quit', () => {
-  controller.disconnect()
-  fxHidStop()
+handle('update:install', async () => {
+  updateInstall?.()
+  return true
+})
+
+app.on('window-all-closed', () => {
+  // With close-to-tray the window is hidden rather than destroyed, so this only
+  // matters on the way out; quitting is handled below.
+  if (process.platform !== 'darwin') return
+})
+
+/**
+ * Leaving config mode with save=true is what commits the profile on the pad —
+ * without it the session state can be dropped when the socket closes, which is
+ * how settings appear to revert once the app is closed. Hold the quit until that
+ * frame has gone out, then exit for real.
+ */
+app.on('before-quit', (event) => {
+  if (quitting) return
+  quitting = true
+  event.preventDefault()
+  void (async () => {
+    try {
+      await controller.exitConfig(true)
+    } catch {
+      /* device already gone — nothing to save */
+    }
+    controller.disconnect()
+    fxHidStop()
+    app.quit()
+  })()
 })
