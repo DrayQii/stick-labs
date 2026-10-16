@@ -149,11 +149,26 @@ whose shape is not captured yet.
 
 Read-only id probes (no writes sent): 50 answers `r:1` (vendor
 `GetProfileCount`); 51 answers the board map; **52 answers nothing and the pad
-re-enumerates right after** — the same flush the vendor app's Save causes — so
-52 belongs to the board-write family, but its payload shape is unproven. The
-vendor DLL's id table (`device_manager_lib.dll`, file offset `0x2045f8`) lists
-the neighbours: 17/18, 30/31, 40–49, 50–56, 60/61, 70/71, 90/91, 132–135,
-170–175, 190–192, 220–222/224.
+re-enumerates right after** a `{c:52,b:1}` frame — the same flush the vendor
+app's Save causes. The vendor DLL's id table (`device_manager_lib.dll`, file
+offset `0x2045f8`) lists the neighbours: 17/18, 30/31, 40–49, 50–56, 60/61,
+70/71, 90/91, 132–135, 170–175, 190–192, 220–222/224.
+
+Live no-op board write (2026-10-15, user-confirmed, nothing meant to change):
+the derived frame `{"c":52,"w":{"b":1,"d2":{a,n,cfg}}}` (read 51 + 1, the same
+R→R+1 rule proven for 60→61 / 70→71 / 90→91, payload = the board's own current
+values, 2 fragments) got **no ack at all**, and the board re-read byte-identical
+(`identical=true`, no re-enumeration). So record 52 does not accept that shape
+and the sub-config write stays uncaptured — nothing further was probed, per the
+no-guessed-wire-bytes rule.
+
+Why there is no vendor-side writer to capture: the DLL's `ButtonAction` enum is
+exactly `Origin` / `GamepadButton` / `KeyboardKey` / `MouseButton` / `Macro`
+(`struct variant ButtonAction::*`), so the app has **no layer/switch target**,
+and the sub tabs (`ConfigTabs`: Main/Sub1/Sub2) are only the keymap editor. The
+vendor app therefore ships editable-but-inert sub keymaps: nothing in it emits a
+board/sub-config write, so a capture has nothing to record until a setter action
+exists somewhere.
 
 The vendor UI's own strings (`ConfigTabs`: `Main`/`Sub1`/`Sub2`, analytics
 `page_view_sub_keymaps` with `config_slot`) show the sub tabs are the same
