@@ -1801,6 +1801,84 @@ function ResetEverythingCard({ profile, fd, edit, onReload, notify }: {
   )
 }
 
+/**
+ * Self-update row in the sidebar. Nothing pops up anywhere: the state comes from
+ * the main process, the button carries a badge while an update is downloading or
+ * waiting, and clicking installs (or re-checks). Packaged builds only — in dev
+ * the check just reports that there is nothing to check.
+ */
+function UpdateRow(): JSX.Element | null {
+  const [st, setSt] = useState<{ state: string; version?: string; percent?: number; message?: string } | null>(null)
+  const [busy, setBusy] = useState(false)
+  useEffect(() => {
+    let alive = true
+    void api()
+      .updateStatus()
+      .then((s) => {
+        if (alive) setSt(s)
+      })
+      .catch(() => undefined)
+    const off = api().on('update:status', (s) => setSt(s as never))
+    return () => {
+      alive = false
+      off()
+    }
+  }, [])
+  if (!st) return null
+
+  const label =
+    st.state === 'ready'
+      ? `Restart to install${st.version ? ` ${st.version}` : ''}`
+      : st.state === 'downloading'
+        ? `Update ${st.version ?? ''} — ${st.percent ?? 0}%`
+        : st.state === 'checking'
+          ? 'Checking for updates…'
+          : st.state === 'current'
+            ? 'Up to date — check again'
+            : st.state === 'error'
+              ? 'Update check failed'
+              : 'Check for updates'
+  const hot = st.state === 'ready' || st.state === 'downloading'
+
+  return (
+    <button
+      type="button"
+      className={`btn sm${hot ? ' primary' : ' ghost'}`}
+      style={{ width: '100%', marginTop: 8 }}
+      disabled={busy || st.state === 'checking'}
+      title={st.message ?? label}
+      onClick={() => {
+        void (async () => {
+          setBusy(true)
+          try {
+            if (st.state === 'ready') await api().updateInstall()
+            else await api().updateCheck()
+          } catch {
+            /* state is reported back through update:status */
+          } finally {
+            setBusy(false)
+          }
+        })()
+      }}
+    >
+      {hot && (
+        <span
+          style={{
+            display: 'inline-block',
+            width: 7,
+            height: 7,
+            borderRadius: 4,
+            background: 'var(--bad, #f43f52)',
+            marginRight: 6,
+            verticalAlign: 'middle'
+          }}
+        />
+      )}
+      {label}
+    </button>
+  )
+}
+
 function StickCross({ lx, ly, rx, ry }: { lx: number; ly: number; rx: number; ry: number }): JSX.Element {
   const ref = useRef<HTMLCanvasElement | null>(null)
   useEffect(() => {
@@ -3059,6 +3137,7 @@ export default function App(): JSX.Element {
           <div className="status-row" style={{ marginTop: 8 }}>
             <span style={{ fontSize: 11.5, color: 'var(--text-3)' }}>{t('side.by')}</span>
           </div>
+          <UpdateRow />
           <button
             type="button"
             className="btn ghost sm"

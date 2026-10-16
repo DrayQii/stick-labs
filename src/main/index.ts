@@ -261,24 +261,40 @@ app.whenReady().then(() => {
   createWindow()
 
   // Self-update from GitHub Releases (packaged builds only — never in dev).
+  // Silent by design: no dialogs. State is pushed to the renderer, which shows
+  // the update button + badge in the sidebar; installing is the user's click.
   if (app.isPackaged) {
     try {
       const { autoUpdater } = require('electron-updater') as typeof import('electron-updater')
       autoUpdater.autoDownload = true
-      void autoUpdater.checkForUpdatesAndNotify()
-      autoUpdater.on('update-downloaded', () => {
-        if (!window_ || window_.isDestroyed()) return
-        void dialog
-          .showMessageBox(window_, {
-            type: 'info',
-            buttons: ['Restart now', 'Later'],
-            defaultId: 0,
-            message: 'Stick Labs update downloaded — restart to install it?'
-          })
-          .then(({ response }) => {
-            if (response === 0) autoUpdater.quitAndInstall()
-          })
+      const push = (): void => send('update:status', updateStatus)
+      autoUpdater.on('checking-for-update', () => {
+        updateStatus = { state: 'checking' }
+        push()
       })
+      autoUpdater.on('update-available', (info) => {
+        updateStatus = { state: 'downloading', version: info?.version, percent: 0 }
+        push()
+      })
+      autoUpdater.on('update-not-available', () => {
+        updateStatus = { state: 'current' }
+        push()
+      })
+      autoUpdater.on('download-progress', (p) => {
+        updateStatus = { state: 'downloading', version: updateStatus.version, percent: Math.round(p?.percent ?? 0) }
+        push()
+      })
+      autoUpdater.on('update-downloaded', (info) => {
+        updateStatus = { state: 'ready', version: info?.version }
+        push()
+      })
+      autoUpdater.on('error', (err) => {
+        updateStatus = { state: 'error', message: err?.message ?? 'update check failed' }
+        push()
+      })
+      updateCheck = () => autoUpdater.checkForUpdates()
+      updateInstall = () => autoUpdater.quitAndInstall()
+      void autoUpdater.checkForUpdates().catch(() => undefined)
     } catch (err) {
       console.error(`[updater] disabled: ${(err as Error).message}`)
     }
@@ -325,6 +341,28 @@ function createTray(): void {
     window_?.focus()
   })
 }
+
+// --- self-update surface (no dialogs; the renderer shows it) ----------------
+interface UpdateStatus {
+  state: 'idle' | 'checking' | 'downloading' | 'ready' | 'current' | 'error'
+  version?: string
+  percent?: number
+  message?: string
+}
+let updateStatus: UpdateStatus = { state: 'idle' }
+let updateCheck: (() => unknown) | null = null
+let updateInstall: (() => unknown) | null = null
+
+handle('update:status', () => updateStatus)
+handle('update:check', async () => {
+  if (!updateCheck) throw new Error('updates are handled by the packaged app — this build checks nothing')
+  await updateCheck()
+  return true
+})
+handle('update:install', async () => {
+  updateInstall?.()
+  return true
+})
 
 app.on('window-all-closed', () => {
   // With close-to-tray the window is hidden rather than destroyed, so this only

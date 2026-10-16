@@ -54,6 +54,10 @@ interface LabApi {
   ping(count: number): Promise<PingResult>
   openExternal(url: string): Promise<boolean>
   version(): Promise<string>
+  /** Self-update state pushed from the main process (no dialogs anywhere). */
+  updateStatus(): Promise<{ state: 'idle' | 'checking' | 'downloading' | 'ready' | 'current' | 'error'; version?: string; percent?: number; message?: string }>
+  updateCheck(): Promise<boolean>
+  updateInstall(): Promise<boolean>
   steamInfo(): Promise<{ steamPath: string | null; userId: string | null; apexInstalled: boolean; apexAppId: number; steamRunning: boolean }>
   steamExport(
     left: { begin: number; end: number },
