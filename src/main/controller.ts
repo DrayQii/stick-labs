@@ -7,7 +7,7 @@
  *   - whole-profile reads and writes (19 chunks at 58 bytes)
  *   - decoding the 0x12 input report into a usable state object
  */
-import { Transport, discover } from './hid'
+import type { Transport } from './hid'
 import {
   PROFILE_LENGTH,
   LIGHT_PROFILE_LENGTH,
@@ -101,11 +101,19 @@ export class Controller {
 
   state: ControllerState = 'disconnected'
 
-  constructor(transport?: Transport) {
-    this.transport = transport ?? new Transport()
+  /**
+   * The transport and device discovery are injected — `hid.ts` is
+   * Electron/node-hid only, and the browser build passes its WebHID transport
+   * and its own (cached, synchronous) candidate list instead. See src/web/api.ts.
+   */
+  constructor(transport: Transport, discover: () => ReadonlyArray<{ path: string }>) {
+    this.transport = transport
+    this.discover = discover
     this.transport.onResponse((raw) => this.dispatch(raw))
     this.transport.onError(() => this.failAll(new Error('device disconnected')))
   }
+
+  private readonly discover: () => ReadonlyArray<{ path: string }>
 
   get isOpen(): boolean {
     return this.transport.isOpen
@@ -127,7 +135,9 @@ export class Controller {
    */
   async connect(path: string): Promise<DeviceInfo> {
     this.state = 'connecting'
-    this.transport.open(path)
+    // Awaited: the browser transport opens asynchronously (WebHID), the Electron
+    // one is synchronous — awaiting a void is a no-op there.
+    await this.transport.open(path)
     this.transport.startHeartbeat(500)
 
     try {
@@ -390,7 +400,7 @@ export class Controller {
   private async reopen(): Promise<void> {
     let lastError: Error = new Error('controller disappeared')
 
-    for (const candidate of discover()) {
+    for (const candidate of this.discover()) {
       try {
         await this.connect(candidate.path)
         if (this.transport.isOpen) {

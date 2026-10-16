@@ -9,6 +9,8 @@
     "dev": "electron-vite dev",
     "build": "electron-vite build",
     "start": "electron-vite preview",
+    "build:web": "vite build --config vite.web.config.ts",
+    "web": "vite --config vite.web.config.ts",
     "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
     "test": "node scripts/test.mjs",
     "dist": "electron-vite build && electron-builder --win",

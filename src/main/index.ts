@@ -5,6 +5,7 @@
 import { app, BrowserWindow, dialog, ipcMain, session, shell } from 'electron'
 import { join } from 'node:path'
 import { Controller, type DeviceInfo } from './controller'
+import { Transport } from './hid'
 import { discover, discoverLive } from './hid'
 import { ljReadButtonTable, ljReadMainSnapshot, ljReadSnapshot, ljWriteButtonVerified, ljWriteStickVerified, ljWriteTriggerVerified } from './leadjoy'
 import type { LjButtonTarget, LjStickPatch } from '../shared/leadjoy'
@@ -13,7 +14,7 @@ import { steamInfo, exportApexDeadzones, listInstalledGames, exportDeadzonesToGa
 import { PROFILE_LENGTH } from '../shared/protocol'
 import { runDeepPoll } from './deeppoll'
 
-const controller = new Controller()
+const controller = new Controller(new Transport(), discover)
 let window_: BrowserWindow | null = null
 
 function send(channel: string, ...args: unknown[]): void {
