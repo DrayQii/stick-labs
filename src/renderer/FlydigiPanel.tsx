@@ -107,6 +107,20 @@ export default function FlydigiPanel(): JSX.Element {
     }
   }
 
+  async function activate(): Promise<void> {
+    if (!snap) return
+    setBusy(true)
+    setMsg(null)
+    try {
+      adopt(await api().flydigiXActivate(snap.cfgId))
+      setMsg({ kind: 'ok', text: `Config ${snap.cfgId + 1} is now the active config on the pad.` })
+    } catch (e) {
+      setMsg({ kind: 'err', text: (e as Error).message })
+    } finally {
+      setBusy(false)
+    }
+  }
+
   async function apply(): Promise<void> {
     if (!snap || !vib || !curves) return
     setBusy(true)
@@ -163,6 +177,11 @@ export default function FlydigiPanel(): JSX.Element {
                 </button>
               ))}
             </div>
+            {snap.cfgId !== snap.activeCfgId && (
+              <button className="btn" disabled={busy} onClick={() => void activate()}>
+                Make active
+              </button>
+            )}
             <span className="mono" style={{ alignSelf: 'center' }}>
               data v{'0x' + snap.dataVersion.toString(16)}
             </span>

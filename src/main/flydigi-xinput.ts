@@ -16,6 +16,7 @@ import {
   FX_CMD_SAVE,
   FX_CMD_WRITE_PACK,
   FX_CMD_WRITE_START,
+  fxApplyConfig,
   fxAssembleBlob,
   fxCfgCountFromAck,
   fxCfgIdFromAck,
@@ -194,6 +195,22 @@ export function fxXInputRead(cfgId?: number): Promise<FxSnapshot> {
     await start()
     const r = await readBlob(cfgId)
     return snapshot(r.cfgId, r.activeCfgId, r.cfgCount, r.blob)
+  })
+}
+
+/** Make a config slot the one the pad runs, then read it back to confirm. */
+export function fxXInputActivate(cfgId: number): Promise<FxSnapshot> {
+  return exclusive(async () => {
+    await start()
+    const before = await readBlob(cfgId)
+    if (before.activeCfgId !== cfgId) {
+      acks = []
+      await sendFrame(fxApplyConfig(cfgId))
+      if (!(await waitAck(FX_CMD_SAVE, (a) => a.data[0] === 5))) throw new Error('flydigi: no ack for apply-config')
+    }
+    const after = await readBlob(cfgId)
+    if (after.activeCfgId !== cfgId) throw new Error(`flydigi: the pad still reports config ${after.activeCfgId + 1} active`)
+    return snapshot(after.cfgId, after.activeCfgId, after.cfgCount, after.blob)
   })
 }
 

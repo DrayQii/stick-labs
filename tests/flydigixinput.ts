@@ -6,6 +6,7 @@ import { readFileSync } from 'node:fs'
 import {
   FX_BLOB_LEN,
   fxAssembleBlob,
+  fxApplyConfig,
   fxDataVersion,
   FX_CURVE_CUSTOM,
   FX_CURVE_DEFAULT,
@@ -53,6 +54,7 @@ const frames = fxRunFrames(runs[0], 1)
 check('start frame matches hardware', hex(frames[0]) === 'a5 23 0e 01 a0 01 00 00 00 00 00 00 00 00 00', hex(frames[0]))
 check('pack frame matches hardware', hex(frames[1]) === 'a5 24 08 19 19 01 ff 00 00 3c ff 32 a0 00 00', hex(frames[1]))
 check('save frame matches hardware', hex(fxSave(fxDataVersion(blob))) === 'a5 50 03 0a 08 00 00 00 00 00 00 00 00 00 00')
+check('apply-config frame (config 2 = id 1)', hex(fxApplyConfig(1)) === 'a5 50 05 01 00 00 00 00 00 00 00 00 00 00 00')
 check('read-config frame', hex(fxReadConfig(1)) === 'a5 21 01 00 00 00 00 00 00 00 00 00 00 00 00')
 
 // Left stick centre (109 + 1 = 110) lives in pack 11.

@@ -9,7 +9,7 @@ import { discover, discoverLive } from './hid'
 import { ljReadButtonTable, ljReadMainSnapshot, ljReadSnapshot, ljWriteButtonVerified, ljWriteStickVerified, ljWriteTriggerVerified } from './leadjoy'
 import type { LjButtonTarget, LjStickPatch } from '../shared/leadjoy'
 import { fdIdentify } from './flydigi'
-import { fxXInputRead, fxXInputWrite, fxXInputStop } from './flydigi-xinput'
+import { fxXInputActivate, fxXInputRead, fxXInputWrite, fxXInputStop } from './flydigi-xinput'
 import type { FxPatch } from '../shared/flydigi-xinput'
 import { ljButtonWriteRecord } from '../shared/leadjoy'
 import { steamInfo, exportApexDeadzones, listInstalledGames, exportDeadzonesToGames } from './steam'
@@ -124,6 +124,10 @@ const cfgOk = (v: unknown): boolean => v === undefined || (Number.isInteger(v) &
 handle('flydigix:read', (cfgId?: number) => {
   if (!cfgOk(cfgId)) throw new Error('flydigi: config id must be 0..7')
   return fxXInputRead(cfgId)
+})
+handle('flydigix:activate', (cfgId: number) => {
+  if (!Number.isInteger(cfgId) || cfgId < 0 || cfgId > 7) throw new Error('flydigi: config id must be 0..7')
+  return fxXInputActivate(cfgId)
 })
 handle('flydigix:write', (patch: FxPatch) => {
   const byte = (v: unknown): boolean => Number.isInteger(v) && (v as number) >= 0 && (v as number) <= 255

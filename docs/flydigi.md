@@ -68,7 +68,7 @@ with `01 A5 <cmd> …` at bytes 13–15. In a pcap, filter on
 | `0x23` | start mapping-config write | `A5 23 00 …` |
 | `0x24` | config pack (two per write, echoes the record) | `A5 24 <seq> <record…>` |
 | `0x50` sub `03` | save current config to the pad | `A5 50 03 01` |
-| `0x50` sub `05` | periodic status poll | `A5 50 05 01` |
+| `0x50` sub `05` | apply (activate) onboard config `<cfgId>`, 0-based; Space Station's 配置1 is 0 | `A5 50 05 01` |
 | `0x50` sub `07` | read hardware function status | `A5 50 07 01 …` |
 
 Observed, matched against the JSON in the log:
@@ -94,7 +94,7 @@ readable from its decompiled command classes:
   `5A A5 <cmd> <len> …` frame with a sum checksum; not this pad.)
 - `0x23` start: `[2]=startPack [3]=packCount [4]=0xA0 [5]=cfgId`.
 - `0x24` pack: `[2..11]=10 config bytes [12]=0xA0 [13]=packNum`.
-- `0x50` save, sub-command in `[2]` (`03` save current config).
+- `0x50` save, sub-command in `[2]` (`03` save current config, `05 <cfgId>` make that config active).
 - Acks are 32-byte input reports with `A5` at `[14]` and the cmd at `[15]`.
 - The config is one blob split into 10-byte packs. The service writes only
   packs that differ from the old config (consecutive changed packs per start).

@@ -26,6 +26,7 @@ export const FX_CMD_WRITE_START = 0x23
 export const FX_CMD_WRITE_PACK = 0x24
 export const FX_CMD_SAVE = 0x50
 export const FX_SUB_SAVE = 0x03
+export const FX_SUB_APPLY = 0x05
 const FX_MARK = 0xa0
 
 /** Blob offsets (V3.0 layout). Unused bytes are 0xFF. */
@@ -65,6 +66,9 @@ export function fxWritePack(data: Uint8Array, packNum: number): Uint8Array {
 /** Persist the current config; `dataVersion` is the blob's u16 at 225. */
 export const fxSave = (dataVersion: number): Uint8Array =>
   frame(FX_CMD_SAVE, FX_SUB_SAVE, dataVersion & 0xff, (dataVersion >> 8) & 0xff)
+
+/** Make config slot `cfgId` (0-based) the one the pad runs: 0x50 sub 05, as Space Station's ApplyOnboardConfig. */
+export const fxApplyConfig = (cfgId: number): Uint8Array => frame(FX_CMD_SAVE, FX_SUB_APPLY, cfgId)
 
 export interface FxAck {
   cmd: number
