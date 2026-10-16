@@ -9,8 +9,6 @@ import {
   bitsToLevels,
   bitsToWireRaw,
   resampleCurve,
-  resampleSpline,
-  traceSpline,
   addDesignPoint,
   DESIGN_MIN_POINTS,
   DESIGN_MAX_POINTS,
@@ -54,7 +52,20 @@ function Hint({ children, style }: { children: React.ReactNode; style?: React.CS
   )
 }
 
-function Slider(props: {  label: string
+function CandidateButton({ candidate, onConnect }: { candidate: Candidate; onConnect: (path: string) => void }): JSX.Element {
+  const known = identifyModel(candidate.product, candidate.productId)
+  const genericProduct = !candidate.product || /^(gamepad|xbox 360 controller for windows)$/i.test(candidate.product.trim())
+  const fallbackName = genericProduct
+    ? `Controller · 0x${candidate.productId.toString(16).padStart(4, '0')}`
+    : candidate.product
+  return (
+    <button className="btn sm" onClick={() => onConnect(candidate.path)}>
+      {known ? known.marketingName : fallbackName}{candidate.preferred ? ' ★' : ''}
+    </button>
+  )
+}
+
+function Slider(props: {  label: React.ReactNode
   value: number
   min: number
   max: number
@@ -83,7 +94,7 @@ function Slider(props: {  label: string
   )
 }
 
-function CurvePlot({ points, onChange, overlay, smooth, max = 255 }: { points: Array<{ x: number; y: number }>; onChange?: (next: Array<{ x: number; y: number }>) => void; overlay?: Array<{ x: number; y: number }>; smooth?: boolean; max?: number }): JSX.Element {
+function CurvePlot({ points, onChange, onAddPoint, maxPoints = Number.POSITIVE_INFINITY, overlay, max = 255, height = 240 }: { points: Array<{ x: number; y: number }>; onChange?: (next: Array<{ x: number; y: number }>) => void; onAddPoint?: (point: { x: number; y: number }) => void; maxPoints?: number; overlay?: Array<{ x: number; y: number }>; max?: number; height?: number }): JSX.Element {
   const ref = useRef<HTMLCanvasElement | null>(null)
   const drag = useRef<number | null>(null)
 
@@ -117,7 +128,7 @@ function CurvePlot({ points, onChange, overlay, smooth, max = 255 }: { points: A
     if (!canvas || !onChange) return
     const rect = canvas.getBoundingClientRect()
     const w = canvas.clientWidth
-    const h = 200
+    const h = height
     const pad = 10
     const x = Math.max(0, Math.min(max, Math.round(((e.clientX - rect.left - pad) / (w - pad * 2)) * max)))
     const y = Math.max(0, Math.min(max, Math.round((1 - (e.clientY - rect.top - pad) / (h - pad * 2)) * max)))
@@ -134,7 +145,7 @@ function CurvePlot({ points, onChange, overlay, smooth, max = 255 }: { points: A
     if (!c) return
     const dpr = window.devicePixelRatio || 1
     const w = c.clientWidth
-    const h = 200
+    const h = height
     c.width = w * dpr
     c.height = h * dpr
     const ctx = c.getContext('2d')
@@ -150,6 +161,9 @@ function CurvePlot({ points, onChange, overlay, smooth, max = 255 }: { points: A
       ctx.beginPath()
       ctx.moveTo(t, pad)
       ctx.lineTo(t, h - pad)
+      const y = (i / 4) * (h - pad * 2) + pad
+      ctx.moveTo(pad, y)
+      ctx.lineTo(w - pad, y)
       ctx.stroke()
     }
     ctx.strokeStyle = '#552c38'
@@ -196,8 +210,9 @@ function CurvePlot({ points, onChange, overlay, smooth, max = 255 }: { points: A
     ctx.strokeStyle = '#f43f52'
     ctx.lineWidth = 2
     ctx.beginPath()
-    const line = smooth ? traceSpline(points) : points
-    line.forEach((p, i) => {
+    // Drawn exactly as placed: the design is a polyline, and the pad samples it
+    // straight at its 5 slots, so the canvas shows the same thing the pad gets.
+    points.forEach((p, i) => {
       if (i === 0) ctx.moveTo(toX(p.x), toY(p.y))
       else ctx.lineTo(toX(p.x), toY(p.y))
     })
@@ -225,18 +240,27 @@ function CurvePlot({ points, onChange, overlay, smooth, max = 255 }: { points: A
       ctx.arc(toX(p.x), toY(p.y), 5, 0, Math.PI * 2)
       ctx.fill()
     })
-  }, [points, overlay, smooth, max])
+  }, [points, overlay, max, height])
   return (
     <canvas
       ref={ref}
       className="plot"
-      style={{ height: 200, cursor: onChange ? 'grab' : 'default', touchAction: 'none' }}
+      style={{ height, cursor: onChange ? 'crosshair' : 'default', touchAction: 'none' }}
       onPointerDown={(e) => {
         if (!onChange || !ref.current) return
-        const i = pointAt(e, ref.current.clientWidth, 200)
+        const i = pointAt(e, ref.current.clientWidth, height)
         if (i !== null) {
           drag.current = i
           ;(e.target as HTMLCanvasElement).setPointerCapture(e.pointerId)
+        } else if (onAddPoint && points.length < maxPoints) {
+          const rect = ref.current.getBoundingClientRect()
+          const pad = 10
+          const x = Math.max(0, Math.min(max, Math.round(((e.clientX - rect.left - pad) / (ref.current.clientWidth - pad * 2)) * max)))
+          const y = Math.max(0, Math.min(max, Math.round((1 - (e.clientY - rect.top - pad) / (height - pad * 2)) * max)))
+          const insertAt = points.findIndex((p) => p.x > x)
+          if (insertAt > 0 && insertAt < points.length && x - points[insertAt - 1].x > 2 && points[insertAt].x - x > 2) {
+            onAddPoint({ x, y })
+          }
         }
       }}
       onPointerMove={(e) => {
@@ -246,6 +270,59 @@ function CurvePlot({ points, onChange, overlay, smooth, max = 255 }: { points: A
         drag.current = null
       }}
     />
+  )
+}
+
+function CurveMiniIcon({ points, max = 255 }: { points: Array<{ x: number; y: number }>; max?: number }): JSX.Element {
+  const d = points.map((p, i) => `${i === 0 ? 'M' : 'L'}${2 + (p.x / max) * 28},${22 - (p.y / max) * 18}`).join(' ')
+  return <svg className="curve-mini-icon" viewBox="0 0 32 24" aria-hidden="true" focusable="false"><path d="M2 22H30M2 22V2" className="curve-mini-axes" /><path d={d} className="curve-mini-line" /></svg>
+}
+
+function nextCustomPresetName(existing: string[], template: string): string {
+  let i = 1
+  let name = template.replace('{n}', String(i))
+  while (existing.includes(name)) name = template.replace('{n}', String(++i))
+  return name
+}
+
+function SavedCurvePreset({ preset, max = 255, onApply, onRename, onDelete }: {
+  preset: { name: string; pts: Array<{ x: number; y: number }> }
+  max?: number
+  onApply: () => void
+  onRename: (name: string) => boolean
+  onDelete: () => void
+}): JSX.Element {
+  const t = useT()
+  const [editing, setEditing] = useState(false)
+  const [name, setName] = useState(preset.name)
+  const [error, setError] = useState(false)
+  useEffect(() => setName(preset.name), [preset.name])
+  const beginRename = (): void => { setName(preset.name); setError(false); setEditing(true) }
+  const commitRename = (): void => {
+    const clean = name.trim().slice(0, 24)
+    if (!clean) return
+    if (clean === preset.name || onRename(clean)) setEditing(false)
+    else setError(true)
+  }
+  return (
+    <div className={`saved-curve-card${editing ? ' editing' : ''}`} onContextMenu={(e) => { e.preventDefault(); beginRename() }}>
+      {editing ? (
+        <>
+          <input className="input saved-curve-name-input" autoFocus maxLength={24} value={name} aria-label={t('sticks.renameCurve')} onChange={(e) => { setName(e.target.value); setError(false) }} onKeyDown={(e) => { if (e.key === 'Enter') commitRename(); if (e.key === 'Escape') setEditing(false) }} />
+          <button className="saved-curve-action saved-curve-confirm" type="button" title={t('common.save')} aria-label={t('common.save')} onClick={commitRename}>✓</button>
+          <button className="saved-curve-action saved-curve-cancel" type="button" title={t('common.dismiss')} aria-label={t('common.dismiss')} onClick={() => setEditing(false)}>↩</button>
+          {error && <span className="saved-curve-error">{t('sticks.curveNameExists')}</span>}
+        </>
+      ) : (
+        <>
+          <button className="saved-curve-apply" type="button" title={preset.name} onClick={onApply} onDoubleClick={beginRename}>
+            <CurveMiniIcon points={preset.pts} max={max} /><span>{preset.name}</span>
+          </button>
+          <button className="saved-curve-action saved-curve-rename" type="button" title={t('sticks.renameCurve')} aria-label={`${t('sticks.renameCurve')}: ${preset.name}`} onClick={beginRename}>✎</button>
+          <button className="saved-curve-action saved-curve-delete" type="button" title={t('common.delete')} aria-label={`${t('common.delete')}: ${preset.name}`} onClick={onDelete}>×</button>
+        </>
+      )}
+    </div>
   )
 }
 
@@ -834,7 +911,87 @@ function StickDial({ x, y, label }: { x: number; y: number; label: string }): JS
   )
 }
 
-function CalibrationPanel(): JSX.Element {
+function LeadJoyCalibrationPanel({ live, onOpenSticks }: {
+  live: { lx: number; ly: number; rx: number; ry: number } | null
+  onOpenSticks: () => void
+}): JSX.Element {
+  const t = useT()
+  const [measuring, setMeasuring] = useState(false)
+  const [result, setResult] = useState<{ offsets: number[]; jitter: number; count: number } | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const samples = useRef<number[][]>([])
+  const timer = useRef<number | null>(null)
+
+  useEffect(() => {
+    if (!measuring || !live) return
+    samples.current.push([live.lx, live.ly, live.rx, live.ry])
+  }, [live, measuring])
+
+  useEffect(() => () => {
+    if (timer.current !== null) window.clearTimeout(timer.current)
+  }, [])
+
+  const measure = (): void => {
+    if (!live || measuring) return
+    samples.current = []
+    setResult(null)
+    setError(null)
+    setMeasuring(true)
+    timer.current = window.setTimeout(() => {
+      const rows = samples.current
+      setMeasuring(false)
+      if (rows.length < 30) {
+        setError(t('cal.measureLowSample'))
+        return
+      }
+      const means = [0, 1, 2, 3].map((axis) => rows.reduce((sum, row) => sum + row[axis], 0) / rows.length)
+      let jitter = 0
+      for (const row of rows) {
+        for (let axis = 0; axis < 4; axis++) jitter = Math.max(jitter, Math.abs(row[axis] - means[axis]))
+      }
+      setResult({ offsets: means.map((value) => Math.round(value - 128)), jitter: Math.round(jitter), count: rows.length })
+    }, 2500)
+  }
+
+  const signed = (value: number): string => value > 0 ? `+${value}` : String(value)
+  let resultText = ''
+  if (result) {
+    resultText = t('cal.measureResult')
+      .replace('{lx}', signed(result.offsets[0]))
+      .replace('{ly}', signed(result.offsets[1]))
+      .replace('{rx}', signed(result.offsets[2]))
+      .replace('{ry}', signed(result.offsets[3]))
+      .replace('{jitter}', String(result.jitter))
+  }
+
+  return (
+    <div className="card calibration-workspace" style={{ display: 'grid', gap: 14 }}>
+      <div className="stick-panel-heading">
+        <div><span className="stick-eyebrow">{t('nav.calibrate')}</span><h3>{t('cal.ljTitle')}</h3></div>
+        <span className="pill">{t('cal.idle')}</span>
+      </div>
+      <p className="stick-intro">{t('cal.ljHint')}</p>
+      <div className="calibration-dials" style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', alignItems: 'center', gap: 36, minHeight: 150, padding: 12, border: '1px solid var(--line)', borderRadius: 12, background: 'var(--bg-1)' }}>
+        {live ? <>
+          <StickDial x={live.lx} y={live.ly} label={t('cal.left')} />
+          <StickDial x={live.rx} y={live.ry} label={t('cal.right')} />
+        </> : <Hint>{t('cal.waiting')}</Hint>}
+      </div>
+      <div className="calibration-actions row wrap" style={{ gap: 8, alignItems: 'center' }}>
+        <button className="btn primary" disabled={!live || measuring} onClick={measure}>
+          {measuring ? t('cal.measuringCenter') : t('cal.measureCenter')}
+        </button>
+        <button className="btn ghost" onClick={onOpenSticks}>{t('cal.openSticks')}</button>
+      </div>
+      {measuring && <div className="note">{t('cal.measuringCenter')}</div>}
+      {result && <div className="note" role="status">{resultText} · {result.count} {t('lab.dpSamples')}</div>}
+      {error && <div className="note bad" role="alert">{error}</div>}
+      <div className="note warn">{t('cal.ljReadOnly')}</div>
+    </div>
+  )
+}
+
+function CalibrationPanel({ modelName }: { modelName: string }): JSX.Element {
   const t = useT()
   const [live, setLive] = useState<LiveSample | null>(null)
   const liveRef = useRef<LiveSample | null>(null)
@@ -1106,10 +1263,13 @@ function CalibrationPanel(): JSX.Element {
   const verdict = !rest ? null : maxDev <= 2 ? t('cal.centered') : maxDev <= 6 ? t('cal.mild') : t('cal.drifting')
 
   return (
-    <div className="card" style={{ marginTop: 16 }}>
-      <h3>{t('cal.bench')}</h3>
+    <div className="card calibration-workspace" style={{ display: 'grid', gap: 14 }}>
+      <div className="stick-panel-heading">
+        <div><span className="stick-eyebrow">{modelName}</span><h3>{t('cal.bench')}</h3></div>
+        <span className={`pill${inCal ? ' warn' : live ? ' good' : ''}`}>{inCal ? t('cal.inCal') : live ? t('cal.idle') : t('cal.waiting')}</span>
+      </div>
       <Hint>{t('cal.intro')}</Hint>
-      <div className="row" style={{ gap: 20, justifyContent: 'center', margin: '12px 0' }}>
+      <div className="calibration-dials row" style={{ justifyContent: 'center', alignItems: 'center', gap: 36, minHeight: 150, padding: 12, border: '1px solid var(--line)', borderRadius: 12, background: 'var(--bg-1)' }}>
         {live ? (
           <>
             <StickDial x={live.lx} y={live.ly} label={t('cal.left')} />
@@ -1119,6 +1279,10 @@ function CalibrationPanel(): JSX.Element {
           <Hint>{t('cal.waiting')}</Hint>
         )}
       </div>
+      <div className="note calibration-scope">{t('cal.stickOnly')}</div>
+      <details className="stick-extra calibration-advanced">
+        <summary>{t('cal.centerTrim')}</summary>
+        <div className="stick-extra-body">
       <Hint style={{ textAlign: 'center' }}>{t('cal.centerHint')}</Hint>
       <div className="row" style={{ gap: 28, justifyContent: 'center', margin: '4px 0 12px' }}>
         {([0, 1] as const).map((s) => (
@@ -1140,6 +1304,8 @@ function CalibrationPanel(): JSX.Element {
         ))}
       </div>
       {trimErr && <div className="note bad" style={{ marginBottom: 8 }}>{trimErr}</div>}
+        </div>
+      </details>
       <div className="row wrap" style={{ gap: 8, margin: '10px 0' }}>
         <span className={`pill${inCal ? ' warn' : ''}`}>{inCal ? `${t('cal.inCal')} (target ${live?.calTarget})` : t('cal.idle')}</span>
         {rest && <span className={`pill${maxDev <= 2 ? ' good' : maxDev <= 6 ? ' warn' : ' bad'}`}>{verdict} · ±{maxDev}</span>}
@@ -1173,14 +1339,21 @@ function CalibrationPanel(): JSX.Element {
           <button className="btn sm ghost" onClick={() => void exitFlow()}>{t('cal.abort')}</button>
         </div>
       )}
+      <details className="stick-extra calibration-advanced">
+        <summary>{t('cal.manual')}</summary>
+        <div className="stick-extra-body">
       <div className="row wrap" style={{ gap: 8, margin: '10px 0' }}>
-        <span className="label">{t('cal.manual')}</span>
         <button className="btn sm" disabled={busy || !!flow || inCal} onClick={() => void enter()}>1 · {t('cal.open')}</button>
         <button className="btn sm primary" disabled={busy || !!flow || !inCal} onClick={() => void commit()}>2 · {t('cal.commit')}</button>
         <button className="btn sm ghost" disabled={busy || !!flow || !inCal} onClick={() => void cancel()}>{t('cal.cancel')}</button>
       </div>
+        </div>
+      </details>
       {note && <div className="note" style={{ marginBottom: 8 }}>{note}</div>}
       {err && <div className="note bad" style={{ marginBottom: 8 }}>{err}</div>}
+      <details className="stick-extra calibration-advanced">
+        <summary>{t('cal.tableBefore')} / {t('cal.tableAfter')}</summary>
+        <div className="stick-extra-body">
       <table className="tbl">
         <thead><tr><th>{t('cal.tableAxis')}</th><th>{t('cal.tableLive')}</th><th>{t('cal.tableBefore')}</th><th>{t('cal.tableAfter')}</th></tr></thead>
         <tbody>
@@ -1194,6 +1367,8 @@ function CalibrationPanel(): JSX.Element {
           ))}
         </tbody>
       </table>
+        </div>
+      </details>
       <Hint style={{ marginTop: 8 }}>{t('cal.tipRest')}</Hint>
       <div className="note warn" style={{ marginTop: 8 }}>{t('cal.driftWarn')} {t('cal.driftWarn2')}</div>
     </div>
@@ -1438,6 +1613,46 @@ const ARROW_DOWN = '10,14.5 14.5,8 5.5,8'
 const ARROW_LEFT = '5.5,10 12,5.5 12,14.5'
 const ARROW_RIGHT = '14.5,10 8,5.5 8,14.5'
 
+function StickSideIcon({ side, size = 18 }: { side: 'left' | 'right'; size?: number }): JSX.Element {
+  return (
+    <svg className="stick-side-icon" width={size} height={size} viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <path d="M7 5.5c-2.4 0-4 2.1-4 4.6v5.2c0 1.5 1 2.7 2.3 2.7 1 0 1.6-.7 2.2-1.5.5-.7 1-1.2 1.9-1.2h5.2c.9 0 1.4.5 1.9 1.2.6.8 1.2 1.5 2.2 1.5 1.3 0 2.3-1.2 2.3-2.7v-5.2c0-2.5-1.6-4.6-4-4.6H7Z" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" />
+      <path d="M7 9v5M4.5 11.5h5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+      <circle cx={15.8} cy={10.6} r="1.35" fill="currentColor" />
+      <circle cx={18.2} cy={13.2} r="1.05" fill="currentColor" opacity=".72" />
+      <circle cx="10" cy="15.2" r="2.2" fill="none" stroke="currentColor" strokeWidth="1.2" opacity={side === 'left' ? '.45' : '.25'} />
+      <circle cx="14" cy="15.2" r="2.2" fill="none" stroke="currentColor" strokeWidth="1.2" opacity={side === 'right' ? '.45' : '.25'} />
+      <circle cx={side === 'left' ? 10 : 14} cy="15.2" r="1.1" fill="currentColor" />
+    </svg>
+  )
+}
+
+function MappingTypeIcon({ type, size = 18 }: { type: 'keyboard' | 'mouse'; size?: number }): JSX.Element {
+  return (
+    <svg width={size} height={size} viewBox="0 0 20 20" aria-hidden="true" focusable="false" className="mapping-type-icon">
+      {type === 'keyboard' ? (
+        <><rect x="2" y="4.5" width="16" height="11" rx="2" fill="none" stroke="currentColor" strokeWidth="1.5" /><path d="M5 8h1m2 0h1m2 0h1m2 0h1M5 10.5h1m2 0h1m2 0h1m2 0h1M7 13h6" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" /></>
+      ) : (
+        <><path d="M10 2.5c-3 0-5 2.1-5 5.2v4.6c0 3.1 2 5.2 5 5.2s5-2.1 5-5.2V7.7c0-3.1-2-5.2-5-5.2Z" fill="none" stroke="currentColor" strokeWidth="1.5" /><path d="M10 3v5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" /><path d="M7.3 11h1m3.4 0h1" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" /></>
+      )}
+    </svg>
+  )
+}
+
+function DeviceIcon({ kind, size = 20 }: { kind: 'polling' | 'resolution' | 'rate'; size?: number }): JSX.Element {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden="true" focusable="false" className="device-icon">
+      {kind === 'polling' ? (
+        <><path d="M19.2 8A8 8 0 0 0 5.5 5.7L4 7.2M4 7.2V3.8M4 7.2h3.4M4.8 16A8 8 0 0 0 18.5 18.3l1.5-1.5m0 0v3.4m0-3.4h-3.4" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" /><path d="M12 7v5l3 2" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" /></>
+      ) : kind === 'resolution' ? (
+        <><rect x="3.5" y="4" width="17" height="16" rx="2.5" fill="none" stroke="currentColor" strokeWidth="1.6" /><path d="M9 4v16m6-16v16M3.5 9.3h17m-17 5.4h17" stroke="currentColor" strokeWidth="1.2" opacity=".75" /></>
+      ) : (
+        <><path d="M12 3c-3.8 0-6.2 2.7-6.2 6.4v5.2c0 3.7 2.4 6.4 6.2 6.4s6.2-2.7 6.2-6.4V9.4C18.2 5.7 15.8 3 12 3Z" fill="none" stroke="currentColor" strokeWidth="1.6" /><path d="M12 3v6m-3.2 5.7h.1m6.2 0h.1" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" /></>
+      )}
+    </svg>
+  )
+}
+
 function KeyIcon({ value, tag, size = 18 }: { value: number; tag?: string; size?: number }): JSX.Element | null {
   const s = size
   switch (value) {
@@ -1455,7 +1670,7 @@ function KeyIcon({ value, tag, size = 18 }: { value: number; tag?: string; size?
     case 20: return glyphPill(s, 'RT', true)
     case 7:
     case 8:
-      return glyphWrap(s, <><circle cx={10} cy={10} r={8} fill="#33333d" /><circle cx={10} cy={10} r={3} fill="#8a8a96" /></>)
+      return glyphWrap(s, <><circle cx={10} cy={10} r={8} fill="#33333d" /><circle cx={value === 7 ? 7.5 : 12.5} cy={10} r={3} fill="#8a8a96" /></>)
     case 13:
       return glyphWrap(s, <><circle cx={10} cy={10} r={8} fill="none" stroke="#8a8a96" strokeWidth={2} /><circle cx={10} cy={10} r={2.5} fill="#8a8a96" /></>)
     case 14:
@@ -1466,7 +1681,22 @@ function KeyIcon({ value, tag, size = 18 }: { value: number; tag?: string; size?
       return glyphWrap(s, <><rect x={2.5} y={6} width={15} height={9} rx={2} fill="#33333d" /><circle cx={10} cy={10.5} r={2.8} fill="none" stroke="#8a8a96" strokeWidth={1.5} /><rect x={8} y={4} width={4} height={2.5} rx={1} fill="#33333d" /></>)
     case 17: return glyphPaddle(s, tag ?? 'FL1')
     case 18: return glyphPaddle(s, tag ?? 'FR1')
-    default: return null
+    default: {
+      const target = REMAP_TARGETS.find((item) => item.value === value)
+      if (target?.group === 'keyboard') {
+        const label = target.label.length <= 2 ? target.label : ''
+        return label ? glyphLabel(s, '#4a4c56', label) : <MappingTypeIcon type="keyboard" size={s} />
+      }
+      if (target?.group === 'mouse') return <MappingTypeIcon type="mouse" size={s} />
+      if (target?.group === 'sticks') {
+        const direction = value % 4
+        const arrow = direction === 1 ? ARROW_UP : direction === 2 ? ARROW_DOWN : direction === 3 ? ARROW_LEFT : ARROW_RIGHT
+        const sideX = value < 25 ? 7 : 13
+        return glyphWrap(s, <><circle cx={10} cy={10} r={8} fill="#33333d" /><circle cx={sideX} cy="10" r="2.5" fill="#ff8fa0" /><path d={arrow} fill="#fff" transform="translate(3 3) scale(.7)" /></>)
+      }
+      if (target) return glyphPill(s, target.label.slice(0, 4), false)
+      return value === 0 ? glyphPill(s, '—', false) : glyphPill(s, `#${value}`, false)
+    }
   }
 }
 
@@ -1502,7 +1732,7 @@ function LjKeyIcon({ id, size = 18 }: { id: number; size?: number }): JSX.Elemen
     case 25: return glyphPaddle(s, 'L5')
     case 26: return glyphPaddle(s, 'R4')
     case 27: return glyphPaddle(s, 'L4')
-    default: return null
+    default: return glyphPill(s, `#${id}`, false)
   }
 }
 
@@ -1637,8 +1867,8 @@ function TriggerDeadzoneCard({ profile, edit }: {
 }): JSX.Element {
   const t = useT()
   return (
-    <div className="card">
-      <h3>{t('trig.title')}</h3>
+    <div className="card trigger-panel">
+      <div className="stick-panel-heading"><div><span className="stick-eyebrow">{t('buttons.title')}</span><h3>{t('trig.title')}</h3></div><KeyIcon value={19} size={24} /></div>
       <Hint>{t('trig.hint')}</Hint>
       {([0, 1] as const).map((ti) => {
         const tpkt = profile.triggers[ti]
@@ -1648,7 +1878,7 @@ function TriggerDeadzoneCard({ profile, edit }: {
         return (
           <div key={ti} style={{ marginTop: 8 }}>
             <div className="row spread" style={{ marginBottom: 6, alignItems: 'center' }}>
-              <span className="label">{ti === 0 ? 'LT' : 'RT'}</span>
+              <span className="row trigger-side-label"><KeyIcon value={ti === 0 ? 19 : 20} size={19} /><span>{ti === 0 ? 'LT' : 'RT'}</span></span>
               <button
                 className={`choice-btn${ten ? ' active' : ''}`}
                 onClick={() => edit(() => trigger.setDeadEnabled(tpkt, !ten))}
@@ -1711,7 +1941,85 @@ function ResetEverythingCard({ profile, fd, edit, onReload, notify }: {
   )
 }
 
-function StickCross({ lx, ly, rx, ry }: { lx: number; ly: number; rx: number; ry: number }): JSX.Element {
+/**
+ * Self-update row in the sidebar. Nothing pops up anywhere: the state comes from
+ * the main process, the button carries a badge while an update is downloading or
+ * waiting, and clicking installs (or re-checks). Packaged builds only — in dev
+ * the check just reports that there is nothing to check.
+ */
+function UpdateRow(): JSX.Element | null {
+  const [st, setSt] = useState<{ state: string; version?: string; percent?: number; message?: string } | null>(null)
+  const [busy, setBusy] = useState(false)
+  useEffect(() => {
+    let alive = true
+    void api()
+      .updateStatus()
+      .then((s) => {
+        if (alive) setSt(s)
+      })
+      .catch(() => undefined)
+    const off = api().on('update:status', (s) => setSt(s as never))
+    return () => {
+      alive = false
+      off()
+    }
+  }, [])
+  if (!st) return null
+
+  const label =
+    st.state === 'ready'
+      ? `Restart to install${st.version ? ` ${st.version}` : ''}`
+      : st.state === 'downloading'
+        ? `Update ${st.version ?? ''} — ${st.percent ?? 0}%`
+        : st.state === 'checking'
+          ? 'Checking for updates…'
+          : st.state === 'current'
+            ? 'Up to date — check again'
+            : st.state === 'error'
+              ? 'Update check failed'
+              : 'Check for updates'
+  const hot = st.state === 'ready' || st.state === 'downloading'
+
+  return (
+    <button
+      type="button"
+      className={`btn sm${hot ? ' primary' : ' ghost'}`}
+      style={{ width: '100%', marginTop: 8 }}
+      disabled={busy || st.state === 'checking'}
+      title={st.message ?? label}
+      onClick={() => {
+        void (async () => {
+          setBusy(true)
+          try {
+            if (st.state === 'ready') await api().updateInstall()
+            else await api().updateCheck()
+          } catch {
+            /* state is reported back through update:status */
+          } finally {
+            setBusy(false)
+          }
+        })()
+      }}
+    >
+      {hot && (
+        <span
+          style={{
+            display: 'inline-block',
+            width: 7,
+            height: 7,
+            borderRadius: 4,
+            background: 'var(--bad, #f43f52)',
+            marginRight: 6,
+            verticalAlign: 'middle'
+          }}
+        />
+      )}
+      {label}
+    </button>
+  )
+}
+
+function StickCross({ lx, ly, rx, ry, windows }: { lx: number; ly: number; rx: number; ry: number; windows?: Array<{ begin: number; end: number; beginAnti: number } | null> }): JSX.Element {
   const ref = useRef<HTMLCanvasElement | null>(null)
   useEffect(() => {
     const c = ref.current
@@ -1725,8 +2033,9 @@ function StickCross({ lx, ly, rx, ry }: { lx: number; ly: number; rx: number; ry
     if (!ctx) return
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
     ctx.clearRect(0, 0, w, h)
-    const draw = (x: number, y: number, cx: number, label: string): void => {
+    const draw = (x: number, y: number, cx: number, label: string, win?: { begin: number; end: number; beginAnti: number } | null): void => {
       const r = 62
+      ctx.setLineDash([])
       ctx.strokeStyle = '#3a2230'
       ctx.beginPath()
       ctx.arc(cx, h / 2, r, 0, Math.PI * 2)
@@ -1737,6 +2046,41 @@ function StickCross({ lx, ly, rx, ry }: { lx: number; ly: number; rx: number; ry
       ctx.moveTo(cx, h / 2 - r)
       ctx.lineTo(cx, h / 2 + r)
       ctx.stroke()
+
+      // The stick's own windows, so tuning is visible while it moves:
+      // dead zone disc (input below this reads 0), saturation ring (output is
+      // pinned past this), and the anti-dead-zone floor — the output jump that
+      // happens the moment you leave the dead zone.
+      if (win) {
+        const inner = Math.max(0, Math.min(0.95, win.begin / 1000)) * r
+        if (inner > 0.5) {
+          ctx.fillStyle = 'rgba(244,63,82,0.13)'
+          ctx.beginPath()
+          ctx.arc(cx, h / 2, inner, 0, Math.PI * 2)
+          ctx.fill()
+          ctx.strokeStyle = 'rgba(244,63,82,0.6)'
+          ctx.setLineDash([3, 3])
+          ctx.beginPath()
+          ctx.arc(cx, h / 2, inner, 0, Math.PI * 2)
+          ctx.stroke()
+        }
+        const outer = Math.max(0.05, Math.min(1, win.end / 1000)) * r
+        ctx.strokeStyle = 'rgba(120,200,255,0.55)'
+        ctx.setLineDash([5, 4])
+        ctx.beginPath()
+        ctx.arc(cx, h / 2, outer, 0, Math.PI * 2)
+        ctx.stroke()
+        const anti = Math.max(0, Math.min(0.95, win.beginAnti / 1000)) * r
+        if (anti > 0.5) {
+          ctx.strokeStyle = 'rgba(245,181,68,0.55)'
+          ctx.setLineDash([2, 3])
+          ctx.beginPath()
+          ctx.arc(cx, h / 2, anti, 0, Math.PI * 2)
+          ctx.stroke()
+        }
+        ctx.setLineDash([])
+      }
+
       const nx = (x - 128) / 128
       const ny = (y - 128) / 128
       const px = cx + nx * r
@@ -1748,10 +2092,15 @@ function StickCross({ lx, ly, rx, ry }: { lx: number; ly: number; rx: number; ry
       ctx.fillStyle = '#c9a3ad'
       ctx.font = '11px system-ui'
       ctx.fillText(label, cx - 12, h - 8)
+      if (win) {
+        ctx.fillStyle = '#8d7f86'
+        ctx.font = '10px system-ui'
+        ctx.fillText(`dz ${(win.begin / 10).toFixed(1)}% · sat ${(win.end / 10).toFixed(0)}% · anti ${(win.beginAnti / 10).toFixed(1)}%`, cx - 44, h - 20)
+      }
     }
-    draw(lx, ly, w * 0.27, `L ${lx},${ly}`)
-    draw(rx, ry, w * 0.73, `R ${rx},${ry}`)
-  }, [lx, ly, rx, ry])
+    draw(lx, ly, w * 0.27, `L ${lx},${ly}`, windows?.[0] ?? null)
+    draw(rx, ry, w * 0.73, `R ${rx},${ry}`, windows?.[1] ?? null)
+  }, [lx, ly, rx, ry, windows])
   return <canvas ref={ref} className="plot" style={{ height: 190 }} />
 }
 
@@ -1767,7 +2116,6 @@ interface LjDraft {
   sticks: Partial<Record<0 | 1, Array<{ x: number; y: number }>>>
   shapes: Partial<Record<0 | 1, number>>
   mouse: Partial<Record<0 | 1, { enabled: number; rate: number }>>
-  trigger: LjTriggerZones | null
 }
 
 /** Convert the renderer's 0.1% point grid to/from the shared pair form. */
@@ -1804,13 +2152,19 @@ const ljSameTarget = (a: LjButtonTarget | null, b: LjButtonTarget | null): boole
  * and the deadzone card and the designer edit one image. Edits stage upward;
  * the topbar Write commits the side and reads it back.
  */
-function LjLiveCard({ live }: { live: { lx: number; ly: number; rx: number; ry: number } | null }): JSX.Element {
+function LjLiveCard({ live, windows }: { live: { lx: number; ly: number; rx: number; ry: number } | null; windows?: Array<{ begin: number; end: number; beginAnti: number } | null> }): JSX.Element {
   const t = useT()
   return (
-    <div className="card">
+    <div className="card lj-live-card">
       <h3>{t('sticks.live')}</h3>
       <Hint>{t('lj.liveHint')}</Hint>
-      <StickCross lx={live?.lx ?? 128} ly={live?.ly ?? 128} rx={live?.rx ?? 128} ry={live?.ry ?? 128} />
+      <StickCross
+        lx={live?.lx ?? 128}
+        ly={live?.ly ?? 128}
+        rx={live?.rx ?? 128}
+        ry={live?.ry ?? 128}
+        windows={windows}
+      />
       <div className="row spread">
         <span className="mono">L {live?.lx ?? '—'},{live?.ly ?? '—'}</span>
         <span className="mono">R {live?.rx ?? '—'},{live?.ry ?? '—'}</span>
@@ -1851,15 +2205,18 @@ function LjZonesCard({ points, onChange }: {
     </label>
   )
   return (
-    <div className="card">
-      <h3>{t('sticks.deadzone')} — {t('sticks.steps01')}</h3>
+    <div className="card lj-zones-card">
+      <div className="stick-panel-heading"><div><span className="stick-eyebrow">{t('sticks.deadzone')}</span><h3>{t('sticks.steps01')}</h3></div><button className="btn sm" onClick={() => onChange(toPts(ljLinearCurve({ ...z, antiStart: 0, antiEnd: 1000 })))}>{t('sticks.physics')}</button></div>
       <Hint>{t('lj.zoneHint')}</Hint>
-      <div className="stack" style={{ gap: 12, marginTop: 8 }}>
+      <div className="stack lj-zone-primary" style={{ gap: 12, marginTop: 8 }}>
         {slider('start', t('sticks.start'))}
         {slider('end', t('sticks.end'))}
+      </div>
+      <details className="stick-extra lj-zone-advanced">
+        <summary>{t('sticks.fineTune')}</summary>
+        <div className="stick-extra-body">
         {slider('antiStart', t('sticks.antiStart'))}
         {slider('antiEnd', t('sticks.antiEnd'))}
-      </div>
       <div className="row wrap" style={{ gap: 8, marginTop: 10 }}>
         {box('start', t('sticks.nStart'))}
         {box('end', t('sticks.nEnd'))}
@@ -1867,7 +2224,6 @@ function LjZonesCard({ points, onChange }: {
         {box('antiEnd', t('sticks.nAntiEnd'))}
       </div>
       <div className="row wrap" style={{ gap: 8, marginTop: 10 }}>
-        <button className="btn sm" onClick={() => onChange(toPts(ljLinearCurve({ ...z, antiStart: 0, antiEnd: 1000 })))}>{t('sticks.physics')}</button>
         <button className="choice-btn" onClick={() => apply({ start: 50, end: 1000, antiStart: 0, antiEnd: 1000 })}><span className="choice-label">{t('sticks.factory')}</span></button>
         <button className="choice-btn" title={t('sticks.tAim')} onClick={() => apply({ end: 800 })}><span className="choice-label">{t('sticks.aimEnd')}</span></button>
         <button className="choice-btn" title={t('sticks.tFlick')} onClick={() => apply({ end: 650 })}><span className="choice-label">{t('sticks.flickEnd')}</span></button>
@@ -1875,6 +2231,8 @@ function LjZonesCard({ points, onChange }: {
         <button className="choice-btn" title={t('sticks.tMax')} onClick={() => apply({ antiStart: 150 })}><span className="choice-label">{t('sticks.antiMax')}</span></button>
         <button className="choice-btn" title={t('sticks.tOff')} onClick={() => apply({ antiStart: 0, antiEnd: 1000 })}><span className="choice-label">{t('sticks.antiOff')}</span></button>
       </div>
+        </div>
+      </details>
     </div>
   )
 }
@@ -1889,7 +2247,7 @@ function LjOuterCard({ points, onChange }: {
   const unlimited = z.end === 1000 && z.antiEnd === 1000
   const apply = (patch: Partial<LjStickZones>): void => onChange(toPts(ljFitZones(toPairs(points), { ...z, ...patch })))
   return (
-    <div className="card">
+    <div className="card lj-outer-card">
       <h3>{t('sticks.outer')} — {unlimited ? t('sticks.noLimitTitle') : t('sticks.custom')}</h3>
       <Hint>{t('lj.outerHint')}</Hint>
       <div className="row spread" style={{ margin: '10px 0' }}>
@@ -1919,7 +2277,7 @@ function LjShapeCard({ shape, busy, onChange }: {
     { code: LJ_SHAPES.RoundedRectangle, label: t('lj.shapeRect') }
   ]
   return (
-    <div className="card">
+    <div className="card lj-shape-card">
       <h3>{t('sticks.shape')}</h3>
       <Hint>{t('lj.shapeHint')}</Hint>
       <div className="stack" style={{ gap: 8 }}>
@@ -1959,6 +2317,7 @@ function LjCurveCard({ snap, side, points, onChange, onReset, onCopyToOther }: {
       return []
     }
   })
+  const [presetNotice, setPresetNotice] = useState('')
   useEffect(() => {
     try {
       window.localStorage.setItem('sticklabs.ljcurves.v1', JSON.stringify(presets))
@@ -1982,14 +2341,33 @@ function LjCurveCard({ snap, side, points, onChange, onReset, onCopyToOther }: {
     }
     onChange(next)
   }
+  const savePreset = (): void => {
+    const name = nextCustomPresetName(presets.map((p) => p.name), t('sticks.customCurveName'))
+    setPresets((prev) => [{ name, pts: points.map((p) => ({ ...p })) }, ...prev].slice(0, 20))
+    setPresetNotice(t('sticks.curveSavedNotice').replace('{name}', name))
+  }
+  const renamePreset = (oldName: string, name: string): boolean => {
+    if (presets.some((p) => p.name === name && p.name !== oldName)) return false
+    setPresets((prev) => prev.map((p) => p.name === oldName ? { ...p, name } : p))
+    return true
+  }
   return (
-    <div className="card">
-      <h3>{t('sticks.curve')} — 8 {t('sticks.points')}</h3>
+    <div className="card lj-curve-card">
+      <div className="stick-panel-heading"><div><span className="stick-eyebrow">{t('sticks.curve')}</span><h3>8 {t('sticks.points')}</h3></div><span className={`pill ${dirty ? 'warn' : 'good'}`}>{dirty ? t('sticks.differs') : t('sticks.matches')}</span></div>
       <Hint>{t('lj.stickHint')}</Hint>
       <CurvePlot points={points} max={1000} overlay={padPts} onChange={(next) => onChange(next.map((p) => ({ ...p })))} />
+      <div className="row wrap" style={{ gap: 8, margin: '12px 0' }}>
+        <button className="btn sm ghost" title={t('lj.copyOther')} onClick={onCopyToOther}>{t('sticks.copyCurve')}</button>
+        <button className="btn sm ghost" onClick={() => onChange(toPts(ljLinearCurve(zones)))}>{t('sticks.resetCurve')}</button>
+        <button className="btn sm ghost" disabled={!dirty} onClick={onReset}>{t('sticks.reload')}</button>
+      </div>
+      <details className="stick-extra stick-curve-tools">
+        <summary>{t('sticks.presetsAndSaved')}</summary>
+        <div className="stick-extra-body">
       <div className="row wrap" style={{ gap: 8, margin: '8px 0' }}>
         {Object.entries(AIM_CURVES).map(([key, c]) => (
           <button key={key} className="choice-btn" title={c.hint} onClick={() => onChange(toPts(ljSampleDesign(c.pts, zones)))}>
+            <CurveMiniIcon points={c.pts} />
             <span className="choice-label">{c.label}</span>
           </button>
         ))}
@@ -1998,36 +2376,24 @@ function LjCurveCard({ snap, side, points, onChange, onReset, onCopyToOther }: {
         <button
           className="btn sm"
           title={t('sticks.saveTitle')}
-          onClick={() => {
-            const name = window.prompt('Name this curve:')
-            if (!name || !name.trim()) return
-            const clean = name.trim().slice(0, 24)
-            setPresets((prev) => {
-              const next = prev.filter((p) => p.name !== clean)
-              next.unshift({ name: clean, pts: points.map((p) => ({ ...p })) })
-              return next.slice(0, 20)
-            })
-          }}
+          onClick={savePreset}
         >
           {t('sticks.saveCurrent')}
         </button>
+        {presetNotice && <span className="saved-curve-notice" role="status">{presetNotice}</span>}
+        {presets.length === 0 && <span className="saved-curve-empty">{t('sticks.noSavedCurves')}</span>}
         {presets.map((p) => (
-          <span key={p.name} className="row" style={{ gap: 4, alignItems: 'center' }}>
-            <button className="btn sm ghost" title={`Apply ${p.name}`} onClick={() => onChange(p.pts.map((q) => ({ ...q })))}>
-              {p.name}
-            </button>
-            <button className="btn sm ghost" title={`Delete ${p.name}`} onClick={() => setPresets((prev) => prev.filter((q) => q.name !== p.name))}>
-              ×
-            </button>
-          </span>
+          <SavedCurvePreset key={p.name} preset={p} max={1000} onApply={() => onChange(p.pts.map((q) => ({ ...q })))} onRename={(name) => renamePreset(p.name, name)} onDelete={() => setPresets((prev) => prev.filter((q) => q.name !== p.name))} />
         ))}
       </div>
       <div className="row wrap" style={{ gap: 8 }}>
         <button className="btn sm" disabled title={t('lj.fixedPoints')}>{t('sticks.addPoint')} (8/8)</button>
-        <button className="btn sm ghost" title={t('lj.copyOther')} onClick={onCopyToOther}>{t('sticks.copyCurve')}</button>
-        <button className="btn sm ghost" onClick={() => onChange(toPts(ljLinearCurve(zones)))}>{t('sticks.resetCurve')}</button>
-        <button className="btn sm ghost" disabled={!dirty} onClick={onReset}>{t('sticks.reload')}</button>
       </div>
+        </div>
+      </details>
+      <details className="stick-extra stick-curve-tools">
+        <summary>{t('sticks.pointEditor')}</summary>
+        <div className="stick-extra-body">
       <table className="tbl" style={{ marginTop: 8 }}>
         <thead><tr><th>#</th><th>X</th><th>Y</th></tr></thead>
         <tbody>
@@ -2043,6 +2409,8 @@ function LjCurveCard({ snap, side, points, onChange, onReset, onCopyToOther }: {
       <div className="note" style={{ marginTop: 8 }}>
         {t('sticks.hwPreview')} <span className="mono">{points.map((p) => `${ljPercentToWire(p.x / 10)}/${ljPercentToWire(p.y / 10)}`).join(' · ')}</span>
       </div>
+        </div>
+      </details>
     </div>
   )
 }
@@ -2052,26 +2420,19 @@ function LjCurveCard({ snap, side, points, onChange, onReset, onCopyToOther }: {
  * thresholds pass through from the pad read untouched; edits stage upward and
  * the topbar Write sends the whole trigger image with readback.
  */
-function LjTriggerCard({ value, onChange, onReset }: {
+function LjTriggerCard({ value }: {
   value: LjTriggerZones
-  onChange: (zones: LjTriggerZones) => void
-  onReset: () => void
 }): JSX.Element {
   const t = useT()
-  const num = (v: number): number => Math.max(0, Math.min(100, Math.round(v)))
   return (
     <div className="card">
-      <h3>{t('lj.trigTitle')}</h3>
+      <div className="stick-panel-heading"><div><span className="stick-eyebrow">{t('buttons.title')}</span><h3>{t('lj.trigTitle')}</h3></div><LjKeyIcon id={9} size={24} /></div>
       <Hint>{t('lj.trigHint')}</Hint>
-      <div className="stack" style={{ gap: 12, marginTop: 8 }}>
-        <Slider label={`LT ${t('lj.inner')}`} value={value.leftInner} min={0} max={100} step={1} format={(v) => `${v}%`} onChange={(v) => onChange({ ...value, leftInner: Math.min(num(v), value.leftOuter) })} />
-        <Slider label={`LT ${t('lj.outer')}`} value={value.leftOuter} min={0} max={100} step={1} format={(v) => `${v}%`} onChange={(v) => onChange({ ...value, leftOuter: Math.max(num(v), value.leftInner) })} />
-        <Slider label={`RT ${t('lj.inner')}`} value={value.rightInner} min={0} max={100} step={1} format={(v) => `${v}%`} onChange={(v) => onChange({ ...value, rightInner: Math.min(num(v), value.rightOuter) })} />
-        <Slider label={`RT ${t('lj.outer')}`} value={value.rightOuter} min={0} max={100} step={1} format={(v) => `${v}%`} onChange={(v) => onChange({ ...value, rightOuter: Math.max(num(v), value.rightInner) })} />
+      <div className="device-summary-pills">
+        <span className="pill"><LjKeyIcon id={9} size={14} /> LT · {value.leftInner}% / {value.leftOuter}%</span>
+        <span className="pill"><LjKeyIcon id={10} size={14} /> RT · {value.rightInner}% / {value.rightOuter}%</span>
       </div>
-      <div className="row" style={{ marginTop: 8 }}>
-        <button className="btn sm ghost" onClick={onReset}>{t('lj.reset')}</button>
-      </div>
+      <div className="note warn">{t('lj.triggerWriteLocked')}</div>
     </div>
   )
 }
@@ -2090,8 +2451,8 @@ function LjControllerRateCard({ value, busy, onChange }: {
   const t = useT()
   const presets = [50, 60, 70, 80, 90, 100]
   return (
-    <div className="card">
-      <h3>{t('device.rate')}</h3>
+    <div className="card device-rate-card">
+      <div className="stick-panel-heading"><div><span className="stick-eyebrow">{t('nav.device')}</span><h3>{t('device.rate')}</h3></div><DeviceIcon kind="rate" size={24} /></div>
       <Hint>{t('lj.rateHint')}</Hint>
       <div className="row spread" style={{ margin: '10px 0' }}>
         <div>
@@ -2141,6 +2502,9 @@ export default function App(): JSX.Element {
   const visibleCandidates = (
     candidates.some((c) => c.live === true) ? candidates.filter((c) => c.live === true || c.live === null || c.path === connPath) : candidates
   ).filter((c) => !(c.productId === 0x0575 && hasDirectPad))
+  const preferredCandidates = visibleCandidates.filter((c) => c.preferred)
+  const primaryCandidates = preferredCandidates.length > 0 ? preferredCandidates : visibleCandidates
+  const otherCandidates = preferredCandidates.length > 0 ? visibleCandidates.filter((c) => !c.preferred) : []
   const [connected, setConnected] = useState(false)
   const [info, setInfo] = useState<DeviceInfo | null>(null)
   // LeadJoy Saber Plus — surfaced through the same UI as the GameSir pads.
@@ -2150,7 +2514,7 @@ export default function App(): JSX.Element {
   const [ljSnap, setLjSnap] = useState<LjSnapshot | null>(null)
   const [ljBusy, setLjBusy] = useState(false)
   const [ljSlot, setLjSlot] = useState<0 | 1 | 2>(0)
-  const [ljDraft, setLjDraft] = useState<LjDraft>({ buttons: {}, sticks: {}, trigger: null, shapes: {}, mouse: {} })
+  const [ljDraft, setLjDraft] = useState<LjDraft>({ buttons: {}, sticks: {}, shapes: {}, mouse: {} })
   const [ljLive, setLjLive] = useState<{ lx: number; ly: number; rx: number; ry: number } | null>(null)
   const [pid, setPid] = useState<number | null>(null)
   const [model, setModel] = useState<ControllerModel | null>(null)
@@ -2209,25 +2573,10 @@ export default function App(): JSX.Element {
   })
   // Free-point curve design (2–10 pts). The pad only stores 5, so this is a
   // design canvas — `quantized` is what actually gets written. Persisted per
-  // slot+stick so a half-finished shape survives a reload.
+  // slot+stick so a half-finished shape survives a reload. Sampling is always
+  // straight-line: the pad interpolates its 5 slots linearly, so smoothing the
+  // design first would only invent values the hardware never sees.
   const [design, setDesign] = useState<Array<{ x: number; y: number }>>([])
-  // Slot sampling mode for the curve designer: straight segments (linear)
-  // or the smoothed spline. Only changes the 5 bytes that get written —
-  // the red design stays exactly as drawn.
-  const [spline, setSpline] = useState<boolean>(() => {
-    try {
-      return window.localStorage.getItem('sticklabs.spline') === '1'
-    } catch {
-      return false
-    }
-  })
-  useEffect(() => {
-    try {
-      window.localStorage.setItem('sticklabs.spline', spline ? '1' : '0')
-    } catch {
-      /* storage full/blocked — sampling mode still works for the session */
-    }
-  }, [spline])
   // Which remap row's icon dropdown is open (row key, or null).
   const [bindOpen, setBindOpen] = useState<string | null>(null)
   // Per-stick output lock: locked sticks are forced back to normal stick
@@ -2333,7 +2682,7 @@ export default function App(): JSX.Element {
   async function loadLeadJoySlot(slot: 0 | 1 | 2, force = false): Promise<void> {
     if (!ljPath || ljBusy) return
     if (!force && ljDirty && !window.confirm(t('lj.discard'))) return
-    setLjDraft({ buttons: {}, sticks: {}, trigger: null, shapes: {}, mouse: {} })
+    setLjDraft({ buttons: {}, sticks: {}, shapes: {}, mouse: {} })
     setSavedAt(null)
     setLjBusy(true)
     setErr(null)
@@ -2360,11 +2709,6 @@ export default function App(): JSX.Element {
       else delete sticks[side]
       return { ...prev, sticks }
     })
-  }
-
-  /** Stage the trigger deadzones; `null` reverts to the pad. */
-  function stageLjTrigger(zones: LjTriggerZones | null): void {
-    setLjDraft((prev) => ({ ...prev, trigger: zones }))
   }
 
   /** Stage a pad-proven stick gate code (0 rounded-rect, 1 circle). */
@@ -2417,9 +2761,6 @@ export default function App(): JSX.Element {
         }
         if (patch.cv === undefined && patch.ci === undefined && patch.mm === undefined && patch.mse === undefined) continue
         await api().leadjoyWriteStick({ path: ljPath, slot: ljSlot, side, patch })
-      }
-      if (ljDraft.trigger && JSON.stringify(ljDraft.trigger) !== JSON.stringify(ljPadZones)) {
-        await api().leadjoyWriteTrigger({ path: ljPath, slot: ljSlot, zones: ljDraft.trigger })
       }
       setLjSnap(await api().leadjoyReadSlot({ path: ljPath, slot: ljSlot }))
       setSavedAt({ slot: ljSlot + 1, at: Date.now() })
@@ -2477,16 +2818,15 @@ export default function App(): JSX.Element {
         setMsg(`${pre.marketingName} detected — ${pre.supportNote}`)
         return
       }
-      if (pre && pre.support === 'detect-only') {
-        // Named but layout-unproven: no GameSir handshake — foreign bytes on
-        // another vendor's pad buy nothing and the timeout only confuses. The
-        // Saber Plus drives the same UI from here (connected, slot read on
-        // connect); other detect-only pads stay locked as before.
+      if (pre && (pre.support === 'detect-only' || pre.id === 'SaberPlus')) {
+        // No GameSir handshake for detect-only pads: foreign bytes on another
+        // vendor's device buy nothing and the timeout only confuses. The Saber
+        // Plus uses its own config protocol, so route it to its slot reader.
         setModel(pre)
         setPid(cand?.productId ?? null)
         setBlob(null)
         setLjSnap(null)
-        setLjDraft({ buttons: {}, sticks: {}, trigger: null, shapes: {}, mouse: {} })
+        setLjDraft({ buttons: {}, sticks: {}, shapes: {}, mouse: {} })
         setLjSlot(0)
         setSavedAt(null)
         const saber = pre.id === 'SaberPlus'
@@ -2761,7 +3101,7 @@ export default function App(): JSX.Element {
     return { enabled: s?.mouse.enabled ? 1 : 0, rate: s?.mouse.rate ?? 50 }
   }
   const ljMouse = (side: 0 | 1): { enabled: number; rate: number } => ljDraft.mouse[side] ?? ljPadMouse(side)
-  const ljZones = ljDraft.trigger ?? ljPadZones
+  const ljZones = ljPadZones
   const ljDirty =
     isLj &&
     (Object.entries(ljDraft.buttons).some(([id, v]) => !ljSameTarget(v, ljPadTarget(Number(id)))) ||
@@ -2770,8 +3110,7 @@ export default function App(): JSX.Element {
       Object.entries(ljDraft.mouse).some(([side, m]) => {
         const pad = ljPadMouse(Number(side) as 0 | 1)
         return m.enabled !== pad.enabled || m.rate !== pad.rate
-      }) ||
-      (ljDraft.trigger !== null && JSON.stringify(ljDraft.trigger) !== JSON.stringify(ljPadZones)))
+      }))
 
   // Live sticks for the Saber Plus come from the system Gamepad API: its own
   // HID node hands raw readers nothing (stub/needs a vendor command), but
@@ -2854,15 +3193,52 @@ export default function App(): JSX.Element {
     }
   }, [design, designKey])
 
-  const quantized = design.length >= 2 ? (spline ? resampleSpline(design) : resampleCurve(design)) : pts
+  const quantized = design.length >= 2 ? resampleCurve(design) : pts
   const locked = connected && (!model || model.support !== 'full')
   const modelId = model?.id ?? 'G7ProCE'
   const modelLen = model && model.profileLength > 0 ? model.profileLength : PROFILE_LENGTH
   modelLenRef.current = modelLen
   const padCurve = pts
 
-  function reloadDesignFromPad(): void {
+  /** Canvas only: rebuild the design points from the working copy (no pad traffic). */
+  function syncDesignFromCopy(): void {
     if (pkt) setDesign(stick.curve(pkt).map((p) => ({ ...p })))
+  }
+
+  /**
+   * Curve card's "Reload from pad": actually reads the pad. Restores THIS
+   * stick's curve + transform bytes (11–23) in the working copy, so any other
+   * staged edits survive; `dirty` is then recomputed from a real byte compare
+   * against the bytes just read rather than assumed.
+   */
+  async function reloadCurveFromPad(): Promise<void> {
+    if (!blob || !pkt) return
+    setBusy(true)
+    setErr(null)
+    try {
+      const res = await api().readProfile(slot, modelLen)
+      const padBytes = b64ToBytes(res.bytes)
+      const padStick = parseProfile(padBytes, modelId).sticks[which]
+      if (!padStick) return
+      edit(() => {
+        for (let i = 11; i <= 23; i++) pkt.bytes[i] = padStick.bytes[i]
+      })
+      syncDesignFromCopy()
+      let same = blob.length === padBytes.length
+      if (same) {
+        for (let i = 0; i < blob.length; i++) {
+          if (blob[i] !== padBytes[i]) {
+            same = false
+            break
+          }
+        }
+      }
+      setDirty(!same)
+    } catch (e) {
+      setErr((e as Error).message)
+    } finally {
+      setBusy(false)
+    }
   }
 
   /**
@@ -2872,10 +3248,10 @@ export default function App(): JSX.Element {
    * the sampled design already equals the working copy, so loading and
    * no-change touches never dirty the profile.
    */
-  function stageDesign(next: Array<{ x: number; y: number }>, useSpline: boolean = spline): void {
+  function stageDesign(next: Array<{ x: number; y: number }>): void {
     setDesign(next)
     if (!pkt || next.length < 2) return
-    const q = useSpline ? resampleSpline(next) : resampleCurve(next)
+    const q = resampleCurve(next)
     const cur = stick.curve(pkt)
     if (q.length === cur.length && q.every((p, i) => p.x === cur[i].x && p.y === cur[i].y)) return
     edit(() => {
@@ -2884,34 +3260,56 @@ export default function App(): JSX.Element {
     })
   }
 
+  function saveCurrentCurvePreset(): void {
+    const name = nextCustomPresetName(presets.map((p) => p.name), t('sticks.customCurveName'))
+    setPresets((prev) => [{ name, pts: design.map((p) => ({ ...p })) }, ...prev].slice(0, 20))
+    setMsg(t('sticks.curveSavedNotice').replace('{name}', name))
+  }
+
+  function renameCurvePreset(oldName: string, name: string): boolean {
+    if (presets.some((p) => p.name === name && p.name !== oldName)) return false
+    setPresets((prev) => prev.map((p) => p.name === oldName ? { ...p, name } : p))
+    return true
+  }
+
   return (
     <LangContext.Provider value={{ lang, setLang }}>
     <ThemeContext.Provider value={{ theme, setTheme }}>
     <div className="app">
       <aside className="sidebar">
         <div className="brand">
-          <h1>Stick <span>Labs</span></h1>
+          <div className="brand-copy">
+            <h1>Stick <span>Labs</span></h1>
+          </div>
         </div>
         <nav className="nav">
           <div className="nav-group">
             <h4>{t('nav.tuning')}</h4>
             <button type="button" className={`nav-item${tab === 'sticks' ? ' active' : ''}`} onClick={() => setTab('sticks')}>
+              <StickSideIcon side="left" size={17} />
               {t('nav.sticks')}
             </button>
             <button type="button" className={`nav-item${tab === 'device' ? ' active' : ''}`} onClick={() => setTab('device')}>
+              <DeviceIcon kind="rate" size={17} />
               {t('nav.device')}
             </button>
             <button type="button" className={`nav-item${tab === 'buttons' ? ' active' : ''}`} onClick={() => setTab('buttons')}>
+              <KeyIcon value={9} size={17} />
               {t('nav.buttons')}
             </button>
-            {!fx.active && (
-              <button type="button" className={`nav-item${tab === 'calibrate' ? ' active' : ''}`} onClick={() => setTab('calibrate')}>
-                {t('nav.calibrate')}
-              </button>
-            )}
           </div>
-          <div className="nav-group">
-            <h4>{t('nav.data')}</h4>
+          <details className="nav-more" open={['calibrate', 'profiles', 'lab', 'language', 'theme'].includes(tab)}>
+            <summary>{t('nav.moreTools')}</summary>
+            <div className="nav-group">
+              <h4>{t('nav.tuning')}</h4>
+              {!fx.active && (
+                <button type="button" className={`nav-item${tab === 'calibrate' ? ' active' : ''}`} onClick={() => setTab('calibrate')}>
+                  {t('nav.calibrate')}
+                </button>
+              )}
+            </div>
+            <div className="nav-group">
+              <h4>{t('nav.data')}</h4>
             <button type="button" className={`nav-item${tab === 'profiles' ? ' active' : ''}`} onClick={() => setTab('profiles')}>
               {t('nav.profiles')}
             </button>
@@ -2920,16 +3318,17 @@ export default function App(): JSX.Element {
                 {t('nav.lab')}
               </button>
             )}
-          </div>
-          <div className="nav-group">
-            <h4>{t('nav.app')}</h4>
+            </div>
+            <div className="nav-group">
+              <h4>{t('nav.app')}</h4>
             <button type="button" className={`nav-item${tab === 'language' ? ' active' : ''}`} onClick={() => setTab('language')}>
               {t('nav.language')}
             </button>
             <button type="button" className={`nav-item${tab === 'theme' ? ' active' : ''}`} onClick={() => setTab('theme')}>
               {t('nav.theme')}
             </button>
-          </div>
+            </div>
+          </details>
         </nav>
         <div className="stack" style={{ gap: 10 }}>
           <button className="btn ghost sm" onClick={() => void refresh()}>{t('side.rescan')}</button>
@@ -2957,14 +3356,15 @@ export default function App(): JSX.Element {
           >
             {t('side.copy')}
           </button>
-          {visibleCandidates.map((c) => {
-            const known = identifyModel(c.product, c.productId)
-            return (
-              <button key={c.path} className="btn sm" onClick={() => void connect(c.path)}>
-                {known ? known.marketingName : (c.product || `Unknown 0x${c.productId.toString(16)}`)}{c.preferred ? ' ★' : ''}
-              </button>
-            )
-          })}
+          {primaryCandidates.map((c) => <CandidateButton key={c.path} candidate={c} onConnect={(path) => void connect(path)} />)}
+          {otherCandidates.length > 0 && (
+            <details className="candidate-more">
+              <summary>{t('side.otherControllers')} <span className="pill">{otherCandidates.length}</span></summary>
+              <div className="stack">
+                {otherCandidates.map((c) => <CandidateButton key={c.path} candidate={c} onConnect={(path) => void connect(path)} />)}
+              </div>
+            </details>
+          )}
           {!fx.active && fx.mode === 'xinput' && !candidates.some((c) => c.productId === 0x2412) && (
             <button className="btn sm" disabled={fx.busy} onClick={() => void connectFlydigi(null)} title="The pad is in XInput mode: connecting switches it to DInput (Windows asks permission once)">
               Flydigi Direwolf 4 (XInput mode)
@@ -3016,6 +3416,7 @@ export default function App(): JSX.Element {
           <div className="status-row" style={{ marginTop: 8 }}>
             <span style={{ fontSize: 11.5, color: 'var(--text-3)' }}>{t('side.by')}</span>
           </div>
+          <UpdateRow />
           <button
             type="button"
             className="btn ghost sm"
@@ -3052,7 +3453,7 @@ export default function App(): JSX.Element {
             </div>
           ) : (
           <div className="row" style={{ gap: 8 }}>
-            {isLj
+            {connected && (isLj
               ? (['Main', 'Sub1', 'Sub2'] as const).map((name, i) => (
                   <button
                     key={name}
@@ -3072,14 +3473,14 @@ export default function App(): JSX.Element {
                   >
                     <span className="choice-label">P{s}</span>
                   </button>
-                ))}
-            <button
+                )))}
+            {connected && <button
               className="btn sm primary"
               disabled={isLj ? ljBusy || !ljDirty : !connected || !dirty || busy || locked}
               onClick={() => void (isLj ? writeLeadJoyDraft() : write())}
             >
               {(isLj ? ljBusy : busy) ? t('common.working') : t('top.write')}
-            </button>
+            </button>}
             {(isLj ? ljDirty : dirty) && <span className="pill warn">{t('msg.unsaved')}</span>}
             {!(isLj ? ljDirty : dirty) && savedAt && savedAt.slot === (isLj ? ljSlot + 1 : slot) && (
               <span className="pill good" title={t('msg.verifiedTitle')}>
@@ -3090,6 +3491,7 @@ export default function App(): JSX.Element {
           )}
         </header>
         <div className="content">
+          <div className="content-frame">
           {showSafety && (
             <div className="card" style={{ marginBottom: 16, borderColor: 'var(--warn)' }}>
               <h3>{t('safety.title')}</h3>
@@ -3127,10 +3529,10 @@ export default function App(): JSX.Element {
           )}
           {isLj && (
             <>
-              <div className="row" style={{ gap: 8, marginBottom: 12 }}>
+              <div className="row stick-selector" style={{ gap: 8, marginBottom: 12 }}>
                 {(['Left', 'Right'] as const).map((n, i) => (
                   <button key={n} className={`choice-btn${i === which ? ' active' : ''}`} onClick={() => setWhich(i)}>
-                    <span className="choice-label">{(n === 'Left' ? t('cal.left') : t('cal.right'))} {t('sticks.stick')}</span>
+                    <span className="row stick-choice-label"><StickSideIcon side={n.toLowerCase() as 'left' | 'right'} /><KeyIcon value={i === 0 ? 7 : 8} size={16} /><span className="stick-click-badge">{i === 0 ? 'L3' : 'R3'}</span><span>{(n === 'Left' ? t('cal.left') : t('cal.right'))} {t('sticks.stick')}</span></span>
                   </button>
                 ))}
                 <div style={{ flex: 1 }} />
@@ -3142,9 +3544,15 @@ export default function App(): JSX.Element {
                 const other = (side === 0 ? 1 : 0) as 0 | 1
                 const pts = ljStickPoints(side)
                 return (
-                  <div className="two" style={{ alignItems: 'start' }}>
+                  <div className="two lj-stick-workspace" style={{ alignItems: 'start' }}>
                     <div className="stack" style={{ gap: 16 }}>
-                      <LjLiveCard live={ljLive} />
+                      <LjLiveCard
+                  live={ljLive}
+                  windows={([0, 1] as const).map((s) => {
+                    const z = ljCurveZones(toPairs(ljDraft.sticks[s] ?? ljPadGrid(s)))
+                    return { begin: z.start, end: z.end, beginAnti: z.antiStart }
+                  })}
+                />
                       <LjZonesCard points={pts} onChange={(next) => stageLjStick(side, next)} />
                       <LjOuterCard points={pts} onChange={(next) => stageLjStick(side, next)} />
                     </div>
@@ -3172,13 +3580,13 @@ export default function App(): JSX.Element {
                 </div>
               )}
               {ljSnap && tab === 'buttons' && (
-                <>
-                  {ljZones && <LjTriggerCard value={ljZones} onChange={stageLjTrigger} onReset={() => stageLjTrigger(null)} />}
-                  <div className="card" style={{ marginTop: 16 }}>
-                    <h3>{t('buttons.title')}</h3>
-                    <Hint>{t('lj.bindHint')}</Hint>
+                <div className="buttons-workspace lj-buttons-workspace">
+                  {ljZones && <LjTriggerCard value={ljZones} />}
+                  <div className="card buttons-map-card">
+                    <div className="stick-panel-heading"><div><span className="stick-eyebrow">{t('buttons.title')}</span><h3>{t('buttons.source')} → {t('buttons.effective')}</h3></div><LjKeyIcon id={1} size={24} /></div>
+                    <details className="buttons-help"><summary><LjKeyIcon id={11} size={16} />{t('buttons.help')}</summary><div className="hint">{t('lj.bindHint')}</div></details>
                     <table className="tbl" style={{ marginTop: 8 }}>
-                      <thead><tr><th>{t('buttons.source')}</th><th>{t('buttons.target')}</th><th>{t('buttons.effective')}</th></tr></thead>
+                      <thead><tr><th><span className="row table-heading-icon"><LjKeyIcon id={11} size={16} />{t('buttons.source')}</span></th><th><span className="row table-heading-icon"><LjKeyIcon id={12} size={16} />{t('buttons.target')}</span></th><th><span className="row table-heading-icon"><LjKeyIcon id={1} size={16} />{t('buttons.effective')}</span></th></tr></thead>
                       <tbody>
                         {(() => {
                           const ljOptions = [
@@ -3188,9 +3596,13 @@ export default function App(): JSX.Element {
                             ...LJ_MOUSE_BUTTONS.map((k) => ({ value: LJ_TARGET_MOUSE_BASE + k.code, label: k.label }))
                           ]
                           const ljLabel = (v: number): string => ljTargetLabel(ljDecodeTarget(v)) ?? t('buttons.unmapped')
-                          // Gamepad targets get the pad glyphs; keys/mouse are text-only.
-                          const ljIcon = (v: number): JSX.Element | null =>
-                            v > 0 && v < LJ_TARGET_KEY_BASE ? <LjKeyIcon id={v} /> : null
+                          // Give every target kind a visible icon in the picker.
+                          const ljIcon = (v: number): JSX.Element | null => {
+                            const target = ljDecodeTarget(v)
+                            if (target.t === LJ_MAP_KEYBOARD) return <MappingTypeIcon type="keyboard" />
+                            if (target.t === LJ_MAP_MOUSE) return <MappingTypeIcon type="mouse" />
+                            return v > 0 ? <LjKeyIcon id={v} /> : <LjKeyIcon id={0} />
+                          }
                           const rows = [
                             ...[24, 25, 26, 27].map((id) => ({ id, phys: LJ_PHYSICAL[id] ?? '' })),
                             ...ljSnap.buttons.filter((b) => b.id !== 24 && b.id !== 25 && b.id !== 26 && b.id !== 27).map((b) => ({ id: b.id, phys: '' }))
@@ -3232,7 +3644,7 @@ export default function App(): JSX.Element {
                       </tbody>
                     </table>
                   </div>
-                </>
+                </div>
               )}
             </>
           )}
@@ -3249,35 +3661,49 @@ export default function App(): JSX.Element {
           )}
           {connected && profile && pkt && dz && fd && (
             <>
-              <div className="row" style={{ gap: 8, marginBottom: 12 }}>
+              <div className="row stick-selector" style={{ gap: 8, marginBottom: 12 }}>
                 {(['Left', 'Right'] as const).map((n, i) => (
                   <button key={n} className={`choice-btn${i === which ? ' active' : ''}`} onClick={() => setWhich(i)}>
-                    <span className="choice-label">{(n === 'Left' ? t('cal.left') : t('cal.right'))} {t('sticks.stick')}</span>
+                    <span className="row stick-choice-label"><StickSideIcon side={n.toLowerCase() as 'left' | 'right'} /><KeyIcon value={i === 0 ? 7 : 8} size={16} /><span className="stick-click-badge">{i === 0 ? 'L3' : 'R3'}</span><span>{(n === 'Left' ? t('cal.left') : t('cal.right'))} {t('sticks.stick')}</span></span>
                   </button>
                 ))}
                 <div style={{ flex: 1 }} />
                 <span className="pill">{resBits}-bit · {bitsToLevels(resBits).toLocaleString()} {t('device.levels')}</span>
               </div>
               {tab === 'sticks' && (
-              <div className="two" style={{ alignItems: 'start' }}>
+              <div className="two stick-workspace" style={{ alignItems: 'start' }}>
                 <div className="stack" style={{ gap: 16 }}>
-                  <div className="card">
+                  <div className="card stick-live-card">
                     <h3>{t('sticks.live')}</h3>
                     <Hint>{t('sticks.liveNote')} {t('sticks.liveHint')}</Hint>
-                    <StickCross lx={live?.lx ?? 128} ly={live?.ly ?? 128} rx={live?.rx ?? 128} ry={live?.ry ?? 128} />
-                    <div className="row spread">
-                      <span className="mono">L {live?.lx ?? '—'},{live?.ly ?? '—'}</span>
-                      <span className="mono">R {live?.rx ?? '—'},{live?.ry ?? '—'}</span>
+                    <div className="stick-live-visual"><StickCross
+                      lx={live?.lx ?? 128}
+                      ly={live?.ly ?? 128}
+                      rx={live?.rx ?? 128}
+                      ry={live?.ry ?? 128}
+                      windows={[stick.deadzone(profile.sticks[0]), stick.deadzone(profile.sticks[1])]}
+                    /></div>
+                    <div className="stick-readouts">
+                      <div className={`stick-readout${which === 0 ? ' selected' : ''}`}><span>{t('cal.left')}</span><strong>{live?.lx ?? '—'}<i>,</i>{live?.ly ?? '—'}</strong></div>
+                      <div className={`stick-readout${which === 1 ? ' selected' : ''}`}><span>{t('cal.right')}</span><strong>{live?.rx ?? '—'}<i>,</i>{live?.ry ?? '—'}</strong></div>
                     </div>
                   </div>
 
 
-                  <div className="card">
-                    <h3>{t('sticks.deadzone')} — {t('sticks.steps01')}</h3>
-                    <Hint>{t('sticks.dzHint')}</Hint>
-                    <div className="stack" style={{ gap: 12, marginTop: 8 }}>
+                  <div className="card stick-primary-card">
+                    <div className="stick-panel-heading"><div><span className="stick-eyebrow">{t('sticks.deadzone')}</span><h3>{t('sticks.steps01')}</h3></div><button className="btn sm" onClick={() => edit(() => stick.applyPhysics(pkt))}>{t('sticks.physics')}</button></div>
+                    <p className="stick-intro">{t('sticks.dzHint')}</p>
+                    <div className="stick-primary-sliders">
                       <Slider label={t('sticks.start')} value={dz.begin / 10} min={0} max={20} step={0.1} unit="%" onChange={(v) => edit(() => stick.setDeadzone(pkt, { ...stick.deadzone(pkt), begin: Math.round(v * 10) }))} format={(v) => `${v.toFixed(1)}%`} />
                       <Slider label={t('sticks.end')} value={dz.end / 10} min={10} max={100} step={0.1} unit="%" onChange={(v) => edit(() => stick.setDeadzone(pkt, { ...stick.deadzone(pkt), end: Math.round(v * 10) }))} format={(v) => `${v.toFixed(1)}%`} />
+                    </div>
+                    <div className="stick-value-row"><div><span>{t('sticks.start')}</span><strong>{(dz.begin / 10).toFixed(1)}%</strong></div><div><span>{t('sticks.end')}</span><strong>{(dz.end / 10).toFixed(1)}%</strong></div></div>
+                  </div>
+
+                  <details className="card stick-extra">
+                    <summary>{t('sticks.fineTune')}</summary>
+                    <div className="stick-extra-body">
+                    <div className="stack" style={{ gap: 12, marginTop: 8 }}>
                       <Slider label={t('sticks.antiStart')} value={dz.beginAnti / 10} min={0} max={50} step={0.1} unit="%" onChange={(v) => edit(() => stick.setDeadzone(pkt, { ...stick.deadzone(pkt), beginAnti: Math.round(v * 10) }))} format={(v) => `${v.toFixed(1)}%`} />
                       <Slider label={t('sticks.antiEnd')} value={dz.endAnti / 10} min={50} max={100} step={0.1} unit="%" onChange={(v) => edit(() => stick.setDeadzone(pkt, { ...stick.deadzone(pkt), endAnti: Math.round(v * 10) }))} format={(v) => `${v.toFixed(1)}%`} />
                     </div>
@@ -3347,10 +3773,13 @@ export default function App(): JSX.Element {
                         <button className="btn sm ghost" onClick={() => setMeasuring(null)}>{t('common.dismiss')}</button>
                       </div>
                     )}
-                  </div>
+                    </div>
+                  </details>
 
 
-                  <div className="card">
+                  <details className="card stick-extra">
+                    <summary>{t('sticks.outer')}</summary>
+                    <div className="stick-extra-body">
                     <h3>{t('sticks.outer')} — {outerUnlimited ? t('sticks.noLimitTitle') : t('sticks.custom')}</h3>
                     <Hint>{t('sticks.outerHint')}</Hint>
                     <div className="row spread" style={{ margin: '10px 0' }}>
@@ -3384,19 +3813,52 @@ export default function App(): JSX.Element {
                         Tap <strong>Set ∞</strong> to clear it back to the full range.
                       </div>
                     )}
-                  </div>
+                    </div>
+                  </details>
                 </div>
                 <div className="stack" style={{ gap: 16 }}>
-                  <div className="card">
+                  <div className="card stick-curve-card">
                     <h3>{t('sticks.curve')} — {design.length} {t('sticks.points')}</h3>
                     <Hint>{t('sticks.curveHint')}</Hint>
-                    <CurvePlot points={design.length >= 2 ? design : padCurve} onChange={(next) => stageDesign(next)} overlay={quantized} smooth={spline} />
-                    <div className="row" style={{ gap: 8, margin: '8px 0' }}>
-                      <div style={{ flex: 1 }} />
-                      <button className={`choice-btn${!spline ? ' active' : ''}`} onClick={() => { setSpline(false); stageDesign(design, false) }}><span className="choice-label">{t('sticks.linear')}</span></button>
-                      <button className={`choice-btn${spline ? ' active' : ''}`} onClick={() => { setSpline(true); stageDesign(design, true) }}><span className="choice-label">{t('sticks.spline')}</span></button>
-                      <button className="btn sm ghost" onClick={reloadDesignFromPad}>{t('sticks.reload')}</button>
+                    <CurvePlot
+                      points={design.length >= 2 ? design : padCurve}
+                      onChange={(next) => stageDesign(next)}
+                      onAddPoint={(point) => {
+                        const base = design.length >= 2 ? design : padCurve
+                        const insertAt = base.findIndex((p) => p.x > point.x)
+                        if (insertAt > 0 && insertAt < base.length) {
+                          stageDesign([...base.slice(0, insertAt), point, ...base.slice(insertAt)])
+                        }
+                      }}
+                      maxPoints={DESIGN_MAX_POINTS}
+                      overlay={quantized}
+                    />
+                    <div className="curve-edit-hint"><span className="curve-hint-symbol">↗</span><span>{t('sticks.curveClickHint')}</span></div>
+                    <div className="curve-starters">
+                      <div className="curve-starters-heading"><span>{t('sticks.curveQuickStart')}</span><span>{t('sticks.curve')} · {design.length}/{DESIGN_MAX_POINTS}</span></div>
+                      <div className="curve-starter-grid">
+                        {Object.entries(AIM_CURVES).slice(0, 4).map(([key, curve]) => (
+                          <button key={key} className="curve-starter" title={curve.hint} onClick={() => stageDesign(curve.pts.map((p) => ({ ...p })))}>
+                            <CurveMiniIcon points={curve.pts} />
+                            <span>{curve.label}</span>
+                          </button>
+                        ))}
+                      </div>
                     </div>
+                    <div className="row spread stick-curve-status">
+                      <span>{t('sticks.curve')}</span>
+                      <span className={`pill ${design.length === padCurve.length && design.every((p, i) => p.x === padCurve[i]?.x && p.y === padCurve[i]?.y) ? 'good' : 'warn'}`}>
+                        {design.length === padCurve.length && design.every((p, i) => p.x === padCurve[i]?.x && p.y === padCurve[i]?.y) ? t('sticks.matches') : t('sticks.differs')}
+                      </span>
+                    </div>
+                    <div className="row" style={{ gap: 8, margin: '8px 0' }}>
+                      <button className="btn sm" disabled={design.length >= DESIGN_MAX_POINTS} onClick={() => stageDesign(addDesignPoint(design.length >= 2 ? design : padCurve))}>{t('sticks.addPoint')}</button>
+                      <div style={{ flex: 1 }} />
+                      <button className="btn sm ghost" disabled={busy} onClick={() => void reloadCurveFromPad()}>{t('sticks.reload')}</button>
+                    </div>
+                    <details className="stick-extra stick-curve-tools">
+                      <summary>{t('sticks.presetsAndSaved')}</summary>
+                      <div className="stick-extra-body">
                     <div className="row wrap" style={{ gap: 8, margin: '8px 0' }}>
                       {Object.entries(AIM_CURVES).map(([key, c]) => (
                         <button
@@ -3405,7 +3867,7 @@ export default function App(): JSX.Element {
                           title={c.hint}
                           onClick={() => stageDesign(c.pts.map((p) => ({ ...p })))}
                         >
-                          <span className="choice-label">{c.label}</span>
+                          <span className="row curve-preset-label"><CurveMiniIcon points={c.pts} /><span className="choice-label">{c.label}</span></span>
                         </button>
                       ))}
                     </div>
@@ -3413,46 +3875,14 @@ export default function App(): JSX.Element {
                       <button
                         className="btn sm"
                         title={t('sticks.saveTitle')}
-                        onClick={() => {
-                          const name = window.prompt('Name this curve:')
-                          if (!name || !name.trim()) return
-                          const clean = name.trim().slice(0, 24)
-                          setPresets((prev) => {
-                            const next = prev.filter((p) => p.name !== clean)
-                            next.unshift({ name: clean, pts: design.map((p) => ({ ...p })) })
-                            return next.slice(0, 20)
-                          })
-                        }}
+                        onClick={saveCurrentCurvePreset}
                       >
                         {t('sticks.saveCurrent')}
                       </button>
-                      {presets.map((p) => (
-                        <span key={p.name} className="row" style={{ gap: 4, alignItems: 'center' }}>
-                          <button
-                            className="btn sm ghost"
-                            title={`Apply ${p.name}`}
-                            onClick={() => stageDesign(p.pts.map((q) => ({ ...q })))}
-                          >
-                            {p.name}
-                          </button>
-                          <button
-                            className="btn sm ghost"
-                            title={`Delete ${p.name}`}
-                            onClick={() => setPresets((prev) => prev.filter((q) => q.name !== p.name))}
-                          >
-                            ×
-                          </button>
-                        </span>
-                      ))}
+                      {presets.length === 0 && <span className="saved-curve-empty">{t('sticks.noSavedCurves')}</span>}
+                      {presets.map((p) => <SavedCurvePreset key={p.name} preset={p} onApply={() => stageDesign(p.pts.map((q) => ({ ...q })))} onRename={(name) => renameCurvePreset(p.name, name)} onDelete={() => setPresets((prev) => prev.filter((q) => q.name !== p.name))} />)}
                     </div>
                     <div className="row wrap" style={{ gap: 8 }}>
-                      <button
-                        className="btn sm"
-                        disabled={design.length >= DESIGN_MAX_POINTS}
-                        onClick={() => stageDesign(addDesignPoint(design.length >= 2 ? design : padCurve))}
-                      >
-                        {t('sticks.addPoint')} ({design.length}/{DESIGN_MAX_POINTS})
-                      </button>
                       <button
                         className="btn sm ghost"
                         title={t('sticks.copyCurve')}
@@ -3471,6 +3901,11 @@ export default function App(): JSX.Element {
                         {t('sticks.resetCurve')}
                       </button>
                     </div>
+                      </div>
+                    </details>
+                    <details className="stick-extra stick-curve-tools">
+                      <summary>{t('sticks.pointEditor')}</summary>
+                      <div className="stick-extra-body">
                     <table className="tbl" style={{ marginTop: 8 }}>
                       <thead><tr><th>#</th><th>X</th><th>Y</th><th /></tr></thead>
                       <tbody>
@@ -3489,10 +3924,14 @@ export default function App(): JSX.Element {
                     <div className="note" style={{ marginTop: 8 }}>
                       {t('sticks.hwPreview')} <span className="mono">{quantized.map((q) => `${q.x}/${q.y}`).join(' · ')}</span>
                     </div>
+                      </div>
+                    </details>
                   </div>
 
 
-                  <div className="card">
+                  <details className="card stick-extra">
+                    <summary>{t('sticks.shape')}</summary>
+                    <div className="stick-extra-body">
                     <h3>{t('sticks.shape')}</h3>
                     <Hint>{t('sticks.shapeHint')}</Hint>
                     <div className="stack" style={{ gap: 8 }}>
@@ -3524,16 +3963,18 @@ export default function App(): JSX.Element {
                     {stick.isProfileBypassed(pkt) && (
                       <div className="note" style={{ marginTop: 8 }}>{t('sticks.shapeBypass')}</div>
                     )}
-                  </div>
+                    </div>
+                  </details>
 
                 </div>
               </div>
               )}
               {tab === 'device' && (
-              <div className="two" style={{ alignItems: 'start' }}>
+              <div className="two device-workspace" style={{ alignItems: 'start' }}>
                 <div className="stack" style={{ gap: 16 }}>
-                  <div className="card">
-                    <h3>{t('device.polling')} - {allRates.map((o) => (o.hz >= 1000 ? `${o.hz / 1000}K` : `${o.hz}`)).join(' / ')}</h3>
+                  <div className="card device-polling-card">
+                    <div className="stick-panel-heading"><div><span className="stick-eyebrow">{t('nav.device')}</span><h3>{t('device.polling')}</h3></div><DeviceIcon kind="polling" size={24} /></div>
+                    <div className="device-summary-pills">{allRates.map((o) => <span className="pill" key={o.gear}>{o.hz >= 1000 ? `${o.hz / 1000}K` : `${o.hz}`} Hz</span>)}</div>
                     <Hint>Report-rate gear (Fun_Data +14){model ? ` · ${model.marketingName} offers ${allRates.length} gears` : ''}. Hz labels are the vendor's claim; measured input stays ~250–500/s.</Hint>
                     <div className="choice" style={{ margin: '10px 0' }}>
                       {allRates.map((o) => (
@@ -3550,8 +3991,8 @@ export default function App(): JSX.Element {
                   </div>
 
 
-                  <div className="card">
-                    <h3>{t('device.bits')} - 8-12</h3>
+                  <div className="card device-bits-card">
+                    <div className="stick-panel-heading"><div><span className="stick-eyebrow">{t('nav.device')}</span><h3>{t('device.bits')}</h3></div><DeviceIcon kind="resolution" size={24} /></div>
                     <Hint>{t('device.bitHint')}</Hint>
                     <div className="choice" style={{ margin: '10px 0 6px' }}>
                       {STICK_RESOLUTION_OPTIONS.filter((o) => o.bits === 12).map((o) => (
@@ -3591,8 +4032,8 @@ export default function App(): JSX.Element {
 
                 </div>
                 <div className="stack" style={{ gap: 16 }}>
-                  <div className="card">
-                    <h3>{t('device.rate')}</h3>
+                  <div className="card device-rate-card">
+                    <div className="stick-panel-heading"><div><span className="stick-eyebrow">{t('nav.device')}</span><h3>{t('device.rate')}</h3></div><DeviceIcon kind="rate" size={24} /></div>
                     <Hint>{t('device.rateHint')}</Hint>
                     <div className="stack" style={{ gap: 12 }}>
                       <div className="row spread">
@@ -3653,18 +4094,13 @@ export default function App(): JSX.Element {
           {fx.active && tab === 'buttons' && <FxButtons fx={fx} />}
           {tab === 'buttons' && connected && profile && (
             <>
+            <div className="buttons-workspace">
             <TriggerDeadzoneCard profile={profile} edit={edit} />
-            <div className="card" style={{ marginTop: 16 }}>
-              <h3>{t('buttons.title')}</h3>
-              <Hint>
-                {t('buttons.hint')}
-                <br /><br />
-                {t('buttons.backs')}
-                {modelId === 'G7ProCE' && (<><br /><br />{t('buttons.backsExtra')}</>)}
-                {modelId === 'T3CE' && (<><br /><br />{t('buttons.frontExtra')}<br /><br />{t('buttons.tExtra')}</>)}
-              </Hint>
+            <div className="card buttons-map-card">
+              <div className="stick-panel-heading"><div><span className="stick-eyebrow">{t('buttons.title')}</span><h3>{t('buttons.source')} → {t('buttons.effective')}</h3></div><KeyIcon value={9} size={24} /></div>
+              <details className="buttons-help"><summary><KeyIcon value={14} size={16} />{t('buttons.help')}</summary><div className="hint">{t('buttons.hint')}<br /><br />{t('buttons.backs')}{modelId === 'G7ProCE' && (<><br /><br />{t('buttons.backsExtra')}</>)}{modelId === 'T3CE' && (<><br /><br />{t('buttons.frontExtra')}<br /><br />{t('buttons.tExtra')}</>)}</div></details>
               <table className="tbl" style={{ marginTop: 8 }}>
-                <thead><tr><th>{t('buttons.source')}</th><th>{t('buttons.target')}</th><th>{t('buttons.effective')}</th></tr></thead>
+                <thead><tr><th><span className="row table-heading-icon"><KeyIcon value={13} size={16} />{t('buttons.source')}</span></th><th><span className="row table-heading-icon"><KeyIcon value={14} size={16} />{t('buttons.target')}</span></th><th><span className="row table-heading-icon"><KeyIcon value={9} size={16} />{t('buttons.effective')}</span></th></tr></thead>
                 <tbody>
                   {([
                     ...STANDARD_BUTTONS.map((name, i) => ({ name: keyLabel(i + 1), value: i + 1, pkt: profile.buttons[i] ?? null as Packet | null })),
@@ -3734,6 +4170,7 @@ export default function App(): JSX.Element {
                 </tbody>
               </table>
             </div>
+            </div>
             </>
           )}
           {tab === 'profiles' && (
@@ -3750,7 +4187,9 @@ export default function App(): JSX.Element {
           )}
           {tab === 'calibrate' && (
             connected && model?.support === 'full' ? (
-              <CalibrationPanel />
+              isLj
+                ? <LeadJoyCalibrationPanel live={ljLive} onOpenSticks={() => setTab('sticks')} />
+                : <CalibrationPanel modelName={model.marketingName} />
             ) : (
               <div className="msg"><h3>{t('cal.connectTitle')}</h3><p>{t('cal.connectBody')}</p></div>
             )
@@ -3774,9 +4213,10 @@ export default function App(): JSX.Element {
           />
           <LinearityBench live={live} connected={connected} />
           <DeepPollCard vid={model?.vendorId ?? 0x3537} pid={pid} setHz={profile && fd ? gearHz : 0} connected={connected} />
-          <ResetEverythingCard profile={profile} fd={fd} edit={edit} onReload={reloadDesignFromPad} notify={setMsg} />
+          <ResetEverythingCard profile={profile} fd={fd} edit={edit} onReload={syncDesignFromCopy} notify={setMsg} />
           </>
           )}
+          </div>
         </div>
       </main>
     </div>

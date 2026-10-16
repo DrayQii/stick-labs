@@ -56,6 +56,10 @@ interface LabApi {
   ping(count: number): Promise<PingResult>
   openExternal(url: string): Promise<boolean>
   version(): Promise<string>
+  /** Self-update state pushed from the main process (no dialogs anywhere). */
+  updateStatus(): Promise<{ state: 'idle' | 'checking' | 'downloading' | 'ready' | 'current' | 'error'; version?: string; percent?: number; message?: string }>
+  updateCheck(): Promise<boolean>
+  updateInstall(): Promise<boolean>
   steamInfo(): Promise<{ steamPath: string | null; userId: string | null; apexInstalled: boolean; apexAppId: number; steamRunning: boolean }>
   steamExport(
     left: { begin: number; end: number },
@@ -93,7 +97,7 @@ interface LabApi {
   flydigiXBackup(cfgId?: number): Promise<{ name: string; cfgId: number; time: string }>
   /** Write a backup back to the slot it came from (verified, rolled back on mismatch; current contents are backed up first). */
   flydigiXRestore(name: string, save: boolean): Promise<{ verified: boolean; restored: boolean; saved: boolean; changedPacks: number; cfgId: number }>
-  /** LeadJoy Saber Plus: read-only Main-slot snapshot (sticks stay locked). */
+  /** LeadJoy Saber Plus: read the complete Main-slot snapshot. */
   leadjoyReadMain(path: string): Promise<LjSnapshot>
   /** LeadJoy slot snapshot (Main 0 / Sub1 1 / Sub2 2). */
   leadjoyReadSlot(req: { path: string; slot: number }): Promise<LjSnapshot>
@@ -101,8 +105,6 @@ interface LabApi {
   leadjoyWriteButton(req: { path: string; slot: number; id: number; target: LjButtonTarget | null }): Promise<{ verified: boolean; restored: boolean }>
   /** LeadJoy stick image write (verified read-modify-write of a validated patch). */
   leadjoyWriteStick(req: { path: string; slot: number; side: number; patch: LjStickPatch }): Promise<{ verified: boolean; restored: boolean }>
-  /** LeadJoy trigger deadzone write (verified write, ints 0..100). */
-  leadjoyWriteTrigger(req: { path: string; slot: number; zones: { leftInner: number; leftOuter: number; rightInner: number; rightOuter: number } }): Promise<{ verified: boolean; restored: boolean }>
   on(channel: string, fn: (payload: never) => void): () => void
 }
 

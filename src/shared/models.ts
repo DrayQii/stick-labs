@@ -2,10 +2,10 @@
  * Controller model registry — multi-pad support.
  *
  * Each entry describes one pad's wire identity and what Stick Labs may do
- * with it. Tuning stays gated per model: `full` only where the profile
- * geometry (offsets, lengths, wire semantics) is proven against hardware or
- * byte-identical fixtures. Anything else is `detect-only` — the app names
- * the pad and reads live input, but refuses profile writes.
+ * with it. `full` means the model has a verified editing path, which may use
+ * its own protocol instead of the GameSir profile blob. GameSir profile
+ * geometry is enabled only where offsets, lengths, and wire semantics are
+ * proven. `detect-only` models are named but kept read-only.
  *
  * NEVER match a device on productId for opening it (it varies by color and
  * mode); pids[] is documentation for the UI, not a filter.
@@ -75,8 +75,8 @@ export const MODELS: ReadonlyArray<ControllerModel> = [
     reportRates: [],
     profileLength: 0,
     dumpLength: 0,
-    support: 'detect-only',
-    supportNote: 'Full in-app control: buttons (1:1 remaps), stick curves/deadzones and trigger deadzones all read and write live, each write proven by readback (fixtures/leadjoy/).'
+    support: 'full',
+    supportNote: 'In-app control for button remaps, stick curves/deadzones and controller rate. Trigger deadzones are shown read-only until the write command has live hardware proof. Button and stick writes have live readback proof.'
   },
   {
     id: 'G7SE',

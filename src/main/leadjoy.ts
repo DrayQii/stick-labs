@@ -1,27 +1,22 @@
 /**
- * LeadJoy Saber Plus read session (MI_04, usage page 0xFF80/0001).
+ * LeadJoy Saber Plus session (MI_04, usage page 0xFF80/0001).
  *
- * READ-ONLY: every query below comes from the shared builders proven
- * byte-exact against vendor captures in tests/leadjoy.ts — the same bytes
- * the vendor app sends while opening its mapping page. There is deliberately
- * no write path here: writes stay locked until a vendor save-flush capture
- * proves the write framing with readback.
+ * Reads and verified button/stick writes use shared builders proven against
+ * vendor captures in tests/leadjoy.ts. Trigger writes remain disabled until
+ * live hardware proof is recorded.
  */
 import HIDModule, { type HID as HIDInstance } from 'node-hid'
 import {
   LJ_REC_BUTTONS_WRITE,
   LJ_REC_STICK_WRITE,
-  LJ_REC_TRIGGER_WRITE,
   LJ_REPORT_LEN,
   ljApplyStickPatch,
   ljBoardQuery,
   ljBuildButtonWrite,
   ljBuildSnapshot,
   ljBuildStickWrite,
-  ljBuildTriggerWrite,
   ljButtonQuery,
   ljDecodeStream,
-  ljFrameBytes,
   ljFragmentOut,
   ljParseBoard,
   ljParseButtonTable,
@@ -41,8 +36,6 @@ import {
   type LjSnapshot,
   type LjStickPatch,
   type LjStickSide,
-  type LjTriggerD1,
-  type LjTriggerZones
 } from '../shared/leadjoy'
 
 const QUERY_TIMEOUT_MS = 10000
@@ -248,63 +241,6 @@ async function writeStick(handle: HIDInstance, slot: LjSlot, side: 0 | 1, d1: Lj
       return
     }
     throw new Error(`leadjoy: unexpected reply to stick write (class 0x${(bytes[0] ?? 0).toString(16)})`)
-  }
-}
-
-/**
- * Write trigger deadzones and prove they landed (implemented, live proof
- * gated on explicit per-step user confirmation — never call this without it).
- * Read-modify-write: mode/vibration pass through from the pad read, only
- * the four deadzone ints travel from the caller. Ack {c:91,e:0}, read back,
- * restore-on-mismatch.
- */
-export async function ljWriteTriggerVerified(
-  path: string,
-  slot: LjSlot,
-  zones: LjTriggerZones
-): Promise<{ verified: boolean; restored: boolean }> {
-  const handle = openHandle(path)
-  try {
-    const before = await readTrigger(handle, slot)
-    const want: LjTriggerD1 = {
-      ...before,
-      dzl: [zones.leftInner, zones.leftOuter],
-      dzr: [zones.rightInner, zones.rightOuter]
-    }
-    await writeTrigger(handle, slot, want)
-    const landed = await readTrigger(handle, slot)
-    if (JSON.stringify(landed) === JSON.stringify(want)) return { verified: true, restored: false }
-
-    await writeTrigger(handle, slot, before)
-    const afterRestore = await readTrigger(handle, slot)
-    const restored = JSON.stringify(afterRestore) === JSON.stringify(before)
-    throw new Error(
-      `leadjoy: triggers did not verify on readback (restore ${restored ? 'verified' : 'UNVERIFIED'} — re-read before writing again)`
-    )
-  } finally {
-    closeHandle(handle)
-  }
-}
-
-async function readTrigger(handle: HIDInstance, slot: LjSlot): Promise<LjTriggerD1> {
-  const tuning = ljParseTrigger(ljDecodeStream(await queryStream(handle, ljTriggerQuery(slot))))
-  if (tuning.slot !== slot) throw new Error(`leadjoy: trigger echo mismatch (slot ${tuning.slot})`)
-  return tuning.d1
-}
-
-/** Send one trigger write (single A5 frame) and await its {c:91,e:0} ack. */
-async function writeTrigger(handle: HIDInstance, slot: LjSlot, d1: LjTriggerD1): Promise<void> {
-  handle.write([0x00, ...ljFrameBytes(ljBuildTriggerWrite(slot, d1))])
-  const deadline = Date.now() + QUERY_TIMEOUT_MS
-  for (;;) {
-    if (Date.now() > deadline) throw new Error('leadjoy: timed out waiting for the trigger write ack')
-    const bytes = nextReport(handle)
-    if (!bytes) continue
-    if (bytes[0] === 0xa5) {
-      ljParseWriteAck(ljParseSingleFrame(bytes), LJ_REC_TRIGGER_WRITE)
-      return
-    }
-    throw new Error(`leadjoy: unexpected reply to trigger write (class 0x${(bytes[0] ?? 0).toString(16)})`)
   }
 }
 
