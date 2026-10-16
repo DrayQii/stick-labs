@@ -9,6 +9,7 @@ import { useEffect, useState } from 'react'
 import { FX_REPORT_RATES, fxHzFromReportRate, FX_KEY_DEFAULT, FX_KEY_NAMES, FX_KEY_ORDER, FX_CURVE_CUSTOM, fxDeadzonePoints, fxTriggerRange, type FxCurve, type FxSnapshot, type FxTriggerRaw, type FxVibration } from '@shared/flydigi-xinput'
 import { api } from './api'
 import FlydigiCurveDesigner from './FlydigiCurveDesigner'
+import FlydigiLiveView from './FlydigiLiveView'
 
 const sc = (b: number): number => (b > 127 ? b - 256 : b)
 
@@ -296,6 +297,14 @@ export default function FlydigiPanel(props: { onClose?: () => void }): JSX.Eleme
           </div>
         </div>
       )}
+
+      <div style={{ marginTop: 14 }}>
+        <h4>Live input</h4>
+        <div className="hint" style={{ margin: '4px 0 8px' }}>
+          What the system sees from the pad right now (stick position, triggers, buttons). Handy for checking a curve or deadzone after Apply. Read-only; the pad&apos;s own output, after its curve.
+        </div>
+        <FlydigiLiveView />
+      </div>
 
       {msg && (
         <div className="hint" style={{ marginTop: 10, color: msg.kind === 'err' ? 'var(--bad, #e66)' : 'var(--good, #6c6)' }}>
