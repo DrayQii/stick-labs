@@ -75,7 +75,7 @@ interface LabApi {
   /** MARIUS board — read-only preview scaffold. No write path exists. */
   /** Kernel USB poll check (elevated ETW trace, UAC prompts once per run). */
   deeppoll(vid: number, pid: number, seconds?: number): Promise<DeepPollResult>
-  /** LeadJoy Saber Plus: read-only Main-slot snapshot (sticks stay locked). */
+  /** LeadJoy Saber Plus: read the complete Main-slot snapshot. */
   leadjoyReadMain(path: string): Promise<LjSnapshot>
   /** LeadJoy slot snapshot (Main 0 / Sub1 1 / Sub2 2). */
   leadjoyReadSlot(req: { path: string; slot: number }): Promise<LjSnapshot>
@@ -83,8 +83,6 @@ interface LabApi {
   leadjoyWriteButton(req: { path: string; slot: number; id: number; target: LjButtonTarget | null }): Promise<{ verified: boolean; restored: boolean }>
   /** LeadJoy stick image write (verified read-modify-write of a validated patch). */
   leadjoyWriteStick(req: { path: string; slot: number; side: number; patch: LjStickPatch }): Promise<{ verified: boolean; restored: boolean }>
-  /** LeadJoy trigger deadzone write (verified write, ints 0..100). */
-  leadjoyWriteTrigger(req: { path: string; slot: number; zones: { leftInner: number; leftOuter: number; rightInner: number; rightOuter: number } }): Promise<{ verified: boolean; restored: boolean }>
   on(channel: string, fn: (payload: never) => void): () => void
 }
 

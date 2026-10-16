@@ -40,10 +40,9 @@
  * - 120: rumble {b, c:slot, d1:{enl,grl,trl,trml,enr,grr,trr,trmr}}.
  * - 220: motion-control device colors [{mkn,c:[r,g,b],s}].
  *
- * Status: full READ model proven, and the single-record button WRITE (61)
- * is capture-proven byte-exact with its {c:61,e:0} ack. Live write proof
- * (write + readback from this app's handle) is still gated on explicit
- * per-step user confirmation, so every write path stays locked until then.
+ * Status: reads and button/stick runtime writes are implemented and have live
+ * readback proof. Trigger write codecs are fixture-tested, but runtime trigger
+ * writes stay disabled until a live hardware proof is recorded.
  */
 
 /** USB identity of the Saber Plus config interface (MI_04). */

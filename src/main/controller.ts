@@ -488,7 +488,7 @@ export class Controller {
    * Throws rather than silently returning when the handle is gone, because the
    * UI needs to distinguish "sent" from "nothing happened".
    */
-  calibration(state: number, partMask: number = CalPart.Sticks | CalPart.Triggers): void {
+  calibration(state: number, partMask: number = CalPart.Sticks): void {
     if (!this.transport.isOpen) {
       throw new Error('device not open')
     }

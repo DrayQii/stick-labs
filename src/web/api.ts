@@ -160,8 +160,6 @@ const basis = {
     Promise.reject(new Error('LeadJoy support is landing next in the browser build.')),
   leadjoyWriteStick: (_req: { path: string; slot: number; side: number; patch: LjStickPatch }) =>
     Promise.reject(new Error('LeadJoy support is landing next in the browser build.')),
-  leadjoyWriteTrigger: () =>
-    Promise.reject(new Error('LeadJoy support is landing next in the browser build.')),
   on: (channel: string, fn: Listener): (() => void) => {
     const set = listeners.get(channel) ?? new Set<Listener>()
     set.add(fn)

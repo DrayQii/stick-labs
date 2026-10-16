@@ -8,7 +8,7 @@ import { join } from 'node:path'
 import { Controller, type DeviceInfo } from './controller'
 import { Transport } from './hid'
 import { discover, discoverLive } from './hid'
-import { ljReadButtonTable, ljReadMainSnapshot, ljReadSnapshot, ljWriteButtonVerified, ljWriteStickVerified, ljWriteTriggerVerified } from './leadjoy'
+import { ljReadButtonTable, ljReadMainSnapshot, ljReadSnapshot, ljWriteButtonVerified, ljWriteStickVerified } from './leadjoy'
 import type { LjButtonTarget, LjStickPatch } from '../shared/leadjoy'
 import { ljButtonWriteRecord } from '../shared/leadjoy'
 import { steamInfo, exportApexDeadzones, listInstalledGames, exportDeadzonesToGames } from './steam'
@@ -17,6 +17,18 @@ import { runDeepPoll } from './deeppoll'
 
 const controller = new Controller(new Transport(), discover)
 let window_: BrowserWindow | null = null
+
+// A second launch should reveal the existing tray instance instead of
+// creating another Electron process and another tray icon.
+const hasSingleInstanceLock = app.requestSingleInstanceLock()
+if (!hasSingleInstanceLock) {
+  app.quit()
+} else {
+  app.on('second-instance', () => {
+    if (app.isReady()) showMainWindow()
+    else void app.whenReady().then(showMainWindow)
+  })
+}
 
 function send(channel: string, ...args: unknown[]): void {
   if (window_ && !window_.isDestroyed()) window_.webContents.send(channel, ...args)
@@ -138,12 +150,6 @@ handle('leadjoy:writeStick', async (req: { path: string; slot: number; side: num
   if (side !== 0 && side !== 1) throw new Error(`leadjoy: side ${side} is not left/right`)
   return ljWriteStickVerified(path, slot, side, (patch ?? {}) as LjStickPatch)
 })
-handle('leadjoy:writeTrigger', async (req: { path: string; slot: number; zones: { leftInner: number; leftOuter: number; rightInner: number; rightOuter: number } }) => {
-  const { path, slot, zones } = req ?? {}
-  if (typeof path !== 'string' || path.length === 0) throw new Error('leadjoy: refusing write without a device path')
-  if (slot !== 0 && slot !== 1 && slot !== 2) throw new Error(`leadjoy: slot ${slot} is not Main/Sub1/Sub2`)
-  return ljWriteTriggerVerified(path, slot, zones)
-})
 handle('device:connect', async (path: string): Promise<DeviceInfo> => {
   sessionEpoch++
   const info = await controller.connect(path)
@@ -242,7 +248,15 @@ function createWindow(): void {
   })
 }
 
+function showMainWindow(): void {
+  if (!window_ || window_.isDestroyed()) createWindow()
+  if (window_?.isMinimized()) window_.restore()
+  window_?.show()
+  window_?.focus()
+}
+
 app.whenReady().then(() => {
+  if (!hasSingleInstanceLock) return
   session.defaultSession.setPermissionRequestHandler((_wc, permission, callback) => {
     // WebHID for Flydigi Apex 5 (interrupt-OUT reports node-hid cannot send).
     // requestDevice still needs a user gesture; this only stops auto-deny.
@@ -309,8 +323,7 @@ app.whenReady().then(() => {
   createTray()
 
   app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow()
-    window_?.show()
+    showMainWindow()
   })
 })
 
@@ -327,19 +340,13 @@ function createTray(): void {
     Menu.buildFromTemplate([
       {
         label: 'Show Stick Labs',
-        click: () => {
-          window_?.show()
-          window_?.focus()
-        }
+        click: showMainWindow
       },
       { type: 'separator' },
       { label: 'Quit', click: () => app.quit() }
     ])
   )
-  tray.on('click', () => {
-    window_?.show()
-    window_?.focus()
-  })
+  tray.on('click', showMainWindow)
 }
 
 // --- self-update surface (no dialogs; the renderer shows it) ----------------
