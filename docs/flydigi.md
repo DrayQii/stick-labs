@@ -331,18 +331,27 @@ values still used are the ones in the code: turbo frequency 1..30, gyro sensitiv
 - LED / RGB: Space Station's app has no LED or RGB settings for the Direwolf 4 (maintainer, 2026-10-17), so there is nothing to decode.
 - Calibration: Space Station has no calibration screen for the Direwolf 4, so there is nothing to copy.
 
-## Polling rate and mode switch without Space Station (UsbDk, native)
+## Polling rate and mode switch without Space Station (UsbDk, native) — verified
+
+Verified on the pad from the app: DInput pad, set 500 Hz, then 1000 Hz, each read back correctly, pad back in DInput.
+No Python, no Space Station.
 
 `src/main/flydigi-usb.ts` reads/sets the polling rate and does the XInput -> DInput switch (A5 17) over raw USB with
-node-usb 2.17.0 (bundles libusb 1.0.29) and the signed UsbDk driver. No Python, no Space Station. UsbDk lends the pad to the
-app only while it is open and hands it back to the Xbox driver afterwards, so no driver is replaced. libusb is initialised
-when `usb` loads and `useUsbDkBackend()` then sets the option on that context, which is the order libusb 1.0.30 needs
-(set before init it always fails). The pad re-enumerates after a rate change, so it is read back with a fresh open.
-If UsbDk refuses a normal user, the same code runs elevated: the app starts its own executable with
-`ELECTRON_RUN_AS_NODE` and `out/main/flydigi-usb-run.js` (UAC prompt). Without UsbDk the app falls back to
-`scripts/flydigi-xinput-helper.py` (Space Station's driver, needs python). The Python probe
-(`scripts/flydigi-winusb-probe.py --usbdk`) stays as a reference for the verified frames.
+node-usb 2.17.0 (bundles libusb 1.0.29) and the signed UsbDk driver. UsbDk lends the pad to the opening process and
+hands it back to the Xbox driver afterwards, so no driver is replaced. libusb is initialised when `usb` loads and
+`useUsbDkBackend()` then sets the option on that context (set before init it always fails).
 
-node-usb must be 2.17.x: from 2.18 on its libusb is built with Windows hotplug, where the device list is filled by a WinUSB
-scan at start and a later switch to UsbDk never rescans, so the pad is "not visible through UsbDk". 2.17 lists devices
-through the active backend on every call.
+What the pad and UsbDk need, all found on the pad:
+- **Administrator.** UsbDk's StartRedirect refuses a normal user (libusb reports `LIBUSB_ERROR_OTHER` on open). The app
+  runs `out/main/flydigi-usb-run.js` with its own executable as node (`ELECTRON_RUN_AS_NODE`) through a UAC prompt.
+- **One process per USB step.** UsbDk keeps the pad claimed until the process that opened it ends, and the pad
+  re-enumerates to apply a rate, so a second open in the same process fails. Send, read-back and the DInput switch each
+  run as their own short-lived process; the app never opens the pad itself.
+- **The rate write "fails".** The pad drops off USB to apply the rate, so the write usually ends in
+  `LIBUSB_TRANSFER_ERROR` although it took effect. The read-back (fresh process, 4 s later) decides.
+- **node-usb must be 2.17.x.** From 2.18 its libusb is built with Windows hotplug: the device list comes from a WinUSB
+  scan at start and a later switch to UsbDk never rescans, so the pad is "not visible through UsbDk".
+
+Without UsbDk the app falls back to `scripts/flydigi-xinput-helper.py` (Space Station's driver, needs python). The Python
+probe (`scripts/flydigi-winusb-probe.py --usbdk`) stays as a reference for the frames. Set `FLYDIGI_USB_DEBUG=1` for
+libusb's own log. Manual test (admin shell): `node out/main/flydigi-usb-run.js --set-rate 1 --out r.json`.
