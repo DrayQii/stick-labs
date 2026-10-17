@@ -42,7 +42,7 @@ export const FX_STR: Record<string, Row> = {
   'fx.live.raw': { en: 'raw axes:', zh: '原始轴值：', ja: '生の軸値：', ru: 'сырые оси:' },
   'fx.live.fromPad': { en: "From the pad's own stream: every button, including the back buttons (M1..M6) and C / Z.", zh: '来自手柄自身的数据流：所有按键，包括背键（M1..M6）和 C / Z。', ja: 'パッド自身のデータから：背面ボタン（M1..M6）と C / Z を含むすべてのボタン。', ru: 'Из собственного потока геймпада: все кнопки, включая задние (M1..M6) и C / Z.' },
   'fx.live.gyro': { en: 'gyro (raw) x {x} · y {y}', zh: '陀螺仪（原始值）x {x} · y {y}', ja: 'ジャイロ（生の値）x {x} · y {y}', ru: 'гироскоп (сырые) x {x} · y {y}' },
-  'fx.live.gyroTip': { en: 'Raw gyro bytes from the pad's stream; they follow when you tilt the pad.', zh: '手柄数据流中的原始陀螺仪字节，倾斜手柄时会随之变化。', ja: 'パッドのデータに含まれる生のジャイロ値です。パッドを傾けると変化します。', ru: 'Сырые байты гироскопа из потока геймпада; меняются при наклоне.' },
+  'fx.live.gyroTip': { en: "Raw gyro bytes from the pad's stream; they follow when you tilt the pad.", zh: '手柄数据流中的原始陀螺仪字节，倾斜手柄时会随之变化。', ja: 'パッドのデータに含まれる生のジャイロ値です。パッドを傾けると変化します。', ru: 'Сырые байты гироскопа из потока геймпада; меняются при наклоне.' },
   'fx.live.default': { en: 'Default', zh: '默认', ja: '既定', ru: 'По умолчанию' },
   'fx.leftStick': { en: 'Left stick', zh: '左摇杆', ja: '左スティック', ru: 'Левый стик' },
   'fx.rightStick': { en: 'Right stick', zh: '右摇杆', ja: '右スティック', ru: 'Правый стик' },
