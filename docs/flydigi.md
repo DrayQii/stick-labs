@@ -340,7 +340,63 @@ decoded from blobs, so the blob bytes very likely use the same numbers.
   never), joystick sensitivity / precision, stick debounce, joystick auto-calibration, stick rebound, gyro debounce,
   quick config switch, mapping switch, grip and trigger vibration tests, SwitchToXInputMode.
 
-The blob layout itself is produced by the .NET service; reading it there (ILSpy) is the next source.
+The blob layout itself is produced by the .NET service; it was read there (below).
+
+### Full blob layout and setting commands (from Space Station's service)
+
+`SpaceStationService.exe` is a .NET single-file bundle; `scripts/dotnet-bundle-extract.py` unpacks it and ILSpy reads
+`Flydigi.ControllerSdk.dll` (`data.parser.MappingConfigParser`, `data.model.config`, `data.command.setting`). Facts
+only, nothing copied. The Direwolf 4 is protocol 0x0301 (769, "V3.1", 84 packs). Offsets below are what the parser
+reads and writes; the ones already decoded here (keys, sticks, triggers, gyro, vibration, curves, data version) all
+agree.
+
+| Bytes | Field | Notes |
+|---|---|---|
+| 0..1 | protocol version | u16 LE, 0x0301 |
+| 2 | pack count | |
+| 3..12 | LED (old style) | 10 bytes |
+| 13..108 | key table | 32 x `[target, enableType, turboFreq]`; target 255 = default, 32 = macro, 254 = keyboard / multi-function, else a `ControllerKey`; turbo when freq > 0 |
+| 109..122 | sticks | 2 x `[preset, centre, p1x, p1y, p2x, p2y, end]`; centre and end signed (>127 means 127 - b) |
+| 123..136 | trigger curves | 2 x `[type, zero, p1x, p1y, p2x, p2y, end]` |
+| 137..144 | gyro | `[mapType, enableKey, enableType, deadZone, sens, sens, useMode, enableKey2]`; Mouse writes keys 255 and dead zone 0. The gyro-mouse X/Y sensitivities are not in the blob |
+| 145..153 | grip vibration | `[master 0=on/255=off, L on, L min, L max, L scale, R on, R min, R max, R scale]` |
+| 154..182 | trigger vibration | `[enable 0=on/1=off]` + per side 14: linear `(type, minLevel, maxLevel, filter, minStart, scale, minTime)` then micro (same 7) |
+| 183..184 | "lunpan" (wheel) | 2 bytes, kept as is |
+| 185..224 | adaptive trigger | per side 20: `type, bind(type, filter, scale, param x5), mixedBorder, param x10` (force-feedback pads) |
+| 225..226 | data version | u16 LE |
+| 230..767 | macros | see below |
+| 770..789 | config title | UTF-16LE, 10 chars, padded 0xFF |
+| 790..813 | curves (V3.1) | 2 x `[preset, 9 points, circularity, edge]` |
+| 820..824 | macro intervals | 5 x (ms / 10), protocol < 0x0302 |
+| 830..835 | gyro smoothing | `[zero, p1x, p1y, p2x, p2y, end]` (the UI's smoothness slider) |
+
+**Macros (230..767, 538 bytes):** `count`, then 5 offset bytes (macro i starts at 6 + offset[i] x 4; offset[0] = 0,
+each next one adds that macro's step count + 1), then per macro a 4-byte head `[key, repeat lo, repeat hi,
+MacroEnableType]` followed by 4-byte steps `[time lo, time hi, key, MacroActionEvent]`. Step time is cumulative from
+the macro start, in 10 ms units on this protocol (1 ms from 0x0302). Up to 5 macros, 64 steps each on 0x0301.
+
+**Setting commands** (XInput frame `A5 <cmd> <sub> <val>`; DInput `05 <cmd> <sub> <val>`, cmd/sub where they differ):
+
+| Setting | XInput | DInput | Value |
+|---|---|---|---|
+| report rate | 50 0A | 50 0A | 1/2/4/8 (DInput measured: ignored) |
+| read status | 50 07 | F2 03 | see below |
+| sleep time | 30 05 | F2 02 | minutes, 0 = never (1/5/15/60 in the UI) |
+| stick debounce | 50 08 | 50 08 | 0 = on, 1 = off |
+| stick auto-calibration | 50 09 | 50 09 | 0 = on, 1 = off |
+| stick rebound | 50 0E | 50 0E | 0 = on, 1 = off |
+| stick sensitivity | 50 0D | 50 0D | 14..20 (Highest..Lowest) |
+| stick precision | 50 0B | 50 0B | 1..7 (8/10/12/9/11/14/16 bit) |
+| gyro debounce | 30 0D | F5 06 | 0 = on, 1 = off |
+| quick config switch | A2 <v> | FA A2 | 1 = on |
+| Xbox home button | 30 0A / 30 09 | - | on / off |
+
+Status reply: XInput (`A5 50 07`) bytes 17..27 = mapping switch (0 = on), stick debounce (0 = on), auto-calibration
+(0 = on), sleep minutes, quick switch (1 = on), report rate (the byte already used here), precision, sensitivity,
+rebound (0 = on), circle (1 = on), dock smart stop. DInput (`05 F2 03`) bytes 4..12 = the first nine in the same
+order. Space Station marks rebound, auto-calibration, debounces, quick switch and the Xbox home button as available
+on the Direwolf 4 (`fp4`).
+
 
 ### Next steps
 1. **Gyro, remaining fields.** Mouse mapping (and its X/Y sensitivities), the other enable types, the second activation
