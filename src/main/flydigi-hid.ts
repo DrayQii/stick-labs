@@ -17,7 +17,7 @@ import { spawn, spawnSync } from 'node:child_process'
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { fxDinputPath, fxXInputPresent } from './flydigi-switch'
+import { fxDinputPath, fxPadMode, fxPauseScans, fxXInputPresent } from './flydigi-switch'
 import {
   FX_BLOB_LEN,
   FX_KEY_DEFAULT,
@@ -114,8 +114,7 @@ const xinputDirewolfPresent = fxXInputPresent
 
 /** Which mode the Direwolf is in right now: 'dinput' (04B4:2412 vendor interface), 'xinput', or 'none'. */
 export function fxHidMode(): 'dinput' | 'xinput' | 'none' {
-  if (dinputPath()) return 'dinput'
-  return xinputDirewolfPresent() ? 'xinput' : 'none'
+  return fxPadMode()
 }
 
 function spaceStationRunning(): boolean {
@@ -516,7 +515,13 @@ export function fxHidPollingRate(code: number | null): Promise<{ reportRate: num
       await sleep(2500) // let Windows finish setting the pad up as an Xbox controller before the driver helper looks for it
     }
     const args = [...(code === null ? ['--read-rate'] : ['--set-rate', String(code)]), ...(wasDInput ? ['--to-dinput'] : [])]
-    const r = await runHelper(args)
+    fxPauseScans(true)
+    let r: Awaited<ReturnType<typeof runHelper>>
+    try {
+      r = await runHelper(args)
+    } finally {
+      fxPauseScans(false)
+    }
     if (wasDInput && !(await waitFor(() => dinputPath() !== null, 12000))) {
       throw new Error('flydigi: the rate was applied but the pad did not return to DInput mode. Press Read pad to switch it again.')
     }
