@@ -10,11 +10,14 @@ export function FlydigiCard(props: {
   charging?: boolean
   /** Raw get-info reply from the pad, shown while the battery byte is still unconfirmed. */
   probeHex?: string | null
+  /** Firmware from the get-info reply: undefined hides the cell, null shows N/A. */
+  firmware?: string | null
+  connection?: 'wired' | 'wireless' | 'unknown'
   onConnect: () => void
   /** XInput mode only: switch through Space Station's driver instead of the pad's FN + D-pad Left combo. */
   onDriverSwitch?: () => void
 }): JSX.Element {
-  const { mode, busy, batteryPercent = null, charging = false, probeHex = null, onConnect, onDriverSwitch } = props
+  const { mode, busy, batteryPercent = null, charging = false, probeHex = null, firmware, connection = 'unknown', onConnect, onDriverSwitch } = props
   const t = useT()
   const xinput = mode === 'XInput'
   const pct = batteryPercent === null ? null : Math.max(0, Math.min(100, batteryPercent))
@@ -39,6 +42,15 @@ export function FlydigiCard(props: {
               {pct === null ? t('fx.card.batteryNA') : `${pct}%${charging ? ` ${t('fx.card.charging')}` : ''}`}
             </span>
           </span>
+          {firmware !== undefined && (
+            <span className="fx-cell" style={{ gridColumn: '1 / -1' }}>
+              <span className="fx-cell-k">{t('fx.card.firmware')}</span>
+              <span className="fx-cell-v">
+                {firmware ?? t('fx.card.batteryNA')}
+                {firmware && connection !== 'unknown' ? ` · ${t(connection === 'wired' ? 'fx.info.wired' : 'fx.info.wireless')}` : ''}
+              </span>
+            </span>
+          )}
         </span>
         {pct === null && probeHex && <span className="fx-probe">{t('fx.card.reply')} {probeHex}</span>}
         {xinput ? (
