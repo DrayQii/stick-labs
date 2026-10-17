@@ -6,6 +6,8 @@
  * any axis (remembered in localStorage) while the raw axes are shown.
  */
 import { useEffect, useRef, useState } from 'react'
+import { useT } from './i18n'
+import { fxFmt } from './i18n-fx'
 
 /** Which gamepad axis (or trigger source) feeds each control. Triggers: 'b6'/'b7' = button value, 'aN' = axis N rescaled from -1..1. */
 interface Mapping {
@@ -77,6 +79,7 @@ function Bar(props: { label: string; value: number }): JSX.Element {
 }
 
 export default function FlydigiLiveView(): JSX.Element {
+  const t = useT()
   const [live, setLive] = useState<Live | null>(null)
   const raf = useRef(0)
   // null = use the default for the pad's layout; a pick is remembered.
@@ -107,7 +110,7 @@ export default function FlydigiLiveView(): JSX.Element {
   }, [])
 
   if (!live) {
-    return <div className="hint">No gamepad seen by the system. Plug the pad in and move a stick (the browser only reports a pad after its first input).</div>
+    return <div className="hint">{t('fx.live.none')}</div>
   }
   const map = saved ?? (live.standard || live.axes.length < 6 ? STANDARD : DINPUT)
   const a = (i: number): number => live.axes[i] ?? 0
@@ -144,18 +147,18 @@ export default function FlydigiLiveView(): JSX.Element {
   return (
     <div className="stack" style={{ gap: 10 }}>
       <div className="mono" style={{ fontSize: 11, opacity: 0.8 }}>
-        {live.id} · {live.standard ? 'standard mapping' : 'non-standard mapping: axes below may not be LX/LY/RX/RY'} · {live.axes.length} axes
+        {live.id} · {live.standard ? t('fx.live.std') : t('fx.live.nonStd')} · {fxFmt(t('fx.live.axes'), { n: live.axes.length })}
       </div>
       <div className="row" style={{ gap: 16, flexWrap: 'wrap' }}>
-        <Stick label="Left stick" x={a(map.lx)} y={a(map.ly)} />
-        <Stick label="Right stick" x={a(map.rx)} y={a(map.ry)} />
+        <Stick label={t('fx.leftStick')} x={a(map.lx)} y={a(map.ly)} />
+        <Stick label={t('fx.rightStick')} x={a(map.rx)} y={a(map.ry)} />
         <div className="stack" style={{ gap: 10, flex: 1, minWidth: 160 }}>
           <Bar label="LT" value={trig(map.lt)} />
           <Bar label="RT" value={trig(map.rt)} />
         </div>
       </div>
       <div className="mono" style={{ fontSize: 11, opacity: 0.8, wordBreak: 'break-all' }}>
-        raw axes: {live.axes.map((v, i) => `${i}:${v.toFixed(2)}`).join('  ')}
+        {t('fx.live.raw')} {live.axes.map((v, i) => `${i}:${v.toFixed(2)}`).join('  ')}
       </div>
       <div className="row" style={{ gap: 10, flexWrap: 'wrap' }}>
         {pick('LX', 'lx', axisOpts)}
@@ -165,7 +168,7 @@ export default function FlydigiLiveView(): JSX.Element {
         {pick('LT', 'lt', trigOpts)}
         {pick('RT', 'rt', trigOpts)}
         <button className="btn ghost sm" onClick={() => setMap(null)}>
-          Default
+          {t('fx.live.default')}
         </button>
       </div>
       <div className="row" style={{ gap: 4, flexWrap: 'wrap' }}>

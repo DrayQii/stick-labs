@@ -9,6 +9,8 @@
 import { useCallback, useEffect, useState } from 'react'
 import { FX_CURVE_CUSTOM, fxDeadzonePoints, fxHzFromReportRate, type FxCurve, type FxMotion, type FxSnapshot, type FxTriggerRaw, type FxTurbo, type FxVibration } from '@shared/flydigi-xinput'
 import { api } from './api'
+import { fxFmt } from './i18n-fx'
+import { tr, type Lang } from './i18n'
 
 export type FxMsg = { kind: 'ok' | 'err'; text: string }
 export type FxBackup = { name: string; cfgId: number; time: string }
@@ -18,7 +20,13 @@ const sc = (b: number): number => (b > 127 ? b - 256 : b)
 const sig = (vib: FxVibration | null, l: number, r: number, c: { left: FxCurve; right: FxCurve } | null, t: { left: FxTriggerRaw; right: FxTriggerRaw } | null): string =>
   JSON.stringify([vib, l, r, c, t])
 
-export function useFlydigi(onLost: () => void) {
+export function useFlydigi(onLost: () => void, lang: Lang) {
+  const t = (key: string, vars: Record<string, string | number> = {}): string => fxFmt(tr(lang, key), vars)
+  /** A pad error from the main process; the common XInput-mode one is shown in the user's language. */
+  const errText = (e: unknown): string => {
+    const m = (e as Error).message
+    return /the pad is in XInput mode/i.test(m) ? t('fx.err.xinputMode') : m
+  }
   const [active, setActive] = useState(false)
   const [snap, setSnap] = useState<FxSnapshot | null>(null)
   const [vib, setVib] = useState<FxVibration | null>(null)
@@ -90,14 +98,14 @@ export function useFlydigi(onLost: () => void) {
   /** Read a slot (the active one when omitted). Returns whether it worked; marks the pad connected on success. */
   async function load(cfgId?: number, viaDriver = false): Promise<boolean> {
     setBusy(true)
-    setMsg({ kind: 'ok', text: viaDriver ? 'Switching the pad to DInput through Space Station’s driver… Windows will ask for permission (this takes a few seconds).' : 'Reading the pad…' })
+    setMsg({ kind: 'ok', text: viaDriver ? t('fx.msg.driverSwitching') : t('fx.msg.reading') })
     try {
       adopt(await api().flydigiXRead(cfgId, viaDriver))
       setActive(true)
-      setMsg({ kind: 'ok', text: cfgId === undefined ? 'Read the active config from the pad.' : `Read config ${cfgId + 1}.` })
+      setMsg({ kind: 'ok', text: cfgId === undefined ? t('fx.msg.readActive') : t('fx.msg.readConfig', { n: cfgId + 1 }) })
       return true
     } catch (e) {
-      setMsg({ kind: 'err', text: (e as Error).message })
+      setMsg({ kind: 'err', text: errText(e) })
       return false
     } finally {
       setBusy(false)
@@ -117,9 +125,7 @@ export function useFlydigi(onLost: () => void) {
   }
 
   async function toXInput(): Promise<void> {
-    const ok = window.confirm(
-      'Switch the Direwolf back to XInput mode?\n\nThe pad will disconnect and return as an Xbox 360 controller (for games). Stick Labs cannot configure it again until it is put back in DInput mode (hold FN + D-pad Left on the pad).'
-    )
+    const ok = window.confirm(t('fx.msg.toXInputConfirm'))
     if (!ok) return
     setBusy(true)
     setMsg(null)
@@ -129,10 +135,10 @@ export function useFlydigi(onLost: () => void) {
         disconnect()
         onLost()
       } else {
-        setMsg({ kind: 'err', text: 'The pad did not leave DInput mode. Unplug and replug it, or check it in Windows Device Manager.' })
+        setMsg({ kind: 'err', text: t('fx.msg.notLeftDInput') })
       }
     } catch (e) {
-      setMsg({ kind: 'err', text: (e as Error).message })
+      setMsg({ kind: 'err', text: errText(e) })
     } finally {
       setBusy(false)
     }
@@ -141,24 +147,22 @@ export function useFlydigi(onLost: () => void) {
   async function pollingRate(code: number | null): Promise<void> {
     if (code !== null) {
       const hz = fxHzFromReportRate(code)
-      const ok = window.confirm(
-        `Set the polling rate to ${hz} Hz?\n\nThe pad only exposes this in XInput mode, so Stick Labs will briefly switch it to XInput, change the rate through the Flydigi driver (administrator step) and switch it back. It takes about 20 seconds; keep Flydigi Space Station closed.`
-      )
+      const ok = window.confirm(t('fx.msg.rateConfirm', { hz: hz ?? '?' }))
       if (!ok) return
     }
     setBusy(true)
-    setMsg({ kind: 'ok', text: code === null ? 'Reading the polling rate… (switches the pad to XInput and back, about 20 seconds)' : 'Setting the polling rate… (switches the pad to XInput and back, about 20 seconds)' })
+    setMsg({ kind: 'ok', text: code === null ? t('fx.msg.rateReading') : t('fx.msg.rateSetting') })
     try {
       const r = await api().flydigiXRate(code)
       setRate(r.reportRate)
       const hz = fxHzFromReportRate(r.reportRate)
       setMsg(
         r.verified
-          ? { kind: 'ok', text: code === null ? `Polling rate is ${hz ?? 'unknown'} Hz.` : `Polling rate set to ${hz} Hz (read back from the pad).` }
-          : { kind: 'err', text: 'The pad did not confirm the polling rate.' }
+          ? { kind: 'ok', text: code === null ? t('fx.msg.rateIs', { hz: hz ?? t('fx.msg.rateUnknown') }) : t('fx.msg.rateSet', { hz: hz ?? '?' }) }
+          : { kind: 'err', text: t('fx.msg.rateNotConfirmed') }
       )
     } catch (e) {
-      setMsg({ kind: 'err', text: (e as Error).message })
+      setMsg({ kind: 'err', text: errText(e) })
     } finally {
       setBusy(false)
     }
@@ -170,9 +174,9 @@ export function useFlydigi(onLost: () => void) {
     setMsg(null)
     try {
       adopt(await api().flydigiXActivate(snap.cfgId))
-      setMsg({ kind: 'ok', text: `Config ${snap.cfgId + 1} is now the active config on the pad.` })
+      setMsg({ kind: 'ok', text: t('fx.msg.nowActive', { n: snap.cfgId + 1 }) })
     } catch (e) {
-      setMsg({ kind: 'err', text: (e as Error).message })
+      setMsg({ kind: 'err', text: errText(e) })
     } finally {
       setBusy(false)
     }
@@ -180,7 +184,7 @@ export function useFlydigi(onLost: () => void) {
 
   /** Switch to another slot; asks first when there are unwritten edits. */
   async function selectSlot(cfgId: number): Promise<void> {
-    if (dirty && !window.confirm('Discard your unwritten changes and switch config?')) return
+    if (dirty && !window.confirm(t('fx.msg.discard'))) return
     await load(cfgId)
   }
 
@@ -191,31 +195,31 @@ export function useFlydigi(onLost: () => void) {
     try {
       await api().flydigiXBackup(snap.cfgId)
       refreshBackups()
-      setMsg({ kind: 'ok', text: `Config ${snap.cfgId + 1} backed up.` })
+      setMsg({ kind: 'ok', text: t('fx.msg.backedUp', { n: snap.cfgId + 1 }) })
     } catch (e) {
-      setMsg({ kind: 'err', text: (e as Error).message })
+      setMsg({ kind: 'err', text: errText(e) })
     } finally {
       setBusy(false)
     }
   }
 
   async function restore(b: FxBackup): Promise<void> {
-    if (!window.confirm(`Restore the backup from ${new Date(b.time).toLocaleString()} to config ${b.cfgId + 1}?\n\nThe slot's current contents are backed up first, so this can be undone.`)) return
+    if (!window.confirm(t('fx.msg.restoreConfirm', { time: new Date(b.time).toLocaleString(), n: b.cfgId + 1 }))) return
     setBusy(true)
     setMsg(null)
     try {
       const r = await api().flydigiXRestore(b.name, save)
       if (!r.verified) {
-        setMsg({ kind: 'err', text: r.restored ? 'Readback mismatch — rolled back to what the slot held before.' : 'Readback mismatch and the rollback could not be confirmed. Re-read the pad.' })
+        setMsg({ kind: 'err', text: r.restored ? t('fx.msg.mismatchRolledBackPrev') : t('fx.msg.mismatchNoRollback') })
       } else if (r.changedPacks === 0) {
-        setMsg({ kind: 'ok', text: `Config ${r.cfgId + 1} already matches this backup.` })
+        setMsg({ kind: 'ok', text: t('fx.msg.alreadyMatches', { n: r.cfgId + 1 }) })
       } else {
-        setMsg({ kind: 'ok', text: `Config ${r.cfgId + 1} restored and verified${save && r.saved ? ', saved to the pad.' : ' — live only, not saved.'}` })
+        setMsg({ kind: 'ok', text: t('fx.msg.restored', { n: r.cfgId + 1 }) + (save && r.saved ? t('fx.msg.savedToPad') : t('fx.msg.liveOnly')) })
       }
       adopt(await api().flydigiXRead(r.cfgId))
       refreshBackups()
     } catch (e) {
-      setMsg({ kind: 'err', text: (e as Error).message })
+      setMsg({ kind: 'err', text: errText(e) })
     } finally {
       setBusy(false)
     }
@@ -242,16 +246,16 @@ export function useFlydigi(onLost: () => void) {
         save
       })
       if (!r.verified) {
-        setMsg({ kind: 'err', text: r.restored ? 'Readback mismatch — rolled back to the previous config.' : 'Readback mismatch and the rollback could not be confirmed. Re-read the pad.' })
+        setMsg({ kind: 'err', text: r.restored ? t('fx.msg.mismatchRolledBackConfig') : t('fx.msg.mismatchNoRollback') })
       } else if (r.changedPacks === 0) {
-        setMsg({ kind: 'ok', text: 'Nothing to change.' })
+        setMsg({ kind: 'ok', text: t('fx.msg.nothingToChange') })
       } else {
-        setMsg({ kind: 'ok', text: `Written and verified (${r.changedPacks} pack${r.changedPacks === 1 ? '' : 's'})${save && snap.cfgId === snap.activeCfgId ? (r.saved ? ', saved to the pad.' : ', but the save was not acknowledged.') : ' — live only, not saved.'}` })
+        setMsg({ kind: 'ok', text: t('fx.msg.written', { n: r.changedPacks, s: r.changedPacks === 1 ? '' : 's' }) + (save && snap.cfgId === snap.activeCfgId ? (r.saved ? t('fx.msg.savedToPad') : t('fx.msg.saveNotAcked')) : t('fx.msg.liveOnly')) })
       }
       adopt(await api().flydigiXRead(snap.cfgId))
       refreshBackups()
     } catch (e) {
-      setMsg({ kind: 'err', text: (e as Error).message })
+      setMsg({ kind: 'err', text: errText(e) })
     } finally {
       setBusy(false)
     }

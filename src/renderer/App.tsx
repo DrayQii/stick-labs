@@ -2549,12 +2549,15 @@ export default function App(): JSX.Element {
   const [savedAt, setSavedAt] = useState<{ slot: number; at: number } | null>(null)
   const [tab, setTab] = useState<'sticks' | 'device' | 'buttons' | 'profiles' | 'lab' | 'calibrate' | 'language' | 'theme'>('sticks')
   // Flydigi Direwolf 4: state lives in the hook; the topbar, nav and tabs below switch to it while it is connected.
+  const [lang, setLang] = useLangState()
+  const [theme, setTheme] = useThemeState()
+  const t = (key: string): string => tr(lang, key)
   const fx = useFlydigi(() => {
     setConnected(false)
     setConnPath(null)
     setModel(null)
     setPid(null)
-  })
+  }, lang)
   useEffect(() => {
     if (fx.active && (tab === 'calibrate' || tab === 'lab')) setTab('sticks')
   }, [fx.active, tab])
@@ -2658,9 +2661,6 @@ export default function App(): JSX.Element {
       /* storage full/blocked — presets stay session-only */
     }
   }, [presets])
-  const [lang, setLang] = useLangState()
-  const [theme, setTheme] = useThemeState()
-  const t = (key: string): string => tr(lang, key)
   const [, force] = useState(0)
   const bump = (): void => {
     setDirty(true)
@@ -3466,7 +3466,7 @@ export default function App(): JSX.Element {
                   key={i}
                   className={`choice-btn${fx.snap?.cfgId === i ? ' active' : ''}`}
                   disabled={fx.busy}
-                  title={fx.snap?.activeCfgId === i ? 'The pad is running this config' : undefined}
+                  title={fx.snap?.activeCfgId === i ? t('fx.top.slotRunning') : undefined}
                   onClick={() => void fx.selectSlot(i)}
                 >
                   <span className="choice-label">P{i + 1}{fx.snap?.activeCfgId === i ? ' •' : ''}</span>

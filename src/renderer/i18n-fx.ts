@@ -1,0 +1,164 @@
+/**
+ * Flydigi Direwolf 4 screens: English + Simplified Chinese + Japanese + Russian.
+ * Merged into the app dictionary by i18n.ts. Button and key names (A, B, LB, RT, D-pad …), units and
+ * the product / tool names (Space Station, DInput, XInput, FN) stay as they are, as in the rest of the app.
+ * Placeholders look like {n} and are filled by fxFmt.
+ */
+type Row = { en: string; zh: string; ja: string; ru: string }
+
+export const fxFmt = (s: string, v: Record<string, string | number>): string => s.replace(/\{(\w+)\}/g, (_, k: string) => String(v[k] ?? ''))
+
+export const FX_STR: Record<string, Row> = {
+  // --- connect card ---
+  'fx.card.mode': { en: 'Mode', zh: '模式', ja: 'モード', ru: 'Режим' },
+  'fx.card.battery': { en: 'Battery', zh: '电量', ja: 'バッテリー', ru: 'Батарея' },
+  'fx.card.batteryNA': { en: 'N/A', zh: '无', ja: '不明', ru: 'Н/Д' },
+  'fx.card.charging': { en: 'CHG', zh: '充电中', ja: '充電中', ru: 'ЗАРЯДКА' },
+  'fx.card.batteryTip': { en: 'Battery level is not readable over USB yet', zh: '暂时无法通过 USB 读取电量', ja: 'USB ではまだバッテリー残量を読み取れません', ru: 'Уровень заряда пока нельзя прочитать по USB' },
+  'fx.card.reply': { en: 'Reply', zh: '回复', ja: '応答', ru: 'Ответ' },
+  'fx.card.working': { en: 'Working', zh: '处理中', ja: '処理中', ru: 'Работаю' },
+  'fx.card.connect': { en: 'Connect', zh: '连接', ja: '接続', ru: 'Подключить' },
+  'fx.card.xinputHint': { en: 'Hold FN + D-pad Left on the pad to switch to DInput. It connects automatically once it switches.', zh: '在手柄上按住 FN + 十字键左键切换到 DInput。切换完成后会自动连接。', ja: 'パッドの FN + 十字キー左を押し続けて DInput に切り替えます。切り替わると自動で接続します。', ru: 'Удерживайте на геймпаде FN + D-pad влево, чтобы переключить в DInput. После переключения подключение произойдёт автоматически.' },
+  'fx.card.driverSwitch': { en: 'Or switch with Space Station’s driver', zh: '或通过 Space Station 的驱动切换', ja: 'または Space Station のドライバーで切り替える', ru: 'Или переключить через драйвер Space Station' },
+  'fx.card.driverTip': { en: "Uses Flydigi Space Station's driver (it must be installed but not running); Windows asks for permission once", zh: '使用 Flydigi Space Station 的驱动（需已安装但未运行）；Windows 会请求一次权限', ja: 'Flydigi Space Station のドライバーを使います（インストール済みで、起動していない状態が必要）。Windows が一度許可を求めます', ru: 'Использует драйвер Flydigi Space Station (он должен быть установлен, но не запущен); Windows один раз запросит разрешение' },
+  'fx.card.alt': { en: 'Flydigi Direwolf 4 controller', zh: 'Flydigi Direwolf 4 手柄', ja: 'Flydigi Direwolf 4 コントローラー', ru: 'Контроллер Flydigi Direwolf 4' },
+
+  // --- top bar ---
+  'fx.top.slotRunning': { en: 'The pad is running this config', zh: '手柄正在使用此配置', ja: 'パッドはこの設定で動作中です', ru: 'Геймпад работает с этим конфигом' },
+
+  // --- live view ---
+  'fx.live.title': { en: 'Live input', zh: '实时输入', ja: 'ライブ入力', ru: 'Живой ввод' },
+  'fx.live.hint': { en: "What the system sees from the pad right now (stick position, triggers, buttons). Handy for checking a curve or deadzone after writing. Read-only; the pad's own output, after its curve.", zh: '系统此刻从手柄读到的内容（摇杆位置、扳机、按键）。写入后可用来检查曲线或死区。只读；这是手柄经过曲线后的实际输出。', ja: 'システムが今パッドから受け取っている内容（スティック位置、トリガー、ボタン）です。書き込み後のカーブやデッドゾーンの確認に便利です。読み取り専用で、カーブ適用後のパッド自身の出力です。', ru: 'Что система видит от геймпада прямо сейчас (положение стиков, триггеры, кнопки). Удобно проверять кривую или мёртвую зону после записи. Только чтение: это собственный выход геймпада после применения кривой.' },
+  'fx.live.none': { en: 'No gamepad seen by the system. Plug the pad in and move a stick (the browser only reports a pad after its first input).', zh: '系统未检测到手柄。请插入手柄并推动一下摇杆（浏览器只有在收到首次输入后才会报告手柄）。', ja: 'システムがゲームパッドを認識していません。パッドを接続してスティックを動かしてください（ブラウザは最初の入力があって初めてパッドを報告します）。', ru: 'Система не видит геймпад. Подключите его и пошевелите стиком (браузер сообщает о геймпаде только после первого ввода).' },
+  'fx.live.std': { en: 'standard mapping', zh: '标准映射', ja: '標準マッピング', ru: 'стандартная раскладка' },
+  'fx.live.nonStd': { en: 'non-standard mapping: axes below may not be LX/LY/RX/RY', zh: '非标准映射：下方的轴可能不是 LX/LY/RX/RY', ja: '非標準マッピング：下の軸は LX/LY/RX/RY とは限りません', ru: 'нестандартная раскладка: оси ниже могут не совпадать с LX/LY/RX/RY' },
+  'fx.live.axes': { en: '{n} axes', zh: '{n} 个轴', ja: '{n} 軸', ru: 'осей: {n}' },
+  'fx.live.raw': { en: 'raw axes:', zh: '原始轴值：', ja: '生の軸値：', ru: 'сырые оси:' },
+  'fx.live.default': { en: 'Default', zh: '默认', ja: '既定', ru: 'По умолчанию' },
+  'fx.leftStick': { en: 'Left stick', zh: '左摇杆', ja: '左スティック', ru: 'Левый стик' },
+  'fx.rightStick': { en: 'Right stick', zh: '右摇杆', ja: '右スティック', ru: 'Правый стик' },
+
+  // --- sticks ---
+  'fx.sticks.hint': { en: "Same number as Space Station's Center slider (-100 Offset to 100 Dead zone); Edge is the outer end of the same range (negative lowers the maximum output, positive reaches full output earlier). They set the stick's centre and edge bytes and regenerate the curve exactly as Space Station does (within 1 on a few points). Fine-tune the curve below if you want something else; moving a slider again regenerates it.", zh: '数值与 Space Station 的“中心”滑块相同（-100 偏移 到 100 死区）；“边缘”是同一范围的外侧端点（负值降低最大输出，正值更早达到满输出）。它们会设置摇杆的中心和边缘字节，并像 Space Station 一样重新生成曲线（个别点相差不超过 1）。如需其他效果，可在下方微调曲线；再次移动滑块会重新生成曲线。', ja: 'Space Station の「センター」スライダーと同じ数値です（-100 オフセット 〜 100 デッドゾーン）。「エッジ」は同じ範囲の外側の端です（負の値は最大出力を下げ、正の値はより早くフル出力に達します）。スティックのセンターとエッジのバイトを設定し、Space Station と同じようにカーブを再生成します（数点で 1 以内の差）。別の形にしたい場合は下でカーブを微調整してください。スライダーを動かすと再生成されます。', ru: 'То же число, что у ползунка Center в Space Station (от -100 Offset до 100 Dead zone); Edge — внешний край того же диапазона (отрицательное значение снижает максимальный выход, положительное раньше достигает полного выхода). Они задают байты центра и края стика и пересоздают кривую так же, как Space Station (на нескольких точках отличие в пределах 1). Если нужно иначе, подправьте кривую ниже; новое движение ползунка пересоздаёт её.' },
+  'fx.sticks.leftDz': { en: 'Left stick deadzone', zh: '左摇杆死区', ja: '左スティックのデッドゾーン', ru: 'Мёртвая зона левого стика' },
+  'fx.sticks.rightDz': { en: 'Right stick deadzone', zh: '右摇杆死区', ja: '右スティックのデッドゾーン', ru: 'Мёртвая зона правого стика' },
+  'fx.sticks.leftEdge': { en: 'Left stick edge', zh: '左摇杆边缘', ja: '左スティックのエッジ', ru: 'Край левого стика' },
+  'fx.sticks.rightEdge': { en: 'Right stick edge', zh: '右摇杆边缘', ja: '右スティックのエッジ', ru: 'Край правого стика' },
+  'fx.curves.title': { en: 'Response curves', zh: '响应曲线', ja: 'レスポンスカーブ', ru: 'Кривые отклика' },
+  'fx.curves.hint': { en: "Output height at nine evenly spaced stick positions (0% to 100% of travel). Drag the points, type values, or apply a preset. Moving a deadzone slider above regenerates that stick's curve.", zh: '在九个等间距的摇杆位置（行程的 0% 到 100%）上的输出高度。可拖动点、输入数值或套用预设。移动上方的死区滑块会重新生成该摇杆的曲线。', ja: '等間隔の 9 つのスティック位置（行程の 0〜100%）での出力の高さです。点をドラッグするか、数値を入力するか、プリセットを適用してください。上のデッドゾーンスライダーを動かすとそのスティックのカーブが再生成されます。', ru: 'Высота выхода в девяти равноотстоящих положениях стика (от 0% до 100% хода). Перетаскивайте точки, вводите значения или применяйте пресет. Движение ползунка мёртвой зоны выше пересоздаёт кривую этого стика.' },
+  'fx.curves.left': { en: 'Left stick curve', zh: '左摇杆曲线', ja: '左スティックのカーブ', ru: 'Кривая левого стика' },
+  'fx.curves.right': { en: 'Right stick curve', zh: '右摇杆曲线', ja: '右スティックのカーブ', ru: 'Кривая правого стика' },
+  'fx.curves.copyToRight': { en: 'Copy to right stick', zh: '复制到右摇杆', ja: '右スティックへコピー', ru: 'Копировать на правый стик' },
+  'fx.curves.copyToLeft': { en: 'Copy to left stick', zh: '复制到左摇杆', ja: '左スティックへコピー', ru: 'Копировать на левый стик' },
+  'fx.curve.default': { en: 'Default ramp', zh: '默认斜线', ja: 'デフォルトの直線', ru: 'Линейная по умолчанию' },
+  'fx.curve.custom': { en: 'Custom curve', zh: '自定义曲线', ja: 'カスタムカーブ', ru: 'Своя кривая' },
+  'fx.curve.circular': { en: 'Circular', zh: '圆形', ja: '円形', ru: 'Круговая' },
+  'fx.curve.rect': { en: 'Rectangle', zh: '矩形', ja: '矩形', ru: 'Прямоугольная' },
+  'fx.curve.presets': { en: 'Presets…', zh: '预设…', ja: 'プリセット…', ru: 'Пресеты…' },
+  'fx.curve.reset': { en: 'Reset', zh: '重置', ja: 'リセット', ru: 'Сбросить' },
+  'fx.curve.copyTitle': { en: 'Copy this curve, type and shape to the other stick', zh: '将此曲线、类型和形状复制到另一个摇杆', ja: 'このカーブ、タイプ、形状をもう一方のスティックにコピーします', ru: 'Скопировать эту кривую, тип и форму на другой стик' },
+  'fx.curve.pointTip': { en: 'input {x}% → output {y}', zh: '输入 {x}% → 输出 {y}', ja: '入力 {x}% → 出力 {y}', ru: 'вход {x}% → выход {y}' },
+  'fx.curve.clamped': { en: '{p}% (clamped to 0)', zh: '{p}%（按 0 处理）', ja: '{p}%（0 に固定）', ru: '{p}% (ограничено нулём)' },
+  'fx.curve.inputTip': { en: 'input {x}%', zh: '输入 {x}%', ja: '入力 {x}%', ru: 'вход {x}%' },
+  'fx.curve.inputAxis': { en: 'input →', zh: '输入 →', ja: '入力 →', ru: 'вход →' },
+
+  // --- buttons ---
+  'fx.buttons.hint': { en: 'Pick what each button sends. "Default" means no remap. Turbo makes a button repeat itself: Press repeats while you hold it, Click toggles repeating on each press (Space Station\'s names); the number is its frequency (Space Station used 8 and 15). Changes are written with Write to controller. Macro buttons are shown but must be edited in Space Station.', zh: '选择每个按键发送的内容。“默认”表示不重映射。连发会让按键自动重复：“按住”在按住期间重复，“点击”每按一次切换重复开关（沿用 Space Station 的叫法）；数字是频率（Space Station 用过 8 和 15）。更改将通过“写入手柄”写入。宏按键仅显示，需在 Space Station 中编辑。', ja: '各ボタンが送る内容を選びます。「既定」はリマップなしです。ターボはボタンを連打させます：Press は押している間連打、Click は押すたびに連打のオン/オフを切り替えます（Space Station の呼び名）。数値は頻度です（Space Station では 8 と 15 が使われていました）。変更は「コントローラーに書き込み」で書き込まれます。マクロのボタンは表示のみで、Space Station で編集する必要があります。', ru: 'Выберите, что отправляет каждая кнопка. «По умолчанию» — без переназначения. Турбо заставляет кнопку повторяться: Press повторяет, пока вы держите её, Click включает и выключает повтор при каждом нажатии (названия из Space Station); число — частота (Space Station использовал 8 и 15). Изменения записываются кнопкой «Записать в контроллер». Кнопки с макросами только показываются, их нужно редактировать в Space Station.' },
+  'fx.buttons.edited': { en: 'edited', zh: '已修改', ja: '変更済み', ru: 'изменено' },
+  'fx.buttons.macro': { en: 'Macro (Space Station)', zh: '宏（Space Station）', ja: 'マクロ（Space Station）', ru: 'Макрос (Space Station)' },
+  'fx.buttons.turboRepeats': { en: 'Turbo: repeats {key}', zh: '连发：重复 {key}', ja: 'ターボ：{key} を連打', ru: 'Турбо: повторяет {key}' },
+  'fx.buttons.default': { en: 'Default ({key})', zh: '默认（{key}）', ja: '既定（{key}）', ru: 'По умолчанию ({key})' },
+  'fx.buttons.turboOff': { en: 'Turbo off', zh: '连发关闭', ja: 'ターボ オフ', ru: 'Турбо выкл.' },
+  'fx.buttons.turboPress': { en: 'Turbo: Press', zh: '连发：Press', ja: 'ターボ：Press', ru: 'Турбо: Press' },
+  'fx.buttons.turboClick': { en: 'Turbo: Click', zh: '连发：Click', ja: 'ターボ：Click', ru: 'Турбо: Click' },
+  'fx.buttons.freq': { en: 'Repeat frequency', zh: '重复频率', ja: '連打頻度', ru: 'Частота повтора' },
+
+  // --- triggers ---
+  'fx.trig.title': { en: 'Triggers', zh: '扳机', ja: 'トリガー', ru: 'Триггеры' },
+  'fx.trig.hint': { en: "Same numbers as Space Station's trigger Start and End sliders (0 to 255; the stock range is 0 to 255). The two curve points follow them the way Space Station sets them.", zh: '数值与 Space Station 的扳机“起点”和“终点”滑块相同（0 到 255；默认范围为 0 到 255）。两个曲线点会按 Space Station 的方式随之设置。', ja: 'Space Station のトリガー「開始」「終了」スライダーと同じ数値です（0〜255、既定の範囲は 0〜255）。2 つのカーブ点は Space Station と同じ方法で連動して設定されます。', ru: 'Те же числа, что у ползунков Start и End курков в Space Station (от 0 до 255; штатный диапазон 0–255). Две точки кривой следуют за ними так же, как задаёт Space Station.' },
+  'fx.trig.left': { en: 'Left trigger (LT)', zh: '左扳机 (LT)', ja: '左トリガー (LT)', ru: 'Левый триггер (LT)' },
+  'fx.trig.right': { en: 'Right trigger (RT)', zh: '右扳机 (RT)', ja: '右トリガー (RT)', ru: 'Правый триггер (RT)' },
+  'fx.trig.start': { en: 'Start', zh: '起点', ja: '開始', ru: 'Начало' },
+  'fx.trig.end': { en: 'End', zh: '终点', ja: '終了', ru: 'Конец' },
+
+  // --- gyro ---
+  'fx.gyro.title': { en: 'Gyro', zh: '陀螺仪', ja: 'ジャイロ', ru: 'Гироскоп' },
+  'fx.gyro.hint': { en: "Maps the pad's motion sensor to a stick while an activation key is held. Decoded from Space Station's log: Left/Right stick mapping, the activation key, sensitivity, dead zone and Racer mode. Mouse mapping and the smoothing curve are not decoded yet, so they are left as they are. Only the fields you change are written.", zh: '在按住激活键时，将手柄的体感传感器映射到摇杆。根据 Space Station 的日志解析：左/右摇杆映射、激活键、灵敏度、死区和赛车模式。鼠标映射和平滑曲线尚未解析，保持原样。只会写入您修改过的字段。', ja: 'アクティベーションキーを押している間、パッドのモーションセンサーをスティックに割り当てます。Space Station のログから解読した内容：左/右スティックのマッピング、アクティベーションキー、感度、デッドゾーン、レーサーモード。マウスマッピングとスムージングカーブは未解読のため、そのままにしておきます。変更した項目だけが書き込まれます。', ru: 'Привязывает датчик движения геймпада к стику, пока удерживается клавиша активации. Расшифровано по журналу Space Station: привязка к левому/правому стику, клавиша активации, чувствительность, мёртвая зона и режим Racer. Привязка к мыши и кривая сглаживания пока не расшифрованы и остаются как есть. Записываются только изменённые поля.' },
+  'fx.gyro.mapping': { en: 'Gyro mapping', zh: '陀螺仪映射', ja: 'ジャイロの割り当て', ru: 'Привязка гироскопа' },
+  'fx.gyro.off': { en: 'Off', zh: '关闭', ja: 'オフ', ru: 'Выкл.' },
+  'fx.gyro.otherMapping': { en: 'Other mapping ({n}), not decoded', zh: '其他映射（{n}），未解析', ja: 'その他のマッピング（{n}）、未解読', ru: 'Другая привязка ({n}), не расшифрована' },
+  'fx.gyro.key': { en: 'Activation key', zh: '激活键', ja: 'アクティベーションキー', ru: 'Клавиша активации' },
+  'fx.gyro.none': { en: 'None', zh: '无', ja: 'なし', ru: 'Нет' },
+  'fx.gyro.activation': { en: 'Activation', zh: '激活方式', ja: '有効化の方法', ru: 'Активация' },
+  'fx.gyro.press': { en: 'Only while the key is held (Press)', zh: '仅在按住按键时（Press）', ja: 'キーを押している間のみ（Press）', ru: 'Только пока клавиша удерживается (Press)' },
+  'fx.gyro.notSet': { en: "Not set (Space Station's default)", zh: '未设置（Space Station 的默认值）', ja: '未設定（Space Station の既定）', ru: 'Не задано (по умолчанию в Space Station)' },
+  'fx.gyro.otherActivation': { en: 'Other ({n}), not decoded', zh: '其他（{n}），未解析', ja: 'その他（{n}）、未解読', ru: 'Другое ({n}), не расшифровано' },
+  'fx.gyro.sensitivity': { en: 'Sensitivity', zh: '灵敏度', ja: '感度', ru: 'Чувствительность' },
+  'fx.gyro.deadZone': { en: 'Dead zone', zh: '死区', ja: 'デッドゾーン', ru: 'Мёртвая зона' },
+  'fx.gyro.racer': { en: 'Racer mode', zh: '赛车模式', ja: 'レーサーモード', ru: 'Режим Racer' },
+
+  // --- vibration ---
+  'fx.vib.title': { en: 'Vibration', zh: '震动', ja: '振動', ru: 'Вибрация' },
+  'fx.vib.enabled': { en: 'Vibration enabled', zh: '启用震动', ja: '振動を有効にする', ru: 'Вибрация включена' },
+  'fx.vib.left': { en: 'Left motor (heavy)', zh: '左马达（重）', ja: '左モーター（重）', ru: 'Левый мотор (тяжёлый)' },
+  'fx.vib.right': { en: 'Right motor (light)', zh: '右马达（轻）', ja: '右モーター（軽）', ru: 'Правый мотор (лёгкий)' },
+  'fx.vib.strength': { en: 'Strength', zh: '强度', ja: '強さ', ru: 'Сила' },
+  'fx.vib.min': { en: 'Minimum', zh: '最小值', ja: '最小', ru: 'Минимум' },
+  'fx.vib.max': { en: 'Maximum', zh: '最大值', ja: '最大', ru: 'Максимум' },
+
+  // --- polling rate and pad mode ---
+  'fx.poll.title': { en: 'Polling rate', zh: '回报率', ja: 'ポーリングレート', ru: 'Частота опроса' },
+  'fx.poll.hint': { en: "How often the pad reports to the PC. The Direwolf only exposes this in XInput mode, so changing it switches the pad to XInput and back through Flydigi's Xbox filter driver (one administrator step, about 20 seconds). This is the one feature that still needs Flydigi Space Station installed (only its driver is used) and closed; everything else works without it.", zh: '手柄向电脑上报数据的频率。Direwolf 只在 XInput 模式下提供此设置，因此更改时会通过 Flydigi 的 Xbox 过滤驱动把手柄切到 XInput 再切回来（需要一次管理员授权，约 20 秒）。这是唯一仍需安装 Flydigi Space Station（只用到它的驱动）并保持其关闭的功能；其余功能都不需要它。', ja: 'パッドが PC に入力を送る頻度です。Direwolf はこの設定を XInput モードでしか公開しないため、変更時は Flydigi の Xbox フィルタードライバー経由でパッドを XInput に切り替えて元に戻します（管理者の許可が 1 回、約 20 秒）。Flydigi Space Station のインストール（ドライバーのみ使用）と終了状態がまだ必要なのはこの機能だけで、それ以外は不要です。', ru: 'Как часто геймпад отправляет данные на ПК. Direwolf показывает эту настройку только в режиме XInput, поэтому при изменении геймпад переключается в XInput и обратно через фильтр-драйвер Xbox от Flydigi (одно подтверждение администратора, около 20 секунд). Это единственная функция, которой всё ещё нужен установленный (используется только его драйвер) и закрытый Flydigi Space Station; всё остальное работает без него.' },
+  'fx.poll.check': { en: 'Check current', zh: '检查当前值', ja: '現在値を確認', ru: 'Проверить текущую' },
+  'fx.poll.notChecked': { en: 'not checked yet', zh: '尚未检查', ja: '未確認', ru: 'ещё не проверено' },
+  'fx.mode.title': { en: 'Pad mode', zh: '手柄模式', ja: 'パッドのモード', ru: 'Режим геймпада' },
+  'fx.mode.hint': { en: 'Stick Labs configures the pad in DInput mode. Switch to XInput to give games an Xbox controller again. To come back, hold FN + D-pad Left on the pad (FN + D-pad Right does the XInput switch from the pad itself); the app connects again once the pad is in DInput. Launching Space Station also switches the pad back to XInput.', zh: 'Stick Labs 在 DInput 模式下配置手柄。切换到 XInput 可让游戏再次把它识别为 Xbox 手柄。要切回来，请在手柄上按住 FN + 十字键左键（FN + 十字键右键可在手柄上直接切到 XInput）；手柄进入 DInput 后应用会重新连接。启动 Space Station 也会把手柄切回 XInput。', ja: 'Stick Labs はパッドを DInput モードで設定します。XInput に切り替えると、ゲームが再び Xbox コントローラーとして認識します。戻すには、パッドの FN + 十字キー左を押し続けてください（FN + 十字キー右でパッド側から XInput に切り替えられます）。DInput になるとアプリが再接続します。Space Station を起動してもパッドは XInput に戻ります。', ru: 'Stick Labs настраивает геймпад в режиме DInput. Переключите в XInput, чтобы игры снова видели его как контроллер Xbox. Чтобы вернуться, удерживайте на геймпаде FN + D-pad влево (FN + D-pad вправо переключает в XInput прямо с геймпада); приложение подключится снова, как только геймпад окажется в DInput. Запуск Space Station тоже возвращает геймпад в XInput.' },
+  'fx.mode.toXInput': { en: 'Switch to XInput', zh: '切换到 XInput', ja: 'XInput に切り替え', ru: 'Переключить в XInput' },
+  'fx.mode.dinput': { en: 'DInput mode', zh: 'DInput 模式', ja: 'DInput モード', ru: 'Режим DInput' },
+  'fx.mode.xinput': { en: 'XInput mode', zh: 'XInput 模式', ja: 'XInput モード', ru: 'Режим XInput' },
+  'fx.mode.none': { en: 'pad not found', zh: '未找到手柄', ja: 'パッドが見つかりません', ru: 'геймпад не найден' },
+
+  // --- profiles ---
+  'fx.slots.title': { en: 'Config slots', zh: '配置槽位', ja: '設定スロット', ru: 'Слоты конфигов' },
+  'fx.slots.hint': { en: "The pad has {n} onboard slots (Space Station's 配置1…{n}); • marks the one it is running. Switching also works from P1…P4 in the top bar.", zh: '手柄有 {n} 个板载槽位（即 Space Station 的“配置1…{n}”）；• 标记正在使用的槽位。也可以用顶部栏的 P1…P4 切换。', ja: 'パッドには {n} 個のオンボードスロットがあります（Space Station の「配置1…{n}」）。• は使用中のスロットです。上部バーの P1…P4 でも切り替えられます。', ru: 'В геймпаде {n} встроенных слота (в Space Station — «配置1…{n}»); • отмечает используемый. Переключать можно и кнопками P1…P4 в верхней панели.' },
+  'fx.slots.config': { en: 'Config {n}', zh: '配置 {n}', ja: '設定 {n}', ru: 'Конфиг {n}' },
+  'fx.slots.makeActive': { en: 'Make active', zh: '设为当前', ja: '使用中にする', ru: 'Сделать активным' },
+  'fx.slots.save': { en: 'Save to pad when writing (survives replug)', zh: '写入时保存到手柄（重新插拔后仍保留）', ja: '書き込み時にパッドへ保存（再接続後も保持）', ru: 'Сохранять в геймпад при записи (сохраняется после переподключения)' },
+  'fx.slots.saveLive': { en: ' — only for the active config; this slot is written live only', zh: ' —— 仅对当前配置有效；此槽位只会实时写入', ja: ' — 使用中の設定のみ。このスロットはライブ書き込みのみです', ru: ' — только для активного конфига; этот слот записывается только «вживую»' },
+  'fx.slots.dataVersion': { en: 'data v{v}', zh: '数据版本 {v}', ja: 'データ v{v}', ru: 'данные v{v}' },
+  'fx.backups.title': { en: 'Backups', zh: '备份', ja: 'バックアップ', ru: 'Резервные копии' },
+  'fx.backups.hint': { en: "A copy of the slot is saved before every write and restore. Restoring puts a backup back into the slot it came from (this follows the Save to pad option above). Files live in Stick Labs' data folder under flydigi-backups.", zh: '每次写入和恢复之前都会保存该槽位的副本。恢复会把备份放回它原来的槽位（遵循上方“保存到手柄”的设置）。文件位于 Stick Labs 数据文件夹下的 flydigi-backups 中。', ja: '書き込みや復元の前に、そのスロットのコピーを毎回保存します。復元すると、バックアップは元のスロットに戻ります（上の「パッドへ保存」の設定に従います）。ファイルは Stick Labs のデータフォルダ内の flydigi-backups にあります。', ru: 'Копия слота сохраняется перед каждой записью и восстановлением. Восстановление возвращает копию в тот слот, из которого она сделана (учитывается опция «Сохранять в геймпад» выше). Файлы лежат в папке данных Stick Labs, в flydigi-backups.' },
+  'fx.backups.now': { en: 'Back up config {n} now', zh: '立即备份配置 {n}', ja: '設定 {n} を今すぐバックアップ', ru: 'Сделать копию конфига {n}' },
+  'fx.backups.none': { en: 'No backups yet.', zh: '还没有备份。', ja: 'まだバックアップはありません。', ru: 'Резервных копий пока нет.' },
+  'fx.backups.restore': { en: 'Restore', zh: '恢复', ja: '復元', ru: 'Восстановить' },
+
+  // --- messages and dialogs (useFlydigi) ---
+  'fx.err.xinputMode': { en: 'The pad is in XInput mode. Hold FN + D-pad Left on the pad to switch it to DInput, then connect again.', zh: '手柄处于 XInput 模式。请在手柄上按住 FN + 十字键左键切换到 DInput，然后重新连接。', ja: 'パッドは XInput モードです。パッドの FN + 十字キー左を押し続けて DInput に切り替えてから、もう一度接続してください。', ru: 'Геймпад в режиме XInput. Удерживайте на геймпаде FN + D-pad влево, чтобы переключить его в DInput, затем подключитесь снова.' },
+  'fx.msg.reading': { en: 'Reading the pad…', zh: '正在读取手柄…', ja: 'パッドを読み取り中…', ru: 'Читаю геймпад…' },
+  'fx.msg.driverSwitching': { en: 'Switching the pad to DInput through Space Station’s driver… Windows will ask for permission (this takes a few seconds).', zh: '正在通过 Space Station 的驱动把手柄切换到 DInput…… Windows 会请求权限（需要几秒钟）。', ja: 'Space Station のドライバー経由でパッドを DInput に切り替えています…Windows が許可を求めます（数秒かかります）。', ru: 'Переключаю геймпад в DInput через драйвер Space Station… Windows запросит разрешение (это займёт несколько секунд).' },
+  'fx.msg.readActive': { en: 'Read the active config from the pad.', zh: '已从手柄读取当前配置。', ja: 'パッドから使用中の設定を読み取りました。', ru: 'Активный конфиг прочитан из геймпада.' },
+  'fx.msg.readConfig': { en: 'Read config {n}.', zh: '已读取配置 {n}。', ja: '設定 {n} を読み取りました。', ru: 'Конфиг {n} прочитан.' },
+  'fx.msg.toXInputConfirm': { en: 'Switch the Direwolf back to XInput mode?\n\nThe pad will disconnect and return as an Xbox 360 controller (for games). Stick Labs cannot configure it again until it is put back in DInput mode (hold FN + D-pad Left on the pad).', zh: '将 Direwolf 切回 XInput 模式？\n\n手柄会断开，并以 Xbox 360 手柄的身份重新出现（用于游戏）。在它切回 DInput 模式之前（在手柄上按住 FN + 十字键左键），Stick Labs 无法再对其进行配置。', ja: 'Direwolf を XInput モードに戻しますか？\n\nパッドはいったん切断され、Xbox 360 コントローラーとして戻ります（ゲーム用）。DInput モードに戻すまで（パッドの FN + 十字キー左を押し続けます）、Stick Labs では設定できません。', ru: 'Вернуть Direwolf в режим XInput?\n\nГеймпад отключится и вернётся как контроллер Xbox 360 (для игр). Пока он не будет возвращён в DInput (удерживайте на геймпаде FN + D-pad влево), Stick Labs не сможет его настраивать.' },
+  'fx.msg.notLeftDInput': { en: 'The pad did not leave DInput mode. Unplug and replug it, or check it in Windows Device Manager.', zh: '手柄没有退出 DInput 模式。请重新插拔，或在 Windows 设备管理器中检查。', ja: 'パッドが DInput モードを抜けませんでした。抜き差しするか、Windows のデバイスマネージャーで確認してください。', ru: 'Геймпад не вышел из режима DInput. Переподключите его или проверьте в диспетчере устройств Windows.' },
+  'fx.msg.rateConfirm': { en: 'Set the polling rate to {hz} Hz?\n\nThe pad only exposes this in XInput mode, so Stick Labs will briefly switch it to XInput, change the rate through the Flydigi driver (administrator step) and switch it back. It takes about 20 seconds; keep Flydigi Space Station closed.', zh: '将回报率设为 {hz} Hz？\n\n手柄只在 XInput 模式下提供此设置，因此 Stick Labs 会暂时把它切到 XInput，通过 Flydigi 驱动更改回报率（需要管理员授权），然后再切回来。大约需要 20 秒；请保持 Flydigi Space Station 关闭。', ja: 'ポーリングレートを {hz} Hz に設定しますか？\n\nパッドはこの設定を XInput モードでしか公開しないため、Stick Labs は一時的に XInput に切り替え、Flydigi ドライバー経由でレートを変更し（管理者の許可が必要）、元に戻します。約 20 秒かかります。Flydigi Space Station は閉じたままにしてください。', ru: 'Установить частоту опроса {hz} Гц?\n\nГеймпад показывает её только в режиме XInput, поэтому Stick Labs ненадолго переключит его в XInput, изменит частоту через драйвер Flydigi (нужны права администратора) и вернёт обратно. Это займёт около 20 секунд; держите Flydigi Space Station закрытым.' },
+  'fx.msg.rateReading': { en: 'Reading the polling rate… (switches the pad to XInput and back, about 20 seconds)', zh: '正在读取回报率…（会把手柄切到 XInput 再切回来，约 20 秒）', ja: 'ポーリングレートを読み取り中…（パッドを XInput に切り替えて戻します、約 20 秒）', ru: 'Читаю частоту опроса… (геймпад переключится в XInput и обратно, около 20 секунд)' },
+  'fx.msg.rateSetting': { en: 'Setting the polling rate… (switches the pad to XInput and back, about 20 seconds)', zh: '正在设置回报率…（会把手柄切到 XInput 再切回来，约 20 秒）', ja: 'ポーリングレートを設定中…（パッドを XInput に切り替えて戻します、約 20 秒）', ru: 'Устанавливаю частоту опроса… (геймпад переключится в XInput и обратно, около 20 секунд)' },
+  'fx.msg.rateIs': { en: 'Polling rate is {hz} Hz.', zh: '回报率为 {hz} Hz。', ja: 'ポーリングレートは {hz} Hz です。', ru: 'Частота опроса: {hz} Гц.' },
+  'fx.msg.rateSet': { en: 'Polling rate set to {hz} Hz (read back from the pad).', zh: '回报率已设为 {hz} Hz（已从手柄读回确认）。', ja: 'ポーリングレートを {hz} Hz に設定しました（パッドから読み戻して確認済み）。', ru: 'Частота опроса установлена: {hz} Гц (подтверждено чтением из геймпада).' },
+  'fx.msg.rateUnknown': { en: 'unknown', zh: '未知', ja: '不明', ru: 'неизвестно' },
+  'fx.msg.rateNotConfirmed': { en: 'The pad did not confirm the polling rate.', zh: '手柄没有确认回报率。', ja: 'パッドがポーリングレートを確認しませんでした。', ru: 'Геймпад не подтвердил частоту опроса.' },
+  'fx.msg.nowActive': { en: 'Config {n} is now the active config on the pad.', zh: '配置 {n} 现在是手柄的当前配置。', ja: '設定 {n} がパッドの使用中の設定になりました。', ru: 'Конфиг {n} теперь активный в геймпаде.' },
+  'fx.msg.discard': { en: 'Discard your unwritten changes and switch config?', zh: '放弃尚未写入的更改并切换配置？', ja: '書き込んでいない変更を破棄して設定を切り替えますか？', ru: 'Отбросить незаписанные изменения и переключить конфиг?' },
+  'fx.msg.backedUp': { en: 'Config {n} backed up.', zh: '配置 {n} 已备份。', ja: '設定 {n} をバックアップしました。', ru: 'Резервная копия конфига {n} создана.' },
+  'fx.msg.restoreConfirm': { en: "Restore the backup from {time} to config {n}?\n\nThe slot's current contents are backed up first, so this can be undone.", zh: '将 {time} 的备份恢复到配置 {n}？\n\n该槽位当前的内容会先被备份，因此可以撤销。', ja: '{time} のバックアップを設定 {n} に復元しますか？\n\nスロットの現在の内容は先にバックアップされるため、元に戻せます。', ru: 'Восстановить копию от {time} в конфиг {n}?\n\nТекущее содержимое слота сначала будет сохранено, так что это можно отменить.' },
+  'fx.msg.mismatchRolledBackPrev': { en: 'Readback mismatch — rolled back to what the slot held before.', zh: '读回不一致——已回滚到该槽位之前的内容。', ja: '読み戻しが一致しませんでした — スロットの元の内容に戻しました。', ru: 'Чтение не совпало — слот возвращён к прежнему содержимому.' },
+  'fx.msg.mismatchNoRollback': { en: 'Readback mismatch and the rollback could not be confirmed. Re-read the pad.', zh: '读回不一致，且无法确认回滚是否成功。请重新读取手柄。', ja: '読み戻しが一致せず、ロールバックも確認できませんでした。パッドを再読み込みしてください。', ru: 'Чтение не совпало, и откат подтвердить не удалось. Прочитайте геймпад заново.' },
+  'fx.msg.alreadyMatches': { en: 'Config {n} already matches this backup.', zh: '配置 {n} 已与此备份一致。', ja: '設定 {n} はすでにこのバックアップと一致しています。', ru: 'Конфиг {n} уже совпадает с этой копией.' },
+  'fx.msg.restored': { en: 'Config {n} restored and verified', zh: '配置 {n} 已恢复并验证', ja: '設定 {n} を復元して検証しました', ru: 'Конфиг {n} восстановлен и проверен' },
+  'fx.msg.savedToPad': { en: ', saved to the pad.', zh: '，已保存到手柄。', ja: '、パッドに保存しました。', ru: ', сохранено в геймпад.' },
+  'fx.msg.liveOnly': { en: ' — live only, not saved.', zh: ' —— 仅实时生效，未保存。', ja: ' — ライブのみで、保存されていません。', ru: ' — только «вживую», не сохранено.' },
+  'fx.msg.mismatchRolledBackConfig': { en: 'Readback mismatch — rolled back to the previous config.', zh: '读回不一致——已回滚到之前的配置。', ja: '読み戻しが一致しませんでした — 以前の設定に戻しました。', ru: 'Чтение не совпало — выполнен откат к предыдущему конфигу.' },
+  'fx.msg.nothingToChange': { en: 'Nothing to change.', zh: '没有需要更改的内容。', ja: '変更はありません。', ru: 'Менять нечего.' },
+  'fx.msg.written': { en: 'Written and verified ({n} pack{s})', zh: '已写入并验证（{n} 个数据包）', ja: '書き込んで検証しました（{n} パック）', ru: 'Записано и проверено (пакетов: {n})' },
+  'fx.msg.saveNotAcked': { en: ', but the save was not acknowledged.', zh: '，但手柄没有确认保存。', ja: '、ただし保存の応答がありませんでした。', ru: ', но сохранение не было подтверждено.' },
+}

@@ -4,6 +4,8 @@
  */
 import { FX_REPORT_RATES, fxHzFromReportRate, FX_KEY_DEFAULT, FX_KEY_NAMES, FX_KEY_ORDER, FX_MOTION_LEFT, FX_MOTION_OFF, FX_MOTION_PRESS, FX_MOTION_RIGHT, FX_TURBO_CLICK, FX_TURBO_MAX, FX_TURBO_MIN, FX_TURBO_PRESS, fxTriggerRange, type FxMotion, type FxTurbo } from '@shared/flydigi-xinput'
 import FlydigiCurveDesigner from './FlydigiCurveDesigner'
+import { useT } from './i18n'
+import { fxFmt } from './i18n-fx'
 import FlydigiLiveView from './FlydigiLiveView'
 import type { Flydigi } from './useFlydigi'
 
@@ -30,45 +32,46 @@ function Num(props: { label: string; value: number; min: number; max: number; on
 
 
 export function FxSticks({ fx }: { fx: Flydigi }): JSX.Element | null {
+  const t = useT()
   const { snap, curves, setCurves, left, right, setDeadzone, setEdge, sc } = fx
   if (!snap || !curves) return null
   return (
     <>
           <div className="card" style={{ marginTop: 16 }}>
-        <h3>Live input</h3>
+        <h3>{t('fx.live.title')}</h3>
         <div className="hint" style={{ margin: '4px 0 8px' }}>
-          What the system sees from the pad right now (stick position, triggers, buttons). Handy for checking a curve or deadzone after writing. Read-only; the pad&apos;s own output, after its curve.
+          {t('fx.live.hint')}
         </div>
         <FlydigiLiveView />
           </div>
           <div className="card" style={{ marginTop: 16 }}>
-            <h3>Sticks</h3>
+            <h3>{t('nav.sticks')}</h3>
             <div className="hint" style={{ margin: '4px 0 8px' }}>
-              Same number as Space Station&apos;s Center slider (-100 Offset to 100 Dead zone); Edge is the outer end of the same range (negative lowers the maximum output, positive reaches full output earlier). They set the stick&apos;s centre byte and regenerates the curve exactly as Space Station does (within 1 on a few points). Fine-tune the curve below if you want something else; moving the deadzone again regenerates it.
+              {t('fx.sticks.hint')}
             </div>
-            <Num label="Left stick deadzone" value={left} min={-100} max={100} onChange={(d) => setDeadzone('left', d)} />
-            <Num label="Right stick deadzone" value={right} min={-100} max={100} onChange={(d) => setDeadzone('right', d)} />
-            <Num label="Left stick edge" value={sc(curves.left.edge)} min={-100} max={100} onChange={(e) => setEdge('left', e)} />
-            <Num label="Right stick edge" value={sc(curves.right.edge)} min={-100} max={100} onChange={(e) => setEdge('right', e)} />
+            <Num label={t('fx.sticks.leftDz')} value={left} min={-100} max={100} onChange={(d) => setDeadzone('left', d)} />
+            <Num label={t('fx.sticks.rightDz')} value={right} min={-100} max={100} onChange={(d) => setDeadzone('right', d)} />
+            <Num label={t('fx.sticks.leftEdge')} value={sc(curves.left.edge)} min={-100} max={100} onChange={(e) => setEdge('left', e)} />
+            <Num label={t('fx.sticks.rightEdge')} value={sc(curves.right.edge)} min={-100} max={100} onChange={(e) => setEdge('right', e)} />
             <div style={{ height: 10 }} />
-            <h4 style={{ marginTop: 12 }}>Response curves</h4>
+            <h4 style={{ marginTop: 12 }}>{t('fx.curves.title')}</h4>
             <div className="hint" style={{ margin: '4px 0 8px' }}>
-              Output height at nine evenly spaced stick positions (0% to 100% of travel). Drag the points, type values, or apply a preset. Moving a deadzone slider above regenerates that stick&apos;s curve.
+              {t('fx.curves.hint')}
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 16 }}>
               <FlydigiCurveDesigner
-                title="Left stick curve"
+                title={t('fx.curves.left')}
                 curve={curves.left}
                 onChange={(c) => setCurves({ ...curves, left: c })}
                 onCopyToOther={() => setCurves({ ...curves, right: { ...curves.left } })}
-                otherLabel="right"
+                copyLabel={t('fx.curves.copyToRight')}
               />
               <FlydigiCurveDesigner
-                title="Right stick curve"
+                title={t('fx.curves.right')}
                 curve={curves.right}
                 onChange={(c) => setCurves({ ...curves, right: c })}
                 onCopyToOther={() => setCurves({ ...curves, left: { ...curves.right } })}
-                otherLabel="left"
+                copyLabel={t('fx.curves.copyToLeft')}
               />
             </div>
           </div>
@@ -78,14 +81,15 @@ export function FxSticks({ fx }: { fx: Flydigi }): JSX.Element | null {
 }
 
 export function FxButtons({ fx }: { fx: Flydigi }): JSX.Element | null {
+  const t = useT()
   const { snap, keyEdits, setKeyEdits, turboEdits, setTurboEdits } = fx
   if (!snap) return null
   return (
     <>
           <div className="card" style={{ marginTop: 16 }}>
-            <h3>Buttons</h3>
+            <h3>{t('nav.buttons')}</h3>
             <div className="hint" style={{ margin: '4px 0 8px' }}>
-              Pick what each button sends. &quot;Default&quot; means no remap. Turbo makes a button repeat itself: Press repeats while you hold it, Click toggles repeating on each press (Space Station&apos;s names); the number is its frequency (Space Station used 8 and 15). Changes are written with Write to controller. Macro buttons are shown but must be edited in Space Station.
+              {t('fx.buttons.hint')}
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(210px, 1fr))', gap: 8 }}>
               {FX_KEY_ORDER.map((id) => {
@@ -113,7 +117,7 @@ export function FxButtons({ fx }: { fx: Flydigi }): JSX.Element | null {
                   <div key={id} className="stack" style={{ gap: 4 }}>
                     <div className="row spread">
                       <span className="label">{FX_KEY_NAMES[id]}</span>
-                      {edited && <span className="mono">edited</span>}
+                      {edited && <span className="mono">{t('fx.buttons.edited')}</span>}
                     </div>
                     <select
                       className="input"
@@ -135,9 +139,9 @@ export function FxButtons({ fx }: { fx: Flydigi }): JSX.Element | null {
                         })
                       }}
                     >
-                      {macro && <option value="macro">Macro (Space Station)</option>}
-                      {turbo !== null && <option value="turbo">Turbo: repeats {FX_KEY_NAMES[id]}</option>}
-                      <option value={FX_KEY_DEFAULT}>Default ({FX_KEY_NAMES[id]})</option>
+                      {macro && <option value="macro">{t('fx.buttons.macro')}</option>}
+                      {turbo !== null && <option value="turbo">{fxFmt(t('fx.buttons.turboRepeats'), { key: FX_KEY_NAMES[id] })}</option>}
+                      <option value={FX_KEY_DEFAULT}>{fxFmt(t('fx.buttons.default'), { key: FX_KEY_NAMES[id] })}</option>
                       {FX_KEY_ORDER.map((t) => (
                         <option key={t} value={t}>
                           {FX_KEY_NAMES[t]}
@@ -154,9 +158,9 @@ export function FxButtons({ fx }: { fx: Flydigi }): JSX.Element | null {
                           setTurbo(v === 'off' ? null : { type: v === 'click' ? FX_TURBO_CLICK : FX_TURBO_PRESS, frequency: turbo?.frequency ?? orig?.frequency ?? 8 })
                         }}
                       >
-                        <option value="off">Turbo off</option>
-                        <option value="press">Turbo: Press</option>
-                        <option value="click">Turbo: Click</option>
+                        <option value="off">{t('fx.buttons.turboOff')}</option>
+                        <option value="press">{t('fx.buttons.turboPress')}</option>
+                        <option value="click">{t('fx.buttons.turboClick')}</option>
                       </select>
                       {turbo !== null && (
                         <input
@@ -167,7 +171,7 @@ export function FxButtons({ fx }: { fx: Flydigi }): JSX.Element | null {
                           max={FX_TURBO_MAX}
                           step={1}
                           value={turbo.frequency}
-                          title="Repeat frequency"
+                          title={t('fx.buttons.freq')}
                           onChange={(e) => {
                             const f = Math.round(Number(e.target.value))
                             if (Number.isFinite(f)) setTurbo({ ...turbo, frequency: Math.max(FX_TURBO_MIN, Math.min(FX_TURBO_MAX, f)) })
@@ -186,32 +190,33 @@ export function FxButtons({ fx }: { fx: Flydigi }): JSX.Element | null {
 }
 
 export function FxDevice({ fx }: { fx: Flydigi }): JSX.Element | null {
+  const t = useT()
   const { snap, vib, setVib, setMotor, triggers, setTriggers, motion, setMotion, busy, rate, mode, pollingRate, toXInput } = fx
   if (!snap || !vib || !triggers || !motion) return null
   const setGyro = (p: Partial<FxMotion>): void => setMotion({ ...motion, ...p })
   return (
     <>
           <div className="card" style={{ marginTop: 16 }}>
-            <h3>Triggers</h3>
+            <h3>{t('fx.trig.title')}</h3>
             <div className="hint" style={{ margin: '4px 0 8px' }}>
-              Same numbers as Space Station&apos;s trigger Start and End sliders (0 to 255; the stock range is 0 to 255). The two curve points follow them the way Space Station sets them.
+              {t('fx.trig.hint')}
             </div>
             {(['left', 'right'] as const).map((side) => (
               <div key={side} className="stack" style={{ gap: 6, marginBottom: 10 }}>
-                <span className="label">{side === 'left' ? 'Left trigger (LT)' : 'Right trigger (RT)'}</span>
-                <Num label="Start" value={triggers[side].zero} min={0} max={255} onChange={(v) => setTriggers({ ...triggers, [side]: fxTriggerRange(triggers[side], v, triggers[side].end) })} />
-                <Num label="End" value={triggers[side].end} min={0} max={255} onChange={(v) => setTriggers({ ...triggers, [side]: fxTriggerRange(triggers[side], triggers[side].zero, v) })} />
+                <span className="label">{side === 'left' ? t('fx.trig.left') : t('fx.trig.right')}</span>
+                <Num label={t('fx.trig.start')} value={triggers[side].zero} min={0} max={255} onChange={(v) => setTriggers({ ...triggers, [side]: fxTriggerRange(triggers[side], v, triggers[side].end) })} />
+                <Num label={t('fx.trig.end')} value={triggers[side].end} min={0} max={255} onChange={(v) => setTriggers({ ...triggers, [side]: fxTriggerRange(triggers[side], triggers[side].zero, v) })} />
               </div>
             ))}
           </div>
 
           <div className="card" style={{ marginTop: 16 }}>
-            <h3>Gyro</h3>
+            <h3>{t('fx.gyro.title')}</h3>
             <div className="hint" style={{ margin: '4px 0 8px' }}>
-              Maps the pad&apos;s motion sensor to a stick while an activation key is held. Decoded from Space Station&apos;s log: Left/Right stick mapping, the activation key, sensitivity, dead zone and Racer mode. Mouse mapping and the smoothing curve are not decoded yet, so they are left as they are. Only the fields you change are written.
+              {t('fx.gyro.hint')}
             </div>
             <label style={{ display: 'block', maxWidth: 360 }}>
-              <span className="label">Gyro mapping</span>
+              <span className="label">{t('fx.gyro.mapping')}</span>
               <select
                 className="input"
                 style={{ width: '100%' }}
@@ -221,18 +226,18 @@ export function FxDevice({ fx }: { fx: Flydigi }): JSX.Element | null {
                   setGyro({ mapping: v, ...(v === FX_MOTION_RIGHT ? { racer: 0 } : {}) })
                 }}
               >
-                <option value={FX_MOTION_OFF}>Off</option>
-                <option value={FX_MOTION_LEFT}>Left stick</option>
-                <option value={FX_MOTION_RIGHT}>Right stick</option>
-                {![FX_MOTION_OFF, FX_MOTION_LEFT, FX_MOTION_RIGHT].includes(motion.mapping) && <option value={motion.mapping}>Other mapping ({motion.mapping}), not decoded</option>}
+                <option value={FX_MOTION_OFF}>{t('fx.gyro.off')}</option>
+                <option value={FX_MOTION_LEFT}>{t('fx.leftStick')}</option>
+                <option value={FX_MOTION_RIGHT}>{t('fx.rightStick')}</option>
+                {![FX_MOTION_OFF, FX_MOTION_LEFT, FX_MOTION_RIGHT].includes(motion.mapping) && <option value={motion.mapping}>{fxFmt(t('fx.gyro.otherMapping'), { n: motion.mapping })}</option>}
               </select>
             </label>
             {motion.mapping !== FX_MOTION_OFF && (
               <div className="stack" style={{ gap: 8, marginTop: 10, maxWidth: 360 }}>
                 <label style={{ display: 'block' }}>
-                  <span className="label">Activation key</span>
+                  <span className="label">{t('fx.gyro.key')}</span>
                   <select className="input" style={{ width: '100%' }} value={motion.enableKey} onChange={(e) => setGyro({ enableKey: Number(e.target.value) })}>
-                    <option value={FX_KEY_DEFAULT}>None</option>
+                    <option value={FX_KEY_DEFAULT}>{t('fx.gyro.none')}</option>
                     {FX_KEY_ORDER.map((id) => (
                       <option key={id} value={id}>
                         {FX_KEY_NAMES[id]}
@@ -241,19 +246,19 @@ export function FxDevice({ fx }: { fx: Flydigi }): JSX.Element | null {
                   </select>
                 </label>
                 <label style={{ display: 'block' }}>
-                  <span className="label">Activation</span>
+                  <span className="label">{t('fx.gyro.activation')}</span>
                   <select className="input" style={{ width: '100%' }} value={motion.enableType} onChange={(e) => setGyro({ enableType: Number(e.target.value) })}>
-                    <option value={FX_MOTION_PRESS}>Only while the key is held (Press)</option>
-                    <option value={0}>Not set (Space Station&apos;s default)</option>
-                    {![0, FX_MOTION_PRESS].includes(motion.enableType) && <option value={motion.enableType}>Other ({motion.enableType}), not decoded</option>}
+                    <option value={FX_MOTION_PRESS}>{t('fx.gyro.press')}</option>
+                    <option value={0}>{t('fx.gyro.notSet')}</option>
+                    {![0, FX_MOTION_PRESS].includes(motion.enableType) && <option value={motion.enableType}>{fxFmt(t('fx.gyro.otherActivation'), { n: motion.enableType })}</option>}
                   </select>
                 </label>
-                <Num label="Sensitivity" value={motion.sensitivity} min={0} max={100} onChange={(v) => setGyro({ sensitivity: v, sensitivityY: v })} />
-                <Num label="Dead zone" value={motion.deadZone} min={0} max={100} onChange={(v) => setGyro({ deadZone: v })} />
+                <Num label={t('fx.gyro.sensitivity')} value={motion.sensitivity} min={0} max={100} onChange={(v) => setGyro({ sensitivity: v, sensitivityY: v })} />
+                <Num label={t('fx.gyro.deadZone')} value={motion.deadZone} min={0} max={100} onChange={(v) => setGyro({ deadZone: v })} />
                 {motion.mapping === FX_MOTION_LEFT && (
                   <label className="row" style={{ gap: 8 }}>
                     <input type="checkbox" checked={motion.racer === 1} onChange={(e) => setGyro({ racer: e.target.checked ? 1 : 0 })} />
-                    <span>Racer mode</span>
+                    <span>{t('fx.gyro.racer')}</span>
                   </label>
                 )}
               </div>
@@ -261,25 +266,25 @@ export function FxDevice({ fx }: { fx: Flydigi }): JSX.Element | null {
           </div>
 
           <div className="card" style={{ marginTop: 16 }}>
-            <h3>Vibration</h3>
+            <h3>{t('fx.vib.title')}</h3>
             <label className="row" style={{ gap: 8, margin: '4px 0 8px' }}>
               <input type="checkbox" checked={vib.enabled} onChange={(e) => setVib({ ...vib, enabled: e.target.checked })} />
-              <span>Vibration enabled</span>
+              <span>{t('fx.vib.enabled')}</span>
             </label>
             {(['left', 'right'] as const).map((side) => (
               <div key={side} className="stack" style={{ gap: 6, marginBottom: 10 }}>
-                <span className="label">{side === 'left' ? 'Left motor (heavy)' : 'Right motor (light)'}</span>
-                <Num label="Strength" value={vib[side].scale} min={0} max={100} onChange={(v) => setMotor(side, { scale: v })} />
-                <Num label="Minimum" value={vib[side].min} min={0} max={255} onChange={(v) => setMotor(side, { min: Math.min(v, vib[side].max) })} />
-                <Num label="Maximum" value={vib[side].max} min={0} max={255} onChange={(v) => setMotor(side, { max: Math.max(v, vib[side].min) })} />
+                <span className="label">{side === 'left' ? t('fx.vib.left') : t('fx.vib.right')}</span>
+                <Num label={t('fx.vib.strength')} value={vib[side].scale} min={0} max={100} onChange={(v) => setMotor(side, { scale: v })} />
+                <Num label={t('fx.vib.min')} value={vib[side].min} min={0} max={255} onChange={(v) => setMotor(side, { min: Math.min(v, vib[side].max) })} />
+                <Num label={t('fx.vib.max')} value={vib[side].max} min={0} max={255} onChange={(v) => setMotor(side, { max: Math.max(v, vib[side].min) })} />
               </div>
             ))}
           </div>
 
           <div className="card" style={{ marginTop: 16 }}>
-          <h3>Polling rate</h3>
+          <h3>{t('fx.poll.title')}</h3>
           <div className="hint" style={{ margin: '4px 0 8px' }}>
-            How often the pad reports to the PC. The Direwolf only exposes this in XInput mode, so changing it switches the pad to XInput and back through Flydigi&apos;s Xbox filter driver (one administrator step, about 20 seconds). This is the one feature that still needs Flydigi Space Station installed (only its driver is used) and closed; everything else works without it.
+            {t('fx.poll.hint')}
           </div>
           <div className="row" style={{ gap: 6, flexWrap: 'wrap' }}>
             {FX_REPORT_RATES.map((r) => (
@@ -288,24 +293,24 @@ export function FxDevice({ fx }: { fx: Flydigi }): JSX.Element | null {
               </button>
             ))}
             <button className="btn ghost sm" disabled={busy} onClick={() => void pollingRate(null)}>
-              Check current
+              {t('fx.poll.check')}
             </button>
-            <span className="mono" style={{ alignSelf: 'center' }}>{rate === null ? 'not checked yet' : `${fxHzFromReportRate(rate) ?? '?'} Hz`}</span>
+            <span className="mono" style={{ alignSelf: 'center' }}>{rate === null ? t('fx.poll.notChecked') : `${fxHzFromReportRate(rate) ?? '?'} Hz`}</span>
           </div>
           </div>
 
           <div className="card" style={{ marginTop: 16 }}>
-            <h3>Pad mode</h3>
+            <h3>{t('fx.mode.title')}</h3>
             <div className="hint" style={{ margin: '4px 0 8px' }}>
-              Stick Labs configures the pad in DInput mode. Switch to XInput to give games an Xbox controller again. To come back, hold FN + D-pad Left on the pad (FN + D-pad Right does the XInput switch from the pad itself); the app connects again once the pad is in DInput. Launching Space Station also switches the pad back to XInput.
+              {t('fx.mode.hint')}
             </div>
             <div className="row" style={{ gap: 8 }}>
               {mode === 'dinput' && (
                 <button className="btn ghost" disabled={busy} onClick={() => void toXInput()}>
-                  Switch to XInput
+                  {t('fx.mode.toXInput')}
                 </button>
               )}
-              <span className="mono" style={{ alignSelf: 'center' }}>{mode === 'dinput' ? 'DInput mode' : mode === 'xinput' ? 'XInput mode' : 'pad not found'}</span>
+              <span className="mono" style={{ alignSelf: 'center' }}>{mode === 'dinput' ? t('fx.mode.dinput') : mode === 'xinput' ? t('fx.mode.xinput') : t('fx.mode.none')}</span>
             </div>
           </div>
     </>
@@ -313,52 +318,53 @@ export function FxDevice({ fx }: { fx: Flydigi }): JSX.Element | null {
 }
 
 export function FxProfiles({ fx }: { fx: Flydigi }): JSX.Element | null {
+  const t = useT()
   const { snap, busy, activate, selectSlot, backups, backupNow, restore, save, setSave } = fx
   if (!snap) return null
   return (
     <>
       <div className="card" style={{ marginTop: 16 }}>
-        <h3>Config slots</h3>
+        <h3>{t('fx.slots.title')}</h3>
         <div className="hint" style={{ margin: '4px 0 8px' }}>
-          The pad has {Math.max(snap.cfgCount, 1)} onboard slots (Space Station&apos;s 配置1…{Math.max(snap.cfgCount, 1)}); • marks the one it is running. Switching also works from P1…P4 in the top bar.
+          {fxFmt(t('fx.slots.hint'), { n: Math.max(snap.cfgCount, 1) })}
         </div>
         <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
           {Array.from({ length: Math.max(snap.cfgCount, 1) }, (_, i) => (
-            <button key={i} className={`choice-btn${snap.cfgId === i ? ' active' : ''}`} disabled={busy} onClick={() => void selectSlot(i)} title={i === snap.activeCfgId ? 'The pad is running this config' : undefined}>
-              Config {i + 1}{i === snap.activeCfgId ? ' •' : ''}
+            <button key={i} className={`choice-btn${snap.cfgId === i ? ' active' : ''}`} disabled={busy} onClick={() => void selectSlot(i)} title={i === snap.activeCfgId ? t('fx.top.slotRunning') : undefined}>
+              {fxFmt(t('fx.slots.config'), { n: i + 1 })}{i === snap.activeCfgId ? ' •' : ''}
             </button>
           ))}
           {snap.cfgId !== snap.activeCfgId && (
             <button className="btn" disabled={busy} onClick={() => void activate()}>
-              Make active
+              {t('fx.slots.makeActive')}
             </button>
           )}
-          <span className="mono" style={{ alignSelf: 'center' }}>data v{'0x' + snap.dataVersion.toString(16)}</span>
+          <span className="mono" style={{ alignSelf: 'center' }}>{fxFmt(t('fx.slots.dataVersion'), { v: '0x' + snap.dataVersion.toString(16) })}</span>
         </div>
         <label className="row" style={{ gap: 6, marginTop: 10 }}>
           <input type="checkbox" checked={save} onChange={(e) => setSave(e.target.checked)} />
-          <span>Save to pad when writing (survives replug){snap.cfgId !== snap.activeCfgId ? ' — only for the active config; this slot is written live only' : ''}</span>
+          <span>{t('fx.slots.save')}{snap.cfgId !== snap.activeCfgId ? t('fx.slots.saveLive') : ''}</span>
         </label>
       </div>
           <div className="card" style={{ marginTop: 16 }}>
-            <h3>Backups</h3>
+            <h3>{t('fx.backups.title')}</h3>
             <div className="hint" style={{ margin: '4px 0 8px' }}>
-              A copy of the slot is saved before every write and restore. Restoring puts a backup back into the slot it came from (this follows the Save to pad option above). Files live in Stick Labs&apos; data folder under flydigi-backups.
+              {t('fx.backups.hint')}
             </div>
             <button className="btn ghost sm" disabled={busy} onClick={() => void backupNow()}>
-              Back up config {snap.cfgId + 1} now
+              {fxFmt(t('fx.backups.now'), { n: snap.cfgId + 1 })}
             </button>
             {backups.length === 0 ? (
-              <div className="hint" style={{ marginTop: 8 }}>No backups yet.</div>
+              <div className="hint" style={{ marginTop: 8 }}>{t('fx.backups.none')}</div>
             ) : (
               <div className="stack" style={{ gap: 4, marginTop: 8, maxHeight: 220, overflowY: 'auto' }}>
                 {backups.map((b) => (
                   <div key={b.name} className="row spread" style={{ gap: 8 }}>
                     <span className="mono">
-                      Config {b.cfgId + 1} · {new Date(b.time).toLocaleString()}
+                      {fxFmt(t('fx.slots.config'), { n: b.cfgId + 1 })} · {new Date(b.time).toLocaleString()}
                     </span>
                     <button className="btn ghost sm" disabled={busy} onClick={() => void restore(b)}>
-                      Restore
+                      {t('fx.backups.restore')}
                     </button>
                   </div>
                 ))}

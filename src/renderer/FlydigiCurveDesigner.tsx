@@ -9,6 +9,8 @@
  */
 import { useRef } from 'react'
 import { AIM_CURVES } from '@shared/aimcurves'
+import { useT } from './i18n'
+import { fxFmt } from './i18n-fx'
 import {
   FX_CURVE_CUSTOM,
   FX_CURVE_DEFAULT,
@@ -30,8 +32,10 @@ export default function FlydigiCurveDesigner(props: {
   curve: FxCurve
   onChange: (c: FxCurve) => void
   onCopyToOther?: () => void
-  otherLabel?: string
+  /** Text of the copy button, already translated ("Copy to right stick"). */
+  copyLabel?: string
 }): JSX.Element {
+  const t = useT()
   const { curve, onChange } = props
   const svg = useRef<SVGSVGElement | null>(null)
   const drag = useRef<number | null>(null)
@@ -60,12 +64,12 @@ export default function FlydigiCurveDesigner(props: {
           value={curve.type === FX_CURVE_DEFAULT ? 'default' : 'custom'}
           onChange={(e) => onChange(e.target.value === 'default' ? { ...curve, type: FX_CURVE_DEFAULT, points: [...FX_CURVE_DEFAULT_POINTS] } : { ...curve, type: FX_CURVE_CUSTOM })}
         >
-          <option value="default">Default ramp</option>
-          <option value="custom">Custom curve</option>
+          <option value="default">{t('fx.curve.default')}</option>
+          <option value="custom">{t('fx.curve.custom')}</option>
         </select>
         <select className="input" value={curve.circularity} onChange={(e) => onChange({ ...curve, circularity: Number(e.target.value) })}>
-          <option value={1}>Circular</option>
-          <option value={0}>Rectangle</option>
+          <option value={1}>{t('fx.curve.circular')}</option>
+          <option value={0}>{t('fx.curve.rect')}</option>
         </select>
         <select
           className="input"
@@ -75,7 +79,7 @@ export default function FlydigiCurveDesigner(props: {
             if (preset) onChange({ ...curve, type: FX_CURVE_CUSTOM, points: fxCurveFromDesign(preset.pts) })
           }}
         >
-          <option value="">Presets…</option>
+          <option value="">{t('fx.curve.presets')}</option>
           {Object.entries(AIM_CURVES).map(([key, c]) => (
             <option key={key} value={key} title={c.hint}>
               {c.label}
@@ -83,11 +87,11 @@ export default function FlydigiCurveDesigner(props: {
           ))}
         </select>
         <button className="btn ghost sm" onClick={() => onChange({ ...curve, type: FX_CURVE_DEFAULT, points: [...FX_CURVE_DEFAULT_POINTS] })}>
-          Reset
+          {t('fx.curve.reset')}
         </button>
         {props.onCopyToOther && (
-          <button className="btn ghost sm" onClick={props.onCopyToOther} title="Copy this curve, type and shape to the other stick">
-            Copy to {props.otherLabel ?? 'other stick'}
+          <button className="btn ghost sm" onClick={props.onCopyToOther} title={t('fx.curve.copyTitle')}>
+            {props.copyLabel}
           </button>
         )}
       </div>
@@ -123,10 +127,10 @@ export default function FlydigiCurveDesigner(props: {
         <polyline points={poly} fill="none" stroke="var(--accent, #f43f52)" strokeWidth={2} />
         {pcts.map((p, i) => (
           <circle key={i} cx={toX(i)} cy={toY(p)} r={5} fill={p < 0 ? 'none' : 'var(--accent, #f43f52)'} stroke="var(--accent, #f43f52)" strokeWidth={2}>
-            <title>{`input ${Math.round((i / 8) * 1000) / 10}% → output ${p < 0 ? `${p}% (clamped to 0)` : `${p}%`}`}</title>
+            <title>{fxFmt(t('fx.curve.pointTip'), { x: Math.round((i / 8) * 1000) / 10, y: p < 0 ? fxFmt(t('fx.curve.clamped'), { p }) : `${p}%` })}</title>
           </circle>
         ))}
-        <text x={W - PAD} y={H - 2} fontSize={8} textAnchor="end" fill="var(--muted, #888)">input →</text>
+        <text x={W - PAD} y={H - 2} fontSize={8} textAnchor="end" fill="var(--muted, #888)">{t('fx.curve.inputAxis')}</text>
       </svg>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(9, minmax(0, 1fr))', gap: 4, maxWidth: 420 }}>
@@ -140,7 +144,7 @@ export default function FlydigiCurveDesigner(props: {
             max={100}
             step={1}
             value={p}
-            title={`input ${Math.round((i / 8) * 1000) / 10}%`}
+            title={fxFmt(t('fx.curve.inputTip'), { x: Math.round((i / 8) * 1000) / 10 })}
             onChange={(e) => {
               const v = Number(e.target.value)
               if (Number.isFinite(v)) setPoint(i, fxCurvePercentToRaw(v))
