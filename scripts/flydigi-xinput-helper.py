@@ -110,8 +110,13 @@ if res == 5:
 if res != 0:
     finish(False, "the Xbox 360 filter driver did not start (code %d). Close Flydigi Space Station and its service." % res)
 time.sleep(1.0)
-if not dll.IsCurrentUsbCanWrite():
-    finish(False, "the filter driver cannot write to the pad (is it wired, in USB mode, and in XInput mode?)")
+# Right after the pad re-enumerates in XInput mode (the app's switch) the driver needs a few seconds to see it,
+# so wait for it instead of failing at once.
+deadline = time.time() + 12
+while not dll.IsCurrentUsbCanWrite():
+    if time.time() > deadline:
+        finish(False, "the filter driver cannot write to the pad (is it wired, in USB mode, and in XInput mode?)")
+    time.sleep(0.25)
 
 
 def send(cmd, *args):

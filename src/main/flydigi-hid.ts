@@ -465,6 +465,7 @@ export function fxHidPollingRate(code: number | null): Promise<{ reportRate: num
     if (wasDInput) {
       if (!(await hidSwitchToXInput())) throw new Error('flydigi: the pad did not leave DInput mode; unplug and replug it and try again.')
       if (!(await waitFor(() => xinputDirewolfPresent(), 10000))) throw new Error('flydigi: the pad did not come back as an Xbox controller in time.')
+      await sleep(2500) // let Windows finish setting the pad up as an Xbox controller before the driver helper looks for it
     }
     const args = [...(code === null ? ['--read-rate'] : ['--set-rate', String(code)]), ...(wasDInput ? ['--to-dinput'] : [])]
     const r = await runHelper(args)
