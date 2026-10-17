@@ -306,7 +306,7 @@ values still used are the ones in the code: turbo frequency 1..30, gyro sensitiv
 3. **Trigger vibration**, if Space Station has it for this pad, and the live `CallGripVibration {leftValue, rightValue}`
    motor test (a button that buzzes the grips).
 4. **Edge cases in the key table.** What a turbo key with a remap target does, and `enableKey2` for gyro.
-6. **Polling rate without Space Station.** The mode switch no longer needs it (FN + D-pad combo), and plain HID cannot set
+5. **Polling rate without Space Station.** The mode switch no longer needs it (FN + D-pad combo), and plain HID cannot set
    the rate (measured, see above), so only the XInput route remains. Removing the dependency needs raw USB writes to the
    XInput interface: UsbDk (PR #9, closed) did not start under libusb 1.0.30 on the maintainer's machine, and WinUSB via
    Zadig is untested (it swaps the pad's Xbox driver, so games lose XInput until it is rolled back). It would also have to
