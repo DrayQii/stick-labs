@@ -78,8 +78,9 @@ async function openPad(waitMs: number): Promise<Pad> {
       } catch (e) {
         try { dev.close() } catch { /* not open */ }
         const msg = (e as Error).message ?? ''
-        if (/ACCESS|NOT_SUPPORTED|BUSY/i.test(msg) && !/OTHER/i.test(msg)) {
-          throw new FxUsbAccessError(`flydigi: UsbDk could not open the pad (${msg}). Close Space Station, the Xbox app and games that use it.`)
+        // UsbDk's StartRedirect needs administrator rights and reports a refusal as LIBUSB_ERROR_OTHER on open.
+        if (/opening the pad|ACCESS|NOT_SUPPORTED|BUSY/i.test(msg)) {
+          throw new FxUsbAccessError(`flydigi: UsbDk could not open the pad (${msg}). It needs administrator rights, and Space Station, the Xbox app and games must not hold the pad.`)
         }
         throw e
       }
