@@ -6,8 +6,8 @@ script has it open and gives it back afterwards, so the pad is briefly not an Xb
 (With libusb 1.0.30 the UsbDk option must be set AFTER libusb_init, on the context; setting it before init, as the
 closed UsbDk draft did, always fails with "UsbDk backend not available".)
 
-Why: the rate is only exposed in XInput mode (045E:028E) and today Stick Labs reaches it through Space Station's
-Xbox 360 filter driver (scripts/flydigi-xinput-helper.py). This script tries the same two frames as plain USB writes
+Why: the rate is only exposed in XInput mode (045E:028E) and Stick Labs first reached it through Space Station's
+Xbox 360 filter driver (a helper since removed; the app now uses src/main/flydigi-usb.ts). This script tries the same two frames as plain USB writes
 through libusb's WinUSB backend:
   read  A5 50 07            -> the pad answers with a 32-byte report [14]=A5 [15]=50 [16]=07, rate code at [22]
   set   A5 50 0A <code>     -> no answer; the script reads the rate back afterwards
