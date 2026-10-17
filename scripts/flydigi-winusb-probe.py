@@ -197,7 +197,9 @@ if rc != 0:
     die("cannot open the pad: %s" % name(rc))
 rc = lib.libusb_claim_interface(h, IFACE)
 if rc != 0:
-    die("cannot claim interface %d: %s" % (IFACE, name(rc)))
+    die("cannot claim interface %d: %s (another program has the pad open)" % (IFACE, name(rc)))
+print("claimed interface %d" % IFACE)
+sys.stdout.flush()
 
 
 def transfer_in(timeout_ms):
@@ -207,11 +209,16 @@ def transfer_in(timeout_ms):
     return rc, bytes(buf.raw[:got.value])
 
 
-def drain():
-    while True:
+def drain(max_seconds=0.4):
+    # The pad can stream input reports non-stop, so never wait for the queue to run dry.
+    end = time.time() + max_seconds
+    skipped = 0
+    while time.time() < end:
         rc, data = transfer_in(30)
         if rc != 0 or not data:
-            return
+            break
+        skipped += 1
+    print("drained %d queued reports" % skipped)
 
 
 def send(cmd, *args):
