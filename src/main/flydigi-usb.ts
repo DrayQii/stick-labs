@@ -10,7 +10,7 @@
  * Codes: 1 = 1000 Hz, 2 = 500, 4 = 250, 8 = 125. The pad re-enumerates to apply a new rate.
  */
 import { spawn } from 'node:child_process'
-import { readFileSync, rmSync } from 'node:fs'
+import { existsSync, readFileSync, rmSync } from 'node:fs'
 import { createRequire } from 'module'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -166,7 +166,8 @@ export async function fxUsbSendRate(code: number): Promise<void> {
 /** Run flydigi-usb-run.js in its own process (this executable as node) and return what it wrote. */
 export async function runChild(args: string[]): Promise<{ ok: boolean; error?: string; reportRate?: number | null }> {
   const out = join(tmpdir(), `flydigi-usb-child-${Date.now()}.json`)
-  const script = join(__dirname, '..', 'flydigi-usb-run.js')
+  // the bundler may inline this file into the runner (same folder) or put it in chunks/ (one level down)
+  const script = [join(__dirname, 'flydigi-usb-run.js'), join(__dirname, '..', 'flydigi-usb-run.js')].find((f) => existsSync(f)) ?? join(__dirname, 'flydigi-usb-run.js')
   const done = await new Promise<number>((resolve) => {
     const c = spawn(process.execPath, [script, ...args, '--out', out], { env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' }, windowsHide: true, stdio: 'ignore' })
     c.on('error', () => resolve(-1))
