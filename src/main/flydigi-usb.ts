@@ -175,7 +175,7 @@ export async function fxUsbSendRate(code: number): Promise<void> {
 }
 
 /** Run flydigi-usb-run.js in its own process (this executable as node) and return what it wrote. */
-export async function runChild(args: string[]): Promise<{ ok: boolean; error?: string; reportRate?: number | null }> {
+export async function runChild(args: string[]): Promise<{ ok: boolean; error?: string; reportRate?: number | null; status?: number[] | null }> {
   const out = join(tmpdir(), `flydigi-usb-child-${Date.now()}.json`)
   // the bundler may inline this file into the runner (same folder) or put it in chunks/ (one level down)
   const script = [join(__dirname, 'flydigi-usb-run.js'), join(__dirname, '..', 'flydigi-usb-run.js')].find((f) => existsSync(f)) ?? join(__dirname, 'flydigi-usb-run.js')

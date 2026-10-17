@@ -18,15 +18,19 @@ async function main(): Promise<void> {
   else if (set !== null) result.reportRate = await fxUsbSetRate(Number(set), toDInput)
   else {
     const read = process.argv.includes('--read-rate')
-    if (read) {
+    if (read && toDInput) {
+      // One open per process: UsbDk keeps the pad claimed until the process that opened it ends, so the read and the
+      // switch each run in their own child and this process never opens the pad.
+      const r = await runChild(['--read-rate'])
+      if (!r.ok) throw new Error(r.error ?? 'flydigi: the settings read failed.')
+      result.reportRate = r.reportRate ?? null
+      result.status = r.status ?? null
+      const sw = await runChild(['--to-dinput'])
+      if (!sw.ok) throw new Error(sw.error ?? 'flydigi: the switch to DInput failed.')
+    } else if (read) {
       const r = await fxUsbReadRate()
       result.reportRate = r.rate
       result.status = r.status
-    }
-    // one open per process: UsbDk keeps the pad claimed until the process that opened it ends
-    if (toDInput && read) {
-      const sw = await runChild(['--to-dinput'])
-      if (!sw.ok) throw new Error(sw.error ?? 'flydigi: the switch to DInput failed.')
     } else if (toDInput) await fxUsbSwitchToDInput()
   }
   result.ok = true
