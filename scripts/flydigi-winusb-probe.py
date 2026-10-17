@@ -1,5 +1,11 @@
 """Experiment: read and set the Direwolf 4's polling rate over raw USB (WinUSB), without Space Station's driver.
 
+Backends: by default libusb's WinUSB backend (the pad must have the WinUSB driver bound with Zadig). With --usbdk it
+uses UsbDk instead (UsbDk installed, nothing to bind): UsbDk takes the pad away from the Xbox driver only while this
+script has it open and gives it back afterwards, so the pad is briefly not an Xbox controller and then returns by itself.
+(With libusb 1.0.30 the UsbDk option must be set AFTER libusb_init, on the context; setting it before init, as the
+closed UsbDk draft did, always fails with "UsbDk backend not available".)
+
 Why: the rate is only exposed in XInput mode (045E:028E) and today Stick Labs reaches it through Space Station's
 Xbox 360 filter driver (scripts/flydigi-xinput-helper.py). This script tries the same two frames as plain USB writes
 through libusb's WinUSB backend:
@@ -14,7 +20,8 @@ lose it until the driver is rolled back (Device Manager -> uninstall the device 
 Needs: the pad wired, in XInput mode, WinUSB bound, Flydigi Space Station closed, python, and a libusb-1.0.dll
 (pip install libusb-package, or FLYDIGI_LIBUSB=<full path to libusb-1.0.dll>).
 
-Usage: python flydigi-winusb-probe.py --dump                list the pad's interfaces and endpoints, send nothing
+Usage: add --usbdk to any command below to use UsbDk instead of WinUSB.
+       python flydigi-winusb-probe.py --dump                list the pad's interfaces and endpoints, send nothing
        python flydigi-winusb-probe.py --read                read the stored rate
        python flydigi-winusb-probe.py --set CODE            set it (1, 2, 4 or 8) and read it back
 Options: --iface N  --ep-in 0x81  --ep-out 0x01  --len 15  (default: the first interrupt IN/OUT endpoints found)
@@ -40,6 +47,7 @@ def arg(name, default=None, flag=False):
 DUMP = arg("--dump", False, True)
 READ = arg("--read", False, True)
 SET = arg("--set")
+USBDK = arg("--usbdk", False, True)
 if not (DUMP or READ or SET is not None) or "-h" in sys.argv or "--help" in sys.argv:
     print(__doc__)
     sys.exit(0 if ("-h" in sys.argv or "--help" in sys.argv) else 2)
@@ -116,6 +124,7 @@ class CfgDesc(ctypes.Structure):
 
 lib = load_libusb()
 lib.libusb_init.argtypes = [ctypes.POINTER(ctypes.c_void_p)]
+lib.libusb_set_option.argtypes = [ctypes.c_void_p, ctypes.c_int]
 lib.libusb_get_device_list.argtypes = [ctypes.c_void_p, ctypes.POINTER(ctypes.POINTER(ctypes.c_void_p))]
 lib.libusb_get_device_list.restype = ctypes.c_ssize_t
 lib.libusb_get_device_descriptor.argtypes = [ctypes.c_void_p, ctypes.POINTER(DevDesc)]
@@ -132,6 +141,13 @@ ctx = ctypes.c_void_p()
 rc = lib.libusb_init(ctypes.byref(ctx))
 if rc != 0:
     die("libusb_init failed: %s" % name(rc))
+
+if USBDK:
+    # After init, on the real context: the backend has been probed by now, so UsbDk can be switched on.
+    rc = lib.libusb_set_option(ctx, 1)  # LIBUSB_OPTION_USE_USBDK
+    if rc != 0:
+        die("libusb could not switch to the UsbDk backend: %s. Is UsbDk installed, and is its service running?" % name(rc))
+    print("using the UsbDk backend")
 
 devs = ctypes.POINTER(ctypes.c_void_p)()
 n = lib.libusb_get_device_list(ctx, ctypes.byref(devs))
@@ -262,7 +278,7 @@ if SET is not None:
     lib.libusb_close(h)
     time.sleep(4)
     import subprocess
-    run = subprocess.run([sys.executable, os.path.abspath(__file__), "--read"])
+    run = subprocess.run([sys.executable, os.path.abspath(__file__), "--read"] + (["--usbdk"] if USBDK else []))
     print("RESULT: asked for code %d; the read above is what the pad reports now" % code)
     sys.stdout.flush()
     os._exit(run.returncode)

@@ -245,7 +245,7 @@ waits 2.5 s after the pad appears as an Xbox controller.
 Raw USB (2026-10-17). UsbDk (PR #9, closed) did not work: its own tool lists the pad (a 49-byte configuration
 descriptor), but libusb 1.0.30 (the pip build and the official one) always answered "UsbDk backend not available", with
 the helper DLL on PATH, next to libusb and python.exe, preloaded, in the Windows system folder, and from an
-administrator shell; not resolved. **WinUSB works.** With Zadig's WinUSB driver bound to the pad (XInput mode,
+administrator shell. **Cause found (libusb source, v1.0.30):** `libusb_init` applies options set before it (`libusb_set_option(NULL, LIBUSB_OPTION_USE_USBDK)`) *before* it starts the backend, and UsbDk's availability is only determined inside that backend start, so the option can never succeed that way; with 1.0.30 it must be set after init, on the context (`libusb_init` then `libusb_set_option(ctx, LIBUSB_OPTION_USE_USBDK)`). The probe script's `--usbdk` flag does that (untested on the pad until you run it). **WinUSB works.** With Zadig's WinUSB driver bound to the pad (XInput mode,
 045E:028E), `scripts/flydigi-winusb-probe.py` talks to it through libusb: one interface (class FF/5D/01), interrupt IN
 `0x81` and interrupt OUT `0x05` (max packet 64; bInterval 1 for 1000 Hz, 2 for 500 Hz). The same frames as the
 filter-driver route are plain 15-byte interrupt writes to `0x05` (`A5 50 07` read, `A5 50 0A <code>` set), and the
