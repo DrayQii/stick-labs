@@ -334,7 +334,7 @@ values still used are the ones in the code: turbo frequency 1..30, gyro sensitiv
 ## Polling rate and mode switch without Space Station (UsbDk, native)
 
 `src/main/flydigi-usb.ts` reads/sets the polling rate and does the XInput -> DInput switch (A5 17) over raw USB with
-node-usb 2.19.1 (bundles libusb 1.0.30) and the signed UsbDk driver. No Python, no Space Station. UsbDk lends the pad to the
+node-usb 2.17.0 (bundles libusb 1.0.29) and the signed UsbDk driver. No Python, no Space Station. UsbDk lends the pad to the
 app only while it is open and hands it back to the Xbox driver afterwards, so no driver is replaced. libusb is initialised
 when `usb` loads and `useUsbDkBackend()` then sets the option on that context, which is the order libusb 1.0.30 needs
 (set before init it always fails). The pad re-enumerates after a rate change, so it is read back with a fresh open.
@@ -342,3 +342,7 @@ If UsbDk refuses a normal user, the same code runs elevated: the app starts its 
 `ELECTRON_RUN_AS_NODE` and `out/main/flydigi-usb-run.js` (UAC prompt). Without UsbDk the app falls back to
 `scripts/flydigi-xinput-helper.py` (Space Station's driver, needs python). The Python probe
 (`scripts/flydigi-winusb-probe.py --usbdk`) stays as a reference for the verified frames.
+
+node-usb must be 2.17.x: from 2.18 on its libusb is built with Windows hotplug, where the device list is filled by a WinUSB
+scan at start and a later switch to UsbDk never rescans, so the pad is "not visible through UsbDk". 2.17 lists devices
+through the active backend on every call.
