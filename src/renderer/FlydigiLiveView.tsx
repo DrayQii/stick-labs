@@ -1,11 +1,15 @@
 /**
- * Live stick / trigger / button view for the Direwolf, read from the system Gamepad API (the same
+ * Live stick / trigger / button view for the Direwolf. Preferred source: the pad's own live stream on the vendor
+ * interface (`flydigix:live`, `04 FE` reports), which has every button including the back buttons M1..M6 and C / Z.
+ * Until that stream arrives it falls back to the system Gamepad API (the same
  * route the LeadJoy view uses): no HID handle is opened, so it can run beside the config session
  * and works in XInput and DInput mode alike. Axes follow the standard mapping (LX LY RX RY, LT/RT as
  * buttons 6/7) when the pad reports one, else the Direwolf's DInput layout (LX 0, LY 1, RX 2, RY 5, LT/RT
  * axes 3/4); each control can be pointed at any axis (remembered in localStorage) while the raw axes are shown.
  */
 import { useEffect, useRef, useState } from 'react'
+import { FX_LIVE_BUTTONS, type FxLive } from '@shared/flydigi-xinput'
+import { api } from './api'
 import { useT } from './i18n'
 import { fxFmt } from './i18n-fx'
 
@@ -81,7 +85,11 @@ function Bar(props: { label: string; value: number }): JSX.Element {
 export default function FlydigiLiveView(): JSX.Element {
   const t = useT()
   const [live, setLive] = useState<Live | null>(null)
+  const [padLive, setPadLive] = useState<FxLive | null>(null)
   const raf = useRef(0)
+
+  // The pad's own stream; once it has been seen it stays the source (it only reports on change).
+  useEffect(() => api().on('flydigix:live', (l: FxLive) => setPadLive(l)), [])
   // null = use the default for the pad's layout; a pick is remembered.
   const [saved, setSaved] = useState<Mapping | null>(loadMap)
   const setMap = (m: Mapping | null): void => {
@@ -109,6 +117,7 @@ export default function FlydigiLiveView(): JSX.Element {
     return () => cancelAnimationFrame(raf.current)
   }, [])
 
+  if (padLive) return <PadLiveView live={padLive} />
   if (!live) {
     return <div className="hint">{t('fx.live.none')}</div>
   }
@@ -177,6 +186,43 @@ export default function FlydigiLiveView(): JSX.Element {
             {BTN_NAMES[i] ?? `B${i}`}
           </span>
         ))}
+      </div>
+    </div>
+  )
+}
+
+/** Byte 0..255 (centre 128) to -1..1. */
+const norm = (v: number): number => Math.max(-1, Math.min(1, (v - 128) / 127))
+
+function PadLiveView({ live }: { live: FxLive }): JSX.Element {
+  const t = useT()
+  const down = new Set(live.pressed)
+  return (
+    <div className="stack" style={{ gap: 10 }}>
+      <div className="mono" style={{ fontSize: 11, opacity: 0.8 }}>
+        {t('fx.live.fromPad')}
+      </div>
+      <div className="row" style={{ gap: 16, flexWrap: 'wrap' }}>
+        <Stick label={t('fx.leftStick')} x={norm(live.lx)} y={norm(live.ly)} />
+        <Stick label={t('fx.rightStick')} x={norm(live.rx)} y={norm(live.ry)} />
+        <div className="stack" style={{ gap: 10, flex: 1, minWidth: 160 }}>
+          <Bar label="LT" value={live.lt / 255} />
+          <Bar label="RT" value={live.rt / 255} />
+        </div>
+      </div>
+      <div className="row" style={{ gap: 4, flexWrap: 'wrap' }}>
+        {FX_LIVE_BUTTONS.map(([name]) => (
+          <span
+            key={name}
+            className="mono"
+            style={{ fontSize: 11, padding: '1px 6px', borderRadius: 3, border: '1px solid var(--line-2, #333)', background: down.has(name) ? 'var(--accent, #f43f52)' : 'transparent', color: down.has(name) ? '#fff' : 'inherit' }}
+          >
+            {name}
+          </span>
+        ))}
+      </div>
+      <div className="mono" style={{ fontSize: 11, opacity: 0.7 }} title={t('fx.live.gyroTip')}>
+        {fxFmt(t('fx.live.gyro'), { x: live.gyro[0], y: live.gyro[1] })}
       </div>
     </div>
   )

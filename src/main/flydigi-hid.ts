@@ -44,6 +44,7 @@ import {
   fxDiffPacks,
   fxEncodeVibration,
   fxFromDInput,
+  fxParseDInputLive,
   fxReadConfig,
   fxReadConfigId,
   fxRunFrames,
@@ -57,6 +58,7 @@ import {
   fxSetTrigger,
   fxToDInput,
   type FxAck,
+  type FxLive,
   type FxPadStatus,
   type FxPatch,
   type FxSnapshot
@@ -66,6 +68,12 @@ const ACK_TIMEOUT_MS = 2000
 const READ_SETTLE_MS = 2500
 
 let hid: HIDInstance | null = null
+let liveListener: ((live: FxLive) => void) | null = null
+
+/** Receive the pad's live input stream (`04 FE` reports) while the vendor interface is open. */
+export function fxHidOnLive(fn: ((live: FxLive) => void) | null): void {
+  liveListener = fn
+}
 let acks: FxAck[] = []
 let busy = Promise.resolve()
 
@@ -84,7 +92,10 @@ function open(): void {
   try {
     const h = new HIDModule.HID(path)
     h.on('data', (raw: Buffer) => {
-      for (const a of fxFromDInput(new Uint8Array(raw))) acks.push(a)
+      const r = new Uint8Array(raw)
+      const live = fxParseDInputLive(r)
+      if (live) liveListener?.(live)
+      else for (const a of fxFromDInput(r)) acks.push(a)
     })
     h.on('error', () => {
       if (hid === h) hid = null
