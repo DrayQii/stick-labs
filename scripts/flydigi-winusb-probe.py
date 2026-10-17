@@ -255,7 +255,17 @@ if SET is not None:
     code = int(SET, 0)
     print("setting %d Hz (code %d) ..." % (HZ[code], code))
     send(0x50, 0x0A, code)
-    time.sleep(0.6)
+    # The pad applies the rate by changing its USB descriptor and reconnecting, so this handle goes dead.
+    # Read the rate back in a fresh run once it has re-enumerated.
+    print("the pad reconnects to apply the rate; waiting 4 s, then reading it back in a fresh run ...")
+    sys.stdout.flush()
+    lib.libusb_close(h)
+    time.sleep(4)
+    import subprocess
+    run = subprocess.run([sys.executable, os.path.abspath(__file__), "--read"])
+    print("RESULT: asked for code %d; the read above is what the pad reports now" % code)
+    sys.stdout.flush()
+    os._exit(run.returncode)
 rate = read_rate()
 if rate is None:
     print("RESULT: no rate read back")
