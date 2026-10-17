@@ -398,9 +398,12 @@ but the Direwolf 4 answers the short form (its ReadAutoSleepPeriod reader), veri
 00 ...` = sleep 15 min, quick config switch on, nothing else. So the polling rate is only readable in XInput mode.
 
 The Device tab's **Pad settings** card uses these: sleep time and quick switch are read on connect and set with the
-DInput commands, then read back with `05 F2 03`. The stick debounce / auto-calibration / rebound and gyro debounce
-toggles are sent with their DInput commands (marked "sent", since DInput cannot report them); "Check current" under
-Polling rate reads them back through the XInput settings reply (bytes 17..27, `fxDecodeXStatus`).
+DInput commands, then read back with `05 F2 03`. The pad **ignores** the DInput forms of stick debounce /
+auto-calibration / rebound (tested: auto-calibration off over DInput, the XInput read still said on), so those and gyro
+debounce are staged in the card and sent together by **Apply stick settings**: switch to XInput, one elevated UsbDk
+helper (`--settings 50:09:01,...`) writes the `A5 cmd sub val` frames in one child process, reads the settings reply
+back in another (bytes 17..27, `fxDecodeXStatus`) and switches back to DInput in a third. Gyro debounce is not in the
+reply, so it stays marked "sent". "Check current" under Polling rate reads the same block.
 
 What they do, from Space Station's own help texts (`locales/en/translation.json`, paraphrased in the card's
 tooltips): sleep = sleep after that long unused, Home wakes (UI offers never / 1 / 5 / 15 min / 1 h / 3 h); quick

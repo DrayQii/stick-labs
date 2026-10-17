@@ -7,7 +7,7 @@
  * the main process and rolled back on mismatch.
  */
 import { useCallback, useEffect, useState } from 'react'
-import { FX_CURVE_CUSTOM, fxDeadzonePoints, fxHzFromReportRate, type FxCurve, type FxMotion, type FxSnapshot, type FxTriggerRaw, type FxTurbo, type FxSettingKind, type FxVibration } from '@shared/flydigi-xinput'
+import { FX_CURVE_CUSTOM, fxDeadzonePoints, fxHzFromReportRate, type FxCurve, type FxMotion, type FxSnapshot, type FxTriggerRaw, type FxTurbo, type FxSettingKind, type FxVibration, type FxXSettingKind } from '@shared/flydigi-xinput'
 import { api } from './api'
 import { fxFmt } from './i18n-fx'
 import { tr, type Lang } from './i18n'
@@ -23,6 +23,8 @@ export interface PadSettings {
   reboundOn?: boolean
   gyroDebounceOn?: boolean
 }
+
+const X_KEY = { stickDebounce: 'stickDebounceOn', autoCalibration: 'autoCalibrationOn', rebound: 'reboundOn', gyroDebounce: 'gyroDebounceOn' } as const
 
 const sc = (b: number): number => (b > 127 ? b - 256 : b)
 const sig = (vib: FxVibration | null, l: number, r: number, c: { left: FxCurve; right: FxCurve } | null, t: { left: FxTriggerRaw; right: FxTriggerRaw } | null): string =>
@@ -56,6 +58,8 @@ export function useFlydigi(onLost: () => void, lang: Lang) {
   // Pad settings. undefined = not read yet. `sentOnly` = toggles changed here that the pad cannot report in DInput mode.
   const [settings, setSettings] = useState<PadSettings>({})
   const [sentOnly, setSentOnly] = useState<FxSettingKind[]>([])
+  // Stick / gyro toggles changed here but not applied yet: they only go to the pad over XInput (applySettings).
+  const [pending, setPending] = useState<Partial<Record<FxXSettingKind, boolean>>>({})
 
   useEffect(() => {
     api()
@@ -162,6 +166,7 @@ export function useFlydigi(onLost: () => void, lang: Lang) {
     setMsg(null)
     setSettings({})
     setSentOnly([])
+    setPending({})
   }
 
   async function toXInput(): Promise<void> {
@@ -213,22 +218,51 @@ export function useFlydigi(onLost: () => void, lang: Lang) {
     }
   }
 
-  /** Change one pad setting (plain HID). Sleep and quick switch are read back; the toggles are marked "sent". */
-  async function setting(kind: FxSettingKind, value: number | boolean): Promise<void> {
+  /** Sleep time / quick switch over plain HID, read back. */
+  async function setting(kind: 'sleep' | 'quickSwitch', value: number | boolean): Promise<void> {
     setBusy(true)
     setMsg(null)
     try {
       const st = await api().flydigiXSetting(kind, value)
-      if (kind === 'sleep' || kind === 'quickSwitch') {
-        if (st) setSettings((s) => ({ ...s, sleepMinutes: st.sleepMinutes, quickSwitchOn: st.quickSwitchOn }))
-        const ok = st && (kind === 'sleep' ? st.sleepMinutes === value : st.quickSwitchOn === value)
-        setMsg(ok ? { kind: 'ok', text: t('fx.settings.saved') } : { kind: 'err', text: t('fx.settings.notConfirmed') })
-      } else {
-        const key = ({ stickDebounce: 'stickDebounceOn', autoCalibration: 'autoCalibrationOn', rebound: 'reboundOn', gyroDebounce: 'gyroDebounceOn' } as const)[kind]
-        setSettings((s) => ({ ...s, [key]: Boolean(value) }))
-        setSentOnly((k) => (k.includes(kind) ? k : [...k, kind]))
-        setMsg({ kind: 'ok', text: t('fx.settings.sent') })
+      if (st) setSettings((s) => ({ ...s, sleepMinutes: st.sleepMinutes, quickSwitchOn: st.quickSwitchOn }))
+      const ok = st && (kind === 'sleep' ? st.sleepMinutes === value : st.quickSwitchOn === value)
+      setMsg(ok ? { kind: 'ok', text: t('fx.settings.saved') } : { kind: 'err', text: t('fx.settings.notConfirmed') })
+    } catch (e) {
+      setMsg({ kind: 'err', text: errText(e) })
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  /** Mark a stick / gyro toggle to apply; setting it back to the value read from the pad drops it again. */
+  function stage(kind: FxXSettingKind, on: boolean): void {
+    setPending((p) => {
+      const n = { ...p }
+      if (kind !== 'gyroDebounce' && settings[X_KEY[kind]] === on) delete n[kind]
+      else n[kind] = on
+      return n
+    })
+  }
+
+  /** Send the staged stick / gyro toggles over XInput (UsbDk, one admin prompt) and read them back. */
+  async function applySettings(): Promise<void> {
+    const changes = { ...pending }
+    if (Object.keys(changes).length === 0) return
+    setBusy(true)
+    setMsg({ kind: 'ok', text: t('fx.settings.applying') })
+    try {
+      const r = await api().flydigiXApplySettings(changes)
+      const x = r.settings
+      if (x) setSettings((s) => ({ ...s, sleepMinutes: x.sleepMinutes, quickSwitchOn: x.quickSwitchOn, stickDebounceOn: x.stickDebounceOn, autoCalibrationOn: x.autoCalibrationOn, reboundOn: x.reboundOn }))
+      if (x) setRate(x.reportRate)
+      if (typeof changes.gyroDebounce === 'boolean') {
+        const g = changes.gyroDebounce
+        setSettings((s) => ({ ...s, gyroDebounceOn: g }))
+        setSentOnly((k) => (k.includes('gyroDebounce') ? k : [...k, 'gyroDebounce']))
       }
+      setPending({})
+      const failed = (['stickDebounce', 'autoCalibration', 'rebound'] as const).filter((k) => typeof changes[k] === 'boolean' && (!x || x[X_KEY[k]] !== changes[k]))
+      setMsg(failed.length === 0 ? { kind: 'ok', text: t('fx.settings.applied') } : { kind: 'err', text: t('fx.settings.notConfirmed') })
     } catch (e) {
       setMsg({ kind: 'err', text: errText(e) })
     } finally {
@@ -349,7 +383,7 @@ export function useFlydigi(onLost: () => void, lang: Lang) {
   return {
     sc, active, snap, vib, setVib, motion, setMotion, left, right, keyEdits, setKeyEdits, turboEdits, setTurboEdits, triggers, setTriggers, curves, setCurves,
     save, setSave, busy, rate, mode, msg, setMsg, backups, dirty,
-    load, disconnect, leave, leaveXInput, setLeaveXInput, settings, sentOnly, setting, toXInput, pollingRate, activate, selectSlot, backupNow, restore, apply, setDeadzone, setEdge, setMotor
+    load, disconnect, leave, leaveXInput, setLeaveXInput, settings, sentOnly, setting, pending, stage, applySettings, toXInput, pollingRate, activate, selectSlot, backupNow, restore, apply, setDeadzone, setEdge, setMotor
   }
 }
 

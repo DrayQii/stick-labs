@@ -9,7 +9,7 @@ export interface Candidate {
 import type { DeepPollResult } from '@shared/deeppoll'
 import type { LjButtonTarget, LjSnapshot, LjStickPatch } from '@shared/leadjoy'
 import type { FdIdentifyResult } from '@shared/flydigi'
-import type { FxPadSettings, FxPadStatus, FxSettingKind, FxSnapshot, FxPatch } from '@shared/flydigi-xinput'
+import type { FxPadSettings, FxPadStatus, FxSettingKind, FxXSettingKind, FxSnapshot, FxPatch } from '@shared/flydigi-xinput'
 export interface DeviceInfo {
   firmware: string
   dongle: string
@@ -92,6 +92,8 @@ interface LabApi {
   flydigiXRate(code: number | null): Promise<{ reportRate: number | null; verified: boolean; settings: FxPadSettings | null }>
   /** Change one pad setting over plain HID; returns the re-read sleep / quick-switch status. */
   flydigiXSetting(kind: FxSettingKind, value: number | boolean): Promise<FxPadStatus | null>
+  /** Stick debounce / auto-calibration / rebound / gyro debounce over XInput via UsbDk (admin prompt); returns the re-read settings block. */
+  flydigiXApplySettings(changes: Partial<Record<FxXSettingKind, boolean>>): Promise<{ settings: FxPadSettings | null }>
   /** Which mode the Direwolf is in right now (cheap; no traffic to the pad). */
   flydigiXMode(): Promise<'dinput' | 'xinput' | 'none'>
   /** Switch the pad from DInput back to XInput mode; it drops off the bus and returns as an Xbox 360 pad. */

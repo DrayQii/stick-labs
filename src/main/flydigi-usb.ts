@@ -174,6 +174,19 @@ export async function fxUsbSendRate(code: number): Promise<void> {
   }
 }
 
+/** Send settings frames (`[cmd, sub, val]` each) in one open, a little apart. No read-back here: that runs in its own process. */
+export async function fxUsbSendSettings(frames: number[][]): Promise<void> {
+  const p = await openPad(12000)
+  try {
+    for (const [cmd, ...args] of frames) {
+      await write(p, cmd, ...args)
+      await sleep(300)
+    }
+  } finally {
+    closePad(p)
+  }
+}
+
 /** Run flydigi-usb-run.js in its own process (this executable as node) and return what it wrote. */
 export async function runChild(args: string[]): Promise<{ ok: boolean; error?: string; reportRate?: number | null; status?: number[] | null }> {
   const out = join(tmpdir(), `flydigi-usb-child-${Date.now()}.json`)

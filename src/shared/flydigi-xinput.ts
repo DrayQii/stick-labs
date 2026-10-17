@@ -268,6 +268,25 @@ export function fxDecodeXStatus(d: ArrayLike<number>): FxPadSettings {
  */
 export type FxSettingKind = 'sleep' | 'quickSwitch' | 'stickDebounce' | 'autoCalibration' | 'rebound' | 'gyroDebounce'
 
+/** Settings the pad only takes over XInput (it ignores their DInput forms): sent through UsbDk as `A5 cmd sub val`. */
+export type FxXSettingKind = 'stickDebounce' | 'autoCalibration' | 'rebound' | 'gyroDebounce'
+export const FX_XSETTING_KINDS: FxXSettingKind[] = ['stickDebounce', 'autoCalibration', 'rebound', 'gyroDebounce']
+
+/** The XInput frame body `[cmd, sub, val]` for one of those settings (0 = on, 1 = off). */
+export function fxXInputSettingFrame(kind: FxXSettingKind, on: boolean): [number, number, number] {
+  const v = on ? 0 : 1
+  switch (kind) {
+    case 'stickDebounce':
+      return [0x50, 0x08, v]
+    case 'autoCalibration':
+      return [0x50, 0x09, v]
+    case 'rebound':
+      return [0x50, 0x0e, v]
+    case 'gyroDebounce':
+      return [0x30, 0x0d, v]
+  }
+}
+
 export function fxDInputSetting(kind: FxSettingKind, value: number | boolean): Uint8Array {
   const f = new Uint8Array(FX_FRAME_LEN)
   f[0] = FXD_REPORT_ID

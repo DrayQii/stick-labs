@@ -18,6 +18,7 @@ import {
   fxDeadzonePoints,
   fxFromDInput,
   fxDInputSetting,
+  fxXInputSettingFrame,
   fxDecodeXStatus,
   fxParseDInputLive,
   fxDecodeStatus,
@@ -287,6 +288,10 @@ check('quick switch on 05 FA A2 01', hex(fxDInputSetting('quickSwitch', true).su
 check('auto-calibration off 05 50 09 01', hex(fxDInputSetting('autoCalibration', false).subarray(0, 4)) === '05 50 09 01')
 check('rebound on 05 50 0E 00', hex(fxDInputSetting('rebound', true).subarray(0, 4)) === '05 50 0e 00')
 check('gyro debounce on 05 F5 06 00', hex(fxDInputSetting('gyroDebounce', true).subarray(0, 4)) === '05 f5 06 00')
+check('XInput auto-calibration off A5 50 09 01', fxXInputSettingFrame('autoCalibration', false).join() === '80,9,1')
+check('XInput stick debounce on A5 50 08 00', fxXInputSettingFrame('stickDebounce', true).join() === '80,8,0')
+check('XInput rebound off A5 50 0E 01', fxXInputSettingFrame('rebound', false).join() === '80,14,1')
+check('XInput gyro debounce on A5 30 0D 00', fxXInputSettingFrame('gyroDebounce', true).join() === '48,13,0')
 const xs = fxDecodeXStatus([0, 1, 0, 15, 1, 1, 0, 17, 0, 0, 0])
 check('XInput settings block decodes', xs.mappingSwitchOn && !xs.stickDebounceOn && xs.autoCalibrationOn && xs.sleepMinutes === 15 && xs.quickSwitchOn && xs.reportRate === 1 && xs.reboundOn)
 

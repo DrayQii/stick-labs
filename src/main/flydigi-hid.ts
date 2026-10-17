@@ -42,6 +42,8 @@ import {
   fxDInputSwitchToXInput,
   fxDecodeStatus,
   fxDecodeXStatus,
+  fxXInputSettingFrame,
+  FX_XSETTING_KINDS,
   FXD_CMD_STATUS,
   fxDiffPacks,
   fxEncodeVibration,
@@ -64,6 +66,7 @@ import {
   type FxPadStatus,
   type FxPadSettings,
   type FxSettingKind,
+  type FxXSettingKind,
   type FxPatch,
   type FxSnapshot
 } from '../shared/flydigi-xinput'
@@ -505,31 +508,51 @@ export function fxHidSwitchToXInput(): Promise<{ switched: boolean }> {
  * the filter driver and switches the pad back (A5 17), and this waits for 04B4:2412 to return.
  * Codes: 1 = 1000 Hz, 2 = 500, 4 = 250, 8 = 125.
  */
+/** Switch the pad to XInput (if it is in DInput), run the elevated UsbDk helper with `args`, and bring it back to DInput. */
+async function viaXInput(args: string[], what: string): Promise<Awaited<ReturnType<typeof runHelper>>> {
+  const wasDInput = dinputPath() !== null
+  if (!wasDInput && !xinputDirewolfPresent()) throw new Error('flydigi: Direwolf 4 not found (plug it in via USB).')
+  if (wasDInput) {
+    if (!(await hidSwitchToXInput())) throw new Error('flydigi: the pad did not leave DInput mode; unplug and replug it and try again.')
+    if (!(await waitFor(() => xinputDirewolfPresent(), 10000))) throw new Error('flydigi: the pad did not come back as an Xbox controller in time.')
+    await sleep(2500) // let Windows finish setting the pad up as an Xbox controller before the driver helper looks for it
+  }
+  fxPauseScans(true)
+  let r: Awaited<ReturnType<typeof runHelper>>
+  try {
+    r = await runHelper([...args, ...(wasDInput ? ['--to-dinput'] : [])])
+  } finally {
+    fxPauseScans(false)
+  }
+  if (wasDInput && !(await waitFor(() => dinputPath() !== null, 12000))) {
+    throw new Error(`flydigi: the ${what} but the pad did not return to DInput mode. Press Read pad to switch it again.`)
+  }
+  return r
+}
+
 export function fxHidPollingRate(code: number | null): Promise<{ reportRate: number | null; verified: boolean; settings: FxPadSettings | null }> {
   return exclusive(async () => {
-    const wasDInput = dinputPath() !== null
-    if (!wasDInput && !xinputDirewolfPresent()) throw new Error('flydigi: Direwolf 4 not found (plug it in via USB).')
-    if (wasDInput) {
-      if (!(await hidSwitchToXInput())) throw new Error('flydigi: the pad did not leave DInput mode; unplug and replug it and try again.')
-      if (!(await waitFor(() => xinputDirewolfPresent(), 10000))) throw new Error('flydigi: the pad did not come back as an Xbox controller in time.')
-      await sleep(2500) // let Windows finish setting the pad up as an Xbox controller before the driver helper looks for it
-    }
-    const args = [...(code === null ? ['--read-rate'] : ['--set-rate', String(code)]), ...(wasDInput ? ['--to-dinput'] : [])]
-    fxPauseScans(true)
-    let r: Awaited<ReturnType<typeof runHelper>>
-    try {
-      r = await runHelper(args)
-    } finally {
-      fxPauseScans(false)
-    }
-    if (wasDInput && !(await waitFor(() => dinputPath() !== null, 12000))) {
-      throw new Error('flydigi: the rate was applied but the pad did not return to DInput mode. Press Read pad to switch it again.')
-    }
+    const r = await viaXInput(code === null ? ['--read-rate'] : ['--set-rate', String(code)], code === null ? 'settings were read' : 'rate was applied')
     return {
       reportRate: r.reportRate,
       verified: code === null ? r.reportRate !== null : r.reportRate === code,
       settings: r.status && r.status.length >= 11 ? fxDecodeXStatus(r.status) : null
     }
+  })
+}
+
+/**
+ * Stick debounce / auto-calibration / rebound / gyro debounce: the pad ignores their DInput forms, so they go over XInput
+ * through UsbDk like the polling rate (one admin prompt for the whole batch), then the settings block is read back.
+ */
+export function fxHidApplySettings(changes: Partial<Record<FxXSettingKind, boolean>>): Promise<{ settings: FxPadSettings | null }> {
+  return exclusive(async () => {
+    const spec = FX_XSETTING_KINDS.filter((k) => typeof changes[k] === 'boolean')
+      .map((k) => fxXInputSettingFrame(k, changes[k] as boolean).map((b) => b.toString(16).padStart(2, '0')).join(':'))
+      .join(',')
+    if (!spec) throw new Error('flydigi: no settings to apply')
+    const r = await viaXInput(['--settings', spec], 'settings were applied')
+    return { settings: r.status && r.status.length >= 11 ? fxDecodeXStatus(r.status) : null }
   })
 }
 

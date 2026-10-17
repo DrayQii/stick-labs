@@ -216,7 +216,7 @@ export function FxButtons({ fx }: { fx: Flydigi }): JSX.Element | null {
 
 export function FxDevice({ fx, info }: { fx: Flydigi; info?: FdV1Info | null }): JSX.Element | null {
   const t = useT()
-  const { snap, vib, setVib, setMotor, triggers, setTriggers, motion, setMotion, busy, rate, mode, pollingRate, toXInput, leaveXInput, setLeaveXInput, settings, sentOnly, setting } = fx
+  const { snap, vib, setVib, setMotor, triggers, setTriggers, motion, setMotion, busy, rate, mode, pollingRate, toXInput, leaveXInput, setLeaveXInput, settings, sentOnly, setting, pending, stage, applySettings } = fx
   if (!snap || !vib || !triggers || !motion) return null
   const setGyro = (p: Partial<FxMotion>): void => setMotion({ ...motion, ...p })
   return (
@@ -361,16 +361,19 @@ export function FxDevice({ fx, info }: { fx: Flydigi; info?: FdV1Info | null }):
                   ['gyroDebounce', 'gyroDebounceOn', 'fx.settings.gyroDebounce', 'fx.settings.gyroDebounceTip']
                 ] as const
               ).map(([kind, key, label, tip]) => {
-                const v = settings[key]
+                const staged = kind === 'quickSwitch' ? undefined : pending[kind]
+                const v = staged ?? settings[key]
                 return (
                   <label key={kind} style={{ display: 'block' }} title={t(tip)}>
                     <span className="row spread">
                       <span className="label">
                         {t(label)} <span aria-hidden style={{ opacity: 0.6 }}>ⓘ</span>
                       </span>
-                      {sentOnly.includes(kind) && <span className="mono" title={t('fx.settings.sentTip')}>{t('fx.settings.sentTag')}</span>}
+                      {staged !== undefined ? (
+                        <span className="mono" title={t('fx.settings.pendingTip')}>{t('fx.settings.pendingTag')}</span>
+                      ) : sentOnly.includes(kind) && <span className="mono" title={t('fx.settings.sentTip')}>{t('fx.settings.sentTag')}</span>}
                     </span>
-                    <select className="input" style={{ width: '100%' }} disabled={busy} value={v === undefined ? '' : v ? 'on' : 'off'} onChange={(e) => void setting(kind, e.target.value === 'on')}>
+                    <select className="input" style={{ width: '100%' }} disabled={busy} value={v === undefined ? '' : v ? 'on' : 'off'} onChange={(e) => (kind === 'quickSwitch' ? void setting(kind, e.target.value === 'on') : stage(kind, e.target.value === 'on'))}>
                       {v === undefined && <option value="">{t('fx.settings.notRead')}</option>}
                       <option value="on">{t('fx.settings.on')}</option>
                       <option value="off">{t('fx.settings.off')}</option>
@@ -378,6 +381,11 @@ export function FxDevice({ fx, info }: { fx: Flydigi; info?: FdV1Info | null }):
                   </label>
                 )
               })}
+            </div>
+            <div className="row" style={{ gap: 8, marginTop: 10 }}>
+              <button type="button" className="btn" disabled={busy || Object.keys(pending).length === 0} title={t('fx.settings.applyTip')} onClick={() => void applySettings()}>
+                {t('fx.settings.apply')}
+              </button>
             </div>
           </div>
 
