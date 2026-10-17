@@ -234,7 +234,7 @@ export function fxDecodeStatus(d: Uint8Array): FxPadStatus {
 /**
  * Live input from the DInput stream (`04 FE …` on the vendor interface, docs/flydigi.md): sticks 0..255 (centre 128),
  * triggers 0..255 and every button, including the back buttons M1..M6 and C / Z that the Gamepad API does not show.
- * Layout from Space Station's OperatorDataParser, sticks and triggers checked against a capture from the pad.
+ * Layout from Space Station's OperatorDataParser, verified on the pad (all buttons, sticks, triggers, gyro).
  */
 export interface FxLive {
   lx: number
@@ -243,7 +243,7 @@ export interface FxLive {
   ry: number
   lt: number
   rt: number
-  /** Raw bytes Space Station reads as gyro X / Y in DInput mode (unconfirmed). */
+  /** Gyro X / Y, raw bytes (verified to follow tilt on the pad). */
   gyro: [number, number]
   /** Pressed buttons by name (FX_LIVE_BUTTONS). */
   pressed: string[]

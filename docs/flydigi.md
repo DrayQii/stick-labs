@@ -402,12 +402,12 @@ on the Direwolf 4 (`fp4`).
 ### Live input stream in DInput mode (`04 FE …`)
 
 The vendor interface already streams the pad's state as reports `04 FE …` (Space Station's DInputProtocol parses
-`data[0] == 0xFE`; its `data[n]` is our report byte n + 1). Layout from its OperatorDataParser, checked against a
-report captured from the pad (centred sticks `81 80 / 80 7e`, triggers 0):
+`data[0] == 0xFE`; its `data[n]` is our report byte n + 1). Layout from its OperatorDataParser; verified on the pad
+(every button lights the right name, sticks and triggers follow, the gyro bytes follow tilt):
 
 | Report byte | Content |
 |---|---|
-| 5, 6, 7 | gyro X / Y / Z (8-bit; 7 is shared with the button byte below in Space Station's own code, so unconfirmed) |
+| 5, 6 | gyro X / Y (8-bit, verified: they follow tilt). Space Station also reads byte 7 as gyro Z, but that is the button byte below |
 | 7 | C (bit 0), Z, M1, M2, M3, M4, M5, M6 (bits 1..7) |
 | 8 | Menu (bit 0), Home (bit 3), Back (bit 4) |
 | 9 | Up, Right, Down, Left, A, B, Select, X (bits 0..7) |
