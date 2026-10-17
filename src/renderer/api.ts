@@ -94,6 +94,9 @@ interface LabApi {
   flydigiXMode(): Promise<'dinput' | 'xinput' | 'none'>
   /** Switch the pad from DInput back to XInput mode; it drops off the bus and returns as an Xbox 360 pad. */
   flydigiXToXInput(): Promise<{ switched: boolean }>
+  /** "Return the pad to XInput when I leave" (default on): quit, crash, sleep, logoff, disconnect. */
+  flydigiXLeaveXInput(): Promise<boolean>
+  flydigiXSetLeaveXInput(on: boolean): Promise<boolean>
   /** Make a config slot (0-based) the one the pad runs. */
   flydigiXActivate(cfgId: number): Promise<FxSnapshot>
   /** Verified write (rolled back on mismatch); `save` persists across replug. */

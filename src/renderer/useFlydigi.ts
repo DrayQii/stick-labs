@@ -44,6 +44,29 @@ export function useFlydigi(onLost: () => void, lang: Lang) {
   const [mode, setMode] = useState<FxMode | null>(null)
   const [msg, setMsg] = useState<FxMsg | null>(null)
   const [backups, setBackups] = useState<FxBackup[]>([])
+  const [leaveXInput, setLeaveXInputState] = useState(true)
+
+  useEffect(() => {
+    api()
+      .flydigiXLeaveXInput()
+      .then(setLeaveXInputState)
+      .catch(() => undefined)
+  }, [])
+
+  async function setLeaveXInput(on: boolean): Promise<void> {
+    setLeaveXInputState(await api().flydigiXSetLeaveXInput(on))
+  }
+
+  /** Leaving the pad from the app (Disconnect, connecting another controller): put it back in XInput if the setting is on. */
+  async function leave(): Promise<void> {
+    disconnect()
+    if (!leaveXInput) return
+    try {
+      if ((await api().flydigiXMode()) === 'dinput') await api().flydigiXToXInput()
+    } catch {
+      /* pad gone: the main process puts it back when it shows up again or on the next start */
+    }
+  }
 
   // Follow the pad's real mode (it changes on replug, mode switches and when Space Station launches).
   useEffect(() => {
@@ -281,7 +304,7 @@ export function useFlydigi(onLost: () => void, lang: Lang) {
   return {
     sc, active, snap, vib, setVib, motion, setMotion, left, right, keyEdits, setKeyEdits, turboEdits, setTurboEdits, triggers, setTriggers, curves, setCurves,
     save, setSave, busy, rate, mode, msg, setMsg, backups, dirty,
-    load, disconnect, toXInput, pollingRate, activate, selectSlot, backupNow, restore, apply, setDeadzone, setEdge, setMotor
+    load, disconnect, leave, leaveXInput, setLeaveXInput, toXInput, pollingRate, activate, selectSlot, backupNow, restore, apply, setDeadzone, setEdge, setMotor
   }
 }
 

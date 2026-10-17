@@ -9,7 +9,8 @@ export default defineConfig({
       rollupOptions: {
         input: {
           index: resolve('src/main/index.ts'),
-          'flydigi-usb-run': resolve('src/main/flydigi-usb-run.ts')
+          'flydigi-usb-run': resolve('src/main/flydigi-usb-run.ts'),
+          'flydigi-guard': resolve('src/main/flydigi-guard.ts')
         }
       }
     }

@@ -193,7 +193,7 @@ export function FxButtons({ fx }: { fx: Flydigi }): JSX.Element | null {
 
 export function FxDevice({ fx, info }: { fx: Flydigi; info?: FdV1Info | null }): JSX.Element | null {
   const t = useT()
-  const { snap, vib, setVib, setMotor, triggers, setTriggers, motion, setMotion, busy, rate, mode, pollingRate, toXInput } = fx
+  const { snap, vib, setVib, setMotor, triggers, setTriggers, motion, setMotion, busy, rate, mode, pollingRate, toXInput, leaveXInput, setLeaveXInput } = fx
   if (!snap || !vib || !triggers || !motion) return null
   const setGyro = (p: Partial<FxMotion>): void => setMotion({ ...motion, ...p })
   return (
@@ -320,6 +320,10 @@ export function FxDevice({ fx, info }: { fx: Flydigi; info?: FdV1Info | null }):
               )}
               <span className="mono" style={{ alignSelf: 'center' }}>{mode === 'dinput' ? t('fx.mode.dinput') : mode === 'xinput' ? t('fx.mode.xinput') : t('fx.mode.none')}</span>
             </div>
+            <label className="row" style={{ gap: 8, marginTop: 10, alignItems: 'center' }} title={t('fx.mode.leaveTip')}>
+              <input type="checkbox" checked={leaveXInput} onChange={(e) => void setLeaveXInput(e.target.checked)} />
+              <span>{t('fx.mode.leave')}</span>
+            </label>
           </div>
     </>
   )
