@@ -1439,10 +1439,19 @@ table.tbl tbody tr:hover {
 .fx-hot-fn { left: 42.9%; top: 52.4%; width: 8%; height: 5.5%; }
 .fx-hot-dpad { left: 24%; top: 39.3%; width: 8.5%; height: 8.5%; }
 .fx-term {
-  color: var(--accent, #f43f52);
-  border-bottom: 1px dashed currentColor;
+  /* the hint sits on the accent-coloured CTA, so keep its text colour and mark the words by weight and a tint */
+  color: inherit;
+  font-weight: 700;
+  padding: 0 3px;
+  border-radius: 2px;
+  background: rgba(0, 0, 0, 0.12);
+  border-bottom: 2px dashed currentColor;
   cursor: help;
   outline: none;
+}
+.fx-term:hover,
+.fx-term:focus-visible {
+  background: rgba(0, 0, 0, 0.25);
 }
 .fx-term:focus-visible {
   outline: 1px solid currentColor;
