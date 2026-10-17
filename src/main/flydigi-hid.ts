@@ -37,7 +37,10 @@ import {
   fxDecodeSticks,
   fxDecodeTriggers,
   fxDecodeVibration,
+  fxDInputReadStatus,
   fxDInputSwitchToXInput,
+  fxDecodeStatus,
+  FXD_CMD_STATUS,
   fxDiffPacks,
   fxEncodeVibration,
   fxFromDInput,
@@ -54,6 +57,7 @@ import {
   fxSetTrigger,
   fxToDInput,
   type FxAck,
+  type FxPadStatus,
   type FxPatch,
   type FxSnapshot
 } from '../shared/flydigi-xinput'
@@ -433,6 +437,23 @@ async function hidSwitchToXInput(): Promise<boolean> {
   const gone = await waitFor(() => dinputPath() === null, 6000)
   if (gone) close()
   return gone
+}
+
+/** Read the pad's sleep time and quick-switch setting over plain HID (DInput `05 F2 03`). Null when it does not answer. */
+export function fxHidStatus(): Promise<FxPadStatus | null> {
+  return exclusive(async () => {
+    ensureOpen()
+    acks = acks.filter((a) => a.cmd !== FXD_CMD_STATUS)
+    try {
+      hid!.write(Array.from(fxDInputReadStatus()))
+    } catch (e) {
+      close()
+      throw new Error(`flydigi: write failed (${(e as Error).message})`)
+    }
+    const a = await waitAck(FXD_CMD_STATUS)
+    if (!app.isPackaged) console.log('[flydigi] status reply', a ? Array.from(a.data, (b) => b.toString(16).padStart(2, '0')).join(' ') : 'none', a ? fxDecodeStatus(a.data) : '')
+    return a ? fxDecodeStatus(a.data) : null
+  })
 }
 
 export function fxHidSwitchToXInput(): Promise<{ switched: boolean }> {

@@ -162,8 +162,8 @@ every setting as JSON (`IpcCommandEnum_UpdateConfig`), which is how the followin
   Turning turbo off writes the plain default entry `ff 00 00`. The Buttons tab edits it.
 - Motion (gyro) block, blob 137..144, matched byte by byte to the log's `motionConfig` writes:
   `[mapping, enableKey, enableType, deadZone, sensitivity, sensitivityY, racer, enableKey2]`. Mapping 1 =
-  Left stick, 2 = Right stick (0 = off as shipped; mouse is not decoded). enableKey is a key id (13 RT,
-  12 LT), enableType 1 = Press (0 when unset), enableKey2 255 = none. Joystick modes write the same value to
+  Left stick, 2 = Right stick, 3 = Mouse, 0 = Off (`MotionMapType`; mouse bytes not yet checked on the pad). enableKey is a key id (13 RT,
+  12 LT), enableType 1 = Press, 0 = Click (Space Station's `MotionEnableType`), enableKey2 255 = none. Joystick modes write the same value to
   both sensitivity bytes (25/46/30 seen); the racer byte is 1 for Racer mode and Space Station clears it when
   the mapping moves to the right stick. The mouse sensitivities, the smoothing curve and the other
   enable-type values are not decoded. Example: left, RT, Press, dead zone 8, sensitivity 46, Racer ->
@@ -310,6 +310,94 @@ values still used are the ones in the code: turbo frequency 1..30, gyro sensitiv
 - Axis defaults for the live view in DInput mode (LX 0, LY 1, RX 2, RY 5, LT axis 3, RT axis 4).
 - Backup and restore, config-slot switching from the top bar, and the integrated connect flow.
 - Linear interpolation of the nine curve points by the pad.
+
+### Space Station's own names and numbers
+
+Read from the enum tables in Space Station's UI bundle (`resources/app.asar`, Vite build, `index-*.js`; the app talks to
+`SpaceStationService.exe`, a .NET program, with these values). Facts only, no code taken. Several match what was
+decoded from blobs, so the blob bytes very likely use the same numbers.
+
+- **Device:** `ControllerDeviceType_FP4 = 132` (Direwolf 4; FP4_SRS 146, FP4_JDB 147, FP4_MRFZ 148 are editions).
+- **Key ids (`ControllerKey_*`):** Up 0, Right 1, Down 2, Left 3, A 4, B 5, Select 6, X 7, Y 8, Start 9, LB 10, RB 11,
+  LT 12, RT 13, L3 (Thl) 14, R3 (Thr) 15, C 16, Z 17, M1..M6 18..23, Menu 24, Turbo 25, Home 27, Back 28, Macro 32,
+  stick directions 160 (centre) .. 168 (Up, RightUp, Right, RightDown, Down, LeftDown, Left, LeftUp), JsLeft 240,
+  JsRight 241, JsWheel 242, KeyboardMouse 254, None 255.
+- **Button map type (`KeyMapType_*`):** Key 0, Continuous (turbo) 1, Macro 2, MultiFunction 3, Keyboard 4.
+  Turbo enable: Close 0, Press 1, Click 2 (matches the decoded turbo entries).
+- **Gyro (`Motion*`):** map type Off 0, LeftJoystick 1, RightJoystick 2, Mouse 3; enable type **Click 0**, Press 1
+  (so 0 is Click, not "unset"); mode FPS 0, RACER 1 (the "racer" byte). Joystick mapping has sensitivity, deadZone
+  and smoothness (0..255; the UI calls <= 80 convex, >= 120 concave); mouse mapping has sensitivityX / sensitivityY
+  (1..100). Press mode takes a second key (`enableKey[1]`).
+- **Macros:** step event Release 0, Press 1, LeftJoystick 2, RightJoystick 3, Hold 5; enable type None 0, Once 1,
+  Press 2, Click 3.
+- **Sticks:** map type Joystick 0, Keyboard 1, Mouse 2, DPad 3 (keyboard: 4 or 8 directions); circularity
+  Rectangle 0, Circular 1 (matches the decoded byte); response preset Default 0, Quick 1, Slow 2, Custom 3.
+- **Triggers (`AdapterTriggerType_*`):** Normal 0, Race 1, Sniper 2, Recoil 3, Lock 4, Vibration 5 (may be for pads
+  with force-feedback triggers only).
+- **Config sections (`ConfigType_*`):** All 0, Simple 1, Led 2, Button 3, Macro 4, Joystick 5, Motion 6, Trigger 7,
+  Vibration 8.
+- **Separate commands** (not part of the config blob in the UI): report rate, sleep time (1 / 5 / 15 / 60 min, 0 =
+  never), joystick sensitivity / precision, stick debounce, joystick auto-calibration, stick rebound, gyro debounce,
+  quick config switch, mapping switch, grip and trigger vibration tests, SwitchToXInputMode.
+
+The blob layout itself is produced by the .NET service; it was read there (below).
+
+### Full blob layout and setting commands (from Space Station's service)
+
+`SpaceStationService.exe` is a .NET single-file bundle; `scripts/dotnet-bundle-extract.py` unpacks it and ILSpy reads
+`Flydigi.ControllerSdk.dll` (`data.parser.MappingConfigParser`, `data.model.config`, `data.command.setting`). Facts
+only, nothing copied. The Direwolf 4 is protocol 0x0301 (769, "V3.1", 84 packs). Offsets below are what the parser
+reads and writes; the ones already decoded here (keys, sticks, triggers, gyro, vibration, curves, data version) all
+agree.
+
+| Bytes | Field | Notes |
+|---|---|---|
+| 0..1 | protocol version | u16 LE, 0x0301 |
+| 2 | pack count | |
+| 3..12 | LED (old style) | 10 bytes |
+| 13..108 | key table | 32 x `[target, enableType, turboFreq]`; target 255 = default, 32 = macro, 254 = keyboard / multi-function, else a `ControllerKey`; turbo when freq > 0 |
+| 109..122 | sticks | 2 x `[preset, centre, p1x, p1y, p2x, p2y, end]`; centre and end signed (>127 means 127 - b) |
+| 123..136 | trigger curves | 2 x `[type, zero, p1x, p1y, p2x, p2y, end]` |
+| 137..144 | gyro | `[mapType, enableKey, enableType, deadZone, sens, sens, useMode, enableKey2]`; Mouse writes keys 255 and dead zone 0. The gyro-mouse X/Y sensitivities are not in the blob |
+| 145..153 | grip vibration | `[master 0=on/255=off, L on, L min, L max, L scale, R on, R min, R max, R scale]` |
+| 154..182 | trigger vibration | `[enable 0=on/1=off]` + per side 14: linear `(type, minLevel, maxLevel, filter, minStart, scale, minTime)` then micro (same 7) |
+| 183..184 | "lunpan" (wheel) | 2 bytes, kept as is |
+| 185..224 | adaptive trigger | per side 20: `type, bind(type, filter, scale, param x5), mixedBorder, param x10` (force-feedback pads) |
+| 225..226 | data version | u16 LE |
+| 230..767 | macros | see below |
+| 770..789 | config title | UTF-16LE, 10 chars, padded 0xFF |
+| 790..813 | curves (V3.1) | 2 x `[preset, 9 points, circularity, edge]` |
+| 820..824 | macro intervals | 5 x (ms / 10), protocol < 0x0302 |
+| 830..835 | gyro smoothing | `[zero, p1x, p1y, p2x, p2y, end]` (the UI's smoothness slider) |
+
+**Macros (230..767, 538 bytes):** `count`, then 5 offset bytes (macro i starts at 6 + offset[i] x 4; offset[0] = 0,
+each next one adds that macro's step count + 1), then per macro a 4-byte head `[key, repeat lo, repeat hi,
+MacroEnableType]` followed by 4-byte steps `[time lo, time hi, key, MacroActionEvent]`. Step time is cumulative from
+the macro start, in 10 ms units on this protocol (1 ms from 0x0302). Up to 5 macros, 64 steps each on 0x0301.
+
+**Setting commands** (XInput frame `A5 <cmd> <sub> <val>`; DInput `05 <cmd> <sub> <val>`, cmd/sub where they differ):
+
+| Setting | XInput | DInput | Value |
+|---|---|---|---|
+| report rate | 50 0A | 50 0A | 1/2/4/8 (DInput measured: ignored) |
+| read status | 50 07 | F2 03 | see below |
+| sleep time | 30 05 | F2 02 | minutes, 0 = never (1/5/15/60 in the UI) |
+| stick debounce | 50 08 | 50 08 | 0 = on, 1 = off |
+| stick auto-calibration | 50 09 | 50 09 | 0 = on, 1 = off |
+| stick rebound | 50 0E | 50 0E | 0 = on, 1 = off |
+| stick sensitivity | 50 0D | 50 0D | 14..20 (Highest..Lowest) |
+| stick precision | 50 0B | 50 0B | 1..7 (8/10/12/9/11/14/16 bit) |
+| gyro debounce | 30 0D | F5 06 | 0 = on, 1 = off |
+| quick config switch | A2 <v> | FA A2 | 1 = on |
+| Xbox home button | 30 0A / 30 09 | - | on / off |
+
+Status reply: XInput (`A5 50 07`) bytes 17..27 = mapping switch (0 = on), stick debounce (0 = on), auto-calibration
+(0 = on), sleep minutes, quick switch (1 = on), report rate (the byte already used here), precision, sensitivity,
+rebound (0 = on), circle (1 = on), dock smart stop. DInput (`05 F2 03`): Space Station also has a nine-field reader,
+but the Direwolf 4 answers the short form (its ReadAutoSleepPeriod reader), verified on the pad: `04 FF F0 F2 03 0f 01
+00 ...` = sleep 15 min, quick config switch on, nothing else. So the polling rate is only readable in XInput mode. Space Station marks rebound, auto-calibration, debounces, quick switch and the Xbox home button as available
+on the Direwolf 4 (`fp4`).
+
 
 ### Next steps
 1. **Gyro, remaining fields.** Mouse mapping (and its X/Y sensitivities), the other enable types, the second activation

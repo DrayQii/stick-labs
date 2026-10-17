@@ -2,7 +2,7 @@ import { contextBridge, ipcRenderer } from 'electron'
 import type { DeepPollResult } from '../shared/deeppoll'
 import type { LjButtonTarget, LjSnapshot, LjStickPatch } from '../shared/leadjoy'
 import type { FdIdentifyResult } from '../shared/flydigi'
-import type { FxSnapshot, FxPatch } from '../shared/flydigi-xinput'
+import type { FxPadStatus, FxSnapshot, FxPatch } from '../shared/flydigi-xinput'
 
 async function call<T>(channel: string, ...args: unknown[]): Promise<T> {
   const result = (await ipcRenderer.invoke(channel, ...args)) as {
@@ -51,6 +51,7 @@ const api = {
   flydigiXRate: (code: number | null) => call<{ reportRate: number | null; verified: boolean }>('flydigix:rate', code),
   flydigiXMode: () => call<'dinput' | 'xinput' | 'none'>('flydigix:mode'),
   flydigiXToXInput: () => call<{ switched: boolean }>('flydigix:toXInput'),
+  flydigiXStatus: () => call<FxPadStatus | null>('flydigix:status'),
   flydigiXLeaveXInput: () => call<boolean>('flydigix:leaveXInput'),
   flydigiXSetLeaveXInput: (on: boolean) => call<boolean>('flydigix:setLeaveXInput', on),
   flydigiXActivate: (cfgId: number) => call<FxSnapshot>('flydigix:activate', cfgId),

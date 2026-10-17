@@ -97,7 +97,7 @@ export const FX_STR: Record<string, Row> = {
   'fx.gyro.none': { en: 'None', zh: '无', ja: 'なし', ru: 'Нет' },
   'fx.gyro.activation': { en: 'Activation', zh: '激活方式', ja: '有効化の方法', ru: 'Активация' },
   'fx.gyro.press': { en: 'Only while the key is held (Press)', zh: '仅在按住按键时（Press）', ja: 'キーを押している間のみ（Press）', ru: 'Только пока клавиша удерживается (Press)' },
-  'fx.gyro.notSet': { en: "Not set (Space Station's default)", zh: '未设置（Space Station 的默认值）', ja: '未設定（Space Station の既定）', ru: 'Не задано (по умолчанию в Space Station)' },
+  'fx.gyro.click': { en: 'Toggle: press once to turn on, again to turn off (Click)', zh: '切换：按一次开启，再按一次关闭（Click）', ja: '切り替え：1 回押すとオン、もう一度押すとオフ（Click）', ru: 'Переключение: нажмите раз — вкл., ещё раз — выкл. (Click)' },
   'fx.gyro.otherActivation': { en: 'Other ({n}), not decoded', zh: '其他（{n}），未解析', ja: 'その他（{n}）、未解読', ru: 'Другое ({n}), не расшифровано' },
   'fx.gyro.sensitivity': { en: 'Sensitivity', zh: '灵敏度', ja: '感度', ru: 'Чувствительность' },
   'fx.gyro.deadZone': { en: 'Dead zone', zh: '死区', ja: 'デッドゾーン', ru: 'Мёртвая зона' },
@@ -114,7 +114,7 @@ export const FX_STR: Record<string, Row> = {
 
   // --- polling rate and pad mode ---
   'fx.poll.title': { en: 'Polling rate', zh: '回报率', ja: 'ポーリングレート', ru: 'Частота опроса' },
-  'fx.poll.hint': { en: "How often the pad reports to the PC. The Direwolf only exposes this in XInput mode, so changing it switches the pad to XInput and back through Flydigi's Xbox filter driver (one administrator step, about 20 seconds). This is the one feature that still needs Flydigi Space Station installed (only its driver is used) and closed; everything else works without it.", zh: '手柄向电脑上报数据的频率。Direwolf 只在 XInput 模式下提供此设置，因此更改时会通过 Flydigi 的 Xbox 过滤驱动把手柄切到 XInput 再切回来（需要一次管理员授权，约 20 秒）。这是唯一仍需安装 Flydigi Space Station（只用到它的驱动）并保持其关闭的功能；其余功能都不需要它。', ja: 'パッドが PC に入力を送る頻度です。Direwolf はこの設定を XInput モードでしか公開しないため、変更時は Flydigi の Xbox フィルタードライバー経由でパッドを XInput に切り替えて元に戻します（管理者の許可が 1 回、約 20 秒）。Flydigi Space Station のインストール（ドライバーのみ使用）と終了状態がまだ必要なのはこの機能だけで、それ以外は不要です。', ru: 'Как часто геймпад отправляет данные на ПК. Direwolf показывает эту настройку только в режиме XInput, поэтому при изменении геймпад переключается в XInput и обратно через фильтр-драйвер Xbox от Flydigi (одно подтверждение администратора, около 20 секунд). Это единственная функция, которой всё ещё нужен установленный (используется только его драйвер) и закрытый Flydigi Space Station; всё остальное работает без него.' },
+  'fx.poll.hint': { en: 'How often the pad reports to the PC. The pad only exposes it in XInput mode, so to check or change it the app switches the pad there and back over raw USB with UsbDk (one administrator prompt, about 20 seconds).', zh: '手柄向电脑报告的频率。手柄只在 XInput 模式下提供该设置，查看或修改都需要切换，应用会通过 UsbDk 以原始 USB 切换过去再切回来（一次管理员提示，约 20 秒）。', ja: 'パッドが PC に報告する頻度です。この設定は XInput モードでしか扱えないため、確認や変更の際はアプリが UsbDk による生の USB で切り替えて戻します（管理者の確認 1 回、約 20 秒）。', ru: 'Как часто геймпад отчитывается перед ПК. Геймпад даёт доступ к этому только в режиме XInput, поэтому для проверки или изменения приложение переключает геймпад туда и обратно через сырой USB с UsbDk (один запрос администратора, около 20 секунд).' },
   'fx.poll.check': { en: 'Check current', zh: '检查当前值', ja: '現在値を確認', ru: 'Проверить текущую' },
   'fx.poll.notChecked': { en: 'not checked yet', zh: '尚未检查', ja: '未確認', ru: 'ещё не проверено' },
   'fx.mode.title': { en: 'Pad mode', zh: '手柄模式', ja: 'パッドのモード', ru: 'Режим геймпада' },

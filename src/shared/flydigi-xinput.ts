@@ -208,6 +208,30 @@ export const fxDInputSwitchToXInput = (): Uint8Array => {
 }
 
 /**
+ * DInput status read (`05 F2 03`). Space Station has two readers for it: a long one (nine settings, incl. the polling
+ * rate) and a short one (ReadAutoSleepPeriod). The Direwolf 4 answers the short form only, verified on the pad:
+ * `04 FF F0 F2 03 0f 01 00 …` = sleep 15 min, quick config switch on. The polling rate is only in the XInput status.
+ */
+export const FXD_CMD_STATUS = 0xf2
+export const fxDInputReadStatus = (): Uint8Array => {
+  const f = new Uint8Array(FX_FRAME_LEN)
+  f[0] = FXD_REPORT_ID
+  f[1] = FXD_CMD_STATUS
+  f[2] = 0x03
+  return f
+}
+
+export interface FxPadStatus {
+  /** Auto-sleep in minutes, 0 = never (Space Station offers 1 / 5 / 15 / 60). */
+  sleepMinutes: number
+  quickSwitchOn: boolean
+}
+
+export function fxDecodeStatus(d: Uint8Array): FxPadStatus {
+  return { sleepMinutes: d[0], quickSwitchOn: d[1] === 1 }
+}
+
+/**
  * Normalise a DInput reply report (report id first) into XInput-style acks.
  * Plain input reports (`04 FE 66 …`) and get-info replies yield none.
  */
@@ -215,6 +239,7 @@ export function fxFromDInput(r: Uint8Array): FxAck[] {
   if (r.length < 16 || r[1] !== 0xff || r[2] !== 0xf0) return []
   if (r[15] === 0xeb) return [{ cmd: FX_CMD_READ_CFG_ACK, data: Uint8Array.of(r[3], ...r.subarray(5, 15)) }]
   if (r[15] === 0xea) return [{ cmd: FX_CMD_WRITE_START, data: new Uint8Array(0) }, { cmd: FX_CMD_WRITE_PACK, data: new Uint8Array(0) }]
+  if (r[3] === FXD_CMD_STATUS && r[4] === 0x03) return [{ cmd: FXD_CMD_STATUS, data: r.slice(5, 14) }]
   if (r[3] === 0xaa && r[4] === 0xac) return [{ cmd: FX_CMD_READ_CFG_ID, data: Uint8Array.of(r[5], r[6], r[7]) }]
   if (r[3] === FX_CMD_SAVE) return [{ cmd: FX_CMD_SAVE, data: Uint8Array.of(r[4], 1) }]
   return []
@@ -564,8 +589,9 @@ export function fxSetKeyTurbo(blob: Uint8Array, id: number, turbo: FxTurbo): Uin
 export const FX_MOTION_OFF = 0
 export const FX_MOTION_LEFT = 1
 export const FX_MOTION_RIGHT = 2
-/** Enable type byte: 1 = Press (gyro only while the key is held); 0 is what Space Station leaves when it is unset. */
+/** Enable type byte (Space Station's MotionEnableType): 1 = Press (gyro only while the key is held), 0 = Click (toggle). */
 export const FX_MOTION_PRESS = 1
+export const FX_MOTION_CLICK = 0
 
 export interface FxMotion {
   mapping: number
