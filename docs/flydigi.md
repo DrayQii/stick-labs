@@ -330,3 +330,13 @@ values still used are the ones in the code: turbo frequency 1..30, gyro sensitiv
 ### Not available on this pad
 - LED / RGB: Space Station's app has no LED or RGB settings for the Direwolf 4 (maintainer, 2026-10-17), so there is nothing to decode.
 - Calibration: Space Station has no calibration screen for the Direwolf 4, so there is nothing to copy.
+
+## Polling rate and mode switch without Space Station (UsbDk)
+
+`scripts/flydigi-usb-helper.py` does what `flydigi-xinput-helper.py` does (same arguments and result file) over raw USB
+with libusb and the signed UsbDk driver. UsbDk lends the pad to the helper only while it runs, so no driver is replaced
+and Space Station is not involved. Verified on the pad with the probe script: read, set 500 Hz and set 1000 Hz, each
+read back correctly (the pad re-enumerates after a set, so the helper re-reads in a fresh libusb session).
+libusb 1.0.30 needs `libusb_set_option(USE_USBDK)` **after** `libusb_init`; before it always fails.
+The app picks this helper when the `UsbDk` service exists and falls back to Space Station's driver otherwise.
+Needs: UsbDk installed, python, `pip install libusb-package` (or `FLYDIGI_LIBUSB`).
