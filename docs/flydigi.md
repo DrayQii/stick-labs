@@ -162,8 +162,8 @@ every setting as JSON (`IpcCommandEnum_UpdateConfig`), which is how the followin
   Turning turbo off writes the plain default entry `ff 00 00`. The Buttons tab edits it.
 - Motion (gyro) block, blob 137..144, matched byte by byte to the log's `motionConfig` writes:
   `[mapping, enableKey, enableType, deadZone, sensitivity, sensitivityY, racer, enableKey2]`. Mapping 1 =
-  Left stick, 2 = Right stick (0 = off as shipped; mouse is not decoded). enableKey is a key id (13 RT,
-  12 LT), enableType 1 = Press (0 when unset), enableKey2 255 = none. Joystick modes write the same value to
+  Left stick, 2 = Right stick, 3 = Mouse, 0 = Off (`MotionMapType`; mouse bytes not yet checked on the pad). enableKey is a key id (13 RT,
+  12 LT), enableType 1 = Press, 0 = Click (Space Station's `MotionEnableType`), enableKey2 255 = none. Joystick modes write the same value to
   both sensitivity bytes (25/46/30 seen); the racer byte is 1 for Racer mode and Space Station clears it when
   the mapping moves to the right stick. The mouse sensitivities, the smoothing curve and the other
   enable-type values are not decoded. Example: left, RT, Press, dead zone 8, sensitivity 46, Racer ->
@@ -310,6 +310,37 @@ values still used are the ones in the code: turbo frequency 1..30, gyro sensitiv
 - Axis defaults for the live view in DInput mode (LX 0, LY 1, RX 2, RY 5, LT axis 3, RT axis 4).
 - Backup and restore, config-slot switching from the top bar, and the integrated connect flow.
 - Linear interpolation of the nine curve points by the pad.
+
+### Space Station's own names and numbers
+
+Read from the enum tables in Space Station's UI bundle (`resources/app.asar`, Vite build, `index-*.js`; the app talks to
+`SpaceStationService.exe`, a .NET program, with these values). Facts only, no code taken. Several match what was
+decoded from blobs, so the blob bytes very likely use the same numbers.
+
+- **Device:** `ControllerDeviceType_FP4 = 132` (Direwolf 4; FP4_SRS 146, FP4_JDB 147, FP4_MRFZ 148 are editions).
+- **Key ids (`ControllerKey_*`):** Up 0, Right 1, Down 2, Left 3, A 4, B 5, Select 6, X 7, Y 8, Start 9, LB 10, RB 11,
+  LT 12, RT 13, L3 (Thl) 14, R3 (Thr) 15, C 16, Z 17, M1..M6 18..23, Menu 24, Turbo 25, Home 27, Back 28, Macro 32,
+  stick directions 160 (centre) .. 168 (Up, RightUp, Right, RightDown, Down, LeftDown, Left, LeftUp), JsLeft 240,
+  JsRight 241, JsWheel 242, KeyboardMouse 254, None 255.
+- **Button map type (`KeyMapType_*`):** Key 0, Continuous (turbo) 1, Macro 2, MultiFunction 3, Keyboard 4.
+  Turbo enable: Close 0, Press 1, Click 2 (matches the decoded turbo entries).
+- **Gyro (`Motion*`):** map type Off 0, LeftJoystick 1, RightJoystick 2, Mouse 3; enable type **Click 0**, Press 1
+  (so 0 is Click, not "unset"); mode FPS 0, RACER 1 (the "racer" byte). Joystick mapping has sensitivity, deadZone
+  and smoothness (0..255; the UI calls <= 80 convex, >= 120 concave); mouse mapping has sensitivityX / sensitivityY
+  (1..100). Press mode takes a second key (`enableKey[1]`).
+- **Macros:** step event Release 0, Press 1, LeftJoystick 2, RightJoystick 3, Hold 5; enable type None 0, Once 1,
+  Press 2, Click 3.
+- **Sticks:** map type Joystick 0, Keyboard 1, Mouse 2, DPad 3 (keyboard: 4 or 8 directions); circularity
+  Rectangle 0, Circular 1 (matches the decoded byte); response preset Default 0, Quick 1, Slow 2, Custom 3.
+- **Triggers (`AdapterTriggerType_*`):** Normal 0, Race 1, Sniper 2, Recoil 3, Lock 4, Vibration 5 (may be for pads
+  with force-feedback triggers only).
+- **Config sections (`ConfigType_*`):** All 0, Simple 1, Led 2, Button 3, Macro 4, Joystick 5, Motion 6, Trigger 7,
+  Vibration 8.
+- **Separate commands** (not part of the config blob in the UI): report rate, sleep time (1 / 5 / 15 / 60 min, 0 =
+  never), joystick sensitivity / precision, stick debounce, joystick auto-calibration, stick rebound, gyro debounce,
+  quick config switch, mapping switch, grip and trigger vibration tests, SwitchToXInputMode.
+
+The blob layout itself is produced by the .NET service; reading it there (ILSpy) is the next source.
 
 ### Next steps
 1. **Gyro, remaining fields.** Mouse mapping (and its X/Y sensitivities), the other enable types, the second activation
