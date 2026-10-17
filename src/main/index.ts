@@ -12,8 +12,8 @@ import { ljReadButtonTable, ljReadMainSnapshot, ljReadSnapshot, ljWriteButtonVer
 import type { LjButtonTarget, LjStickPatch } from '../shared/leadjoy'
 import { fdIdentify } from './flydigi'
 import { fxLeaveEnabled, fxLeaveInit, fxLeaveNoteMode, fxLeaveNow, fxLeaveOnQuit, fxLeaveSetEnabled } from './flydigi-leave'
-import { fxHidStatus, fxHidActivate, fxHidBackup, fxHidBackups, fxHidRestore, fxHidMode, fxHidPollingRate, fxHidRead, fxHidSwitchToXInput, fxHidWrite, fxHidStop } from './flydigi-hid'
-import type { FxPatch } from '../shared/flydigi-xinput'
+import { fxHidOnLive, fxHidStatus, fxHidActivate, fxHidBackup, fxHidBackups, fxHidRestore, fxHidMode, fxHidPollingRate, fxHidRead, fxHidSwitchToXInput, fxHidWrite, fxHidStop } from './flydigi-hid'
+import type { FxLive, FxPatch } from '../shared/flydigi-xinput'
 import { ljButtonWriteRecord } from '../shared/leadjoy'
 import { steamInfo, exportApexDeadzones, listInstalledGames, exportDeadzonesToGames } from './steam'
 import { PROFILE_LENGTH } from '../shared/protocol'
@@ -154,6 +154,25 @@ handle('flydigix:leaveXInput', () => fxLeaveEnabled())
 handle('flydigix:setLeaveXInput', (on: boolean) => fxLeaveSetEnabled(on === true))
 handle('flydigix:toXInput', () => fxHidSwitchToXInput())
 handle('flydigix:status', () => fxHidStatus())
+// Direwolf live input (all buttons incl. the back buttons), forwarded at most ~30 times a second.
+// The last report of a burst is always sent (trailing timer), so a release is never lost.
+let fxLiveAt = 0
+let fxLivePending: FxLive | null = null
+let fxLiveTimer: NodeJS.Timeout | null = null
+fxHidOnLive((live) => {
+  fxLivePending = live
+  if (fxLiveTimer) return
+  const flush = (): void => {
+    fxLiveTimer = null
+    if (!fxLivePending) return
+    fxLiveAt = Date.now()
+    send('flydigix:live', fxLivePending)
+    fxLivePending = null
+  }
+  const wait = INPUT_SAMPLE_MS - (Date.now() - fxLiveAt)
+  if (wait <= 0) flush()
+  else fxLiveTimer = setTimeout(flush, wait)
+})
 handle('flydigix:activate', (cfgId: number) => {
   if (!Number.isInteger(cfgId) || cfgId < 0 || cfgId > 7) throw new Error('flydigi: config id must be 0..7')
   return fxHidActivate(cfgId)

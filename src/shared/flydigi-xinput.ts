@@ -232,6 +232,48 @@ export function fxDecodeStatus(d: Uint8Array): FxPadStatus {
 }
 
 /**
+ * Live input from the DInput stream (`04 FE …` on the vendor interface, docs/flydigi.md): sticks 0..255 (centre 128),
+ * triggers 0..255 and every button, including the back buttons M1..M6 and C / Z that the Gamepad API does not show.
+ * Layout from Space Station's OperatorDataParser, sticks and triggers checked against a capture from the pad.
+ */
+export interface FxLive {
+  lx: number
+  ly: number
+  rx: number
+  ry: number
+  lt: number
+  rt: number
+  /** Raw bytes Space Station reads as gyro X / Y in DInput mode (unconfirmed). */
+  gyro: [number, number]
+  /** Pressed buttons by name (FX_LIVE_BUTTONS). */
+  pressed: string[]
+}
+
+/** Button bits in the live report: [name, report byte, bit]. */
+export const FX_LIVE_BUTTONS: ReadonlyArray<readonly [string, number, number]> = [
+  ['A', 9, 4], ['B', 9, 5], ['X', 9, 7], ['Y', 10, 0],
+  ['LB', 10, 2], ['RB', 10, 3], ['LT', 10, 4], ['RT', 10, 5], ['L3', 10, 6], ['R3', 10, 7],
+  ['Up', 9, 0], ['Down', 9, 2], ['Left', 9, 3], ['Right', 9, 1],
+  ['Select', 9, 6], ['Start', 10, 1], ['Menu', 8, 0], ['Home', 8, 3], ['Back', 8, 4],
+  ['M1', 7, 2], ['M2', 7, 3], ['M3', 7, 4], ['M4', 7, 5], ['M5', 7, 6], ['M6', 7, 7], ['C', 7, 0], ['Z', 7, 1]
+]
+
+/** Parse a `04 FE …` live report, or null for anything else. */
+export function fxParseDInputLive(r: Uint8Array): FxLive | null {
+  if (r.length < 25 || r[1] !== 0xfe) return null
+  return {
+    lx: r[17],
+    ly: r[19],
+    rx: r[21],
+    ry: r[22],
+    lt: r[23],
+    rt: r[24],
+    gyro: [r[5], r[6]],
+    pressed: FX_LIVE_BUTTONS.filter(([, b, bit]) => (r[b] & (1 << bit)) !== 0).map(([n]) => n)
+  }
+}
+
+/**
  * Normalise a DInput reply report (report id first) into XInput-style acks.
  * Plain input reports (`04 FE 66 …`) and get-info replies yield none.
  */

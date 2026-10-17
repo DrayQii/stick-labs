@@ -17,6 +17,7 @@ import {
   fxCurveRawToPercent,
   fxDeadzonePoints,
   fxFromDInput,
+  fxParseDInputLive,
   fxDecodeStatus,
   fxDInputReadStatus,
   FXD_CMD_STATUS,
@@ -264,6 +265,18 @@ const st = fxFromDInput(h2('04 ff f0 f2 03 0f 01 00 00 00 00 00 00 00 00 00 00 0
 check('status reply becomes one status ack', st.length === 1 && st[0].cmd === FXD_CMD_STATUS)
 const ps = fxDecodeStatus(st[0].data)
 check('status decodes: sleep 15 min, quick switch on', ps.sleepMinutes === 15 && ps.quickSwitchOn)
+
+// Live stream: the input report captured from the pad (sticks centred, triggers 0, nothing pressed).
+const idle = fxParseDInputLive(h2('04 fe 66 00 00 00 00 00 00 00 00 00 00 00 00 ff 00 81 00 80 00 80 7e 00 00 00 00 00 84 01 00 00'))
+check('live report: centred sticks, triggers 0, nothing pressed', !!idle && idle.lx === 0x81 && idle.ly === 0x80 && idle.rx === 0x80 && idle.ry === 0x7e && idle.lt === 0 && idle.rt === 0 && idle.pressed.length === 0)
+const pressed = h2('04 fe 66 00 00 00 00 05 18 11 05 00 00 00 00 ff 00 81 00 80 00 80 7e ff 00 00 00 00 84 01 00 00')
+const busy = fxParseDInputLive(pressed)
+check(
+  'live report: button bits and trigger',
+  !!busy && busy.lt === 255 && ['C', 'M1', 'Home', 'Back', 'Up', 'A', 'Y', 'LB'].every((b) => busy.pressed.includes(b)) && busy.pressed.length === 8,
+  busy?.pressed.join(',')
+)
+check('config reply is not a live report', fxParseDInputLive(h2('04 ff f0 50 00 01 02 03 04 05 06 07 08 09 0a eb 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00')) === null)
 
 if (failures > 0) {
   console.error(`\n${failures} failure(s)`)

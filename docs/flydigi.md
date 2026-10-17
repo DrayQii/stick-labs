@@ -416,7 +416,7 @@ report captured from the pad (centred sticks `81 80 / 80 7e`, triggers 0):
 | 21, 22 | right stick X, Y |
 | 23, 24 | LT, RT (0..255) |
 
-This is the only place the back buttons (M1..M6) and C / Z show up; the Gamepad API does not report them. Raw
+This is the only place the back buttons (M1..M6) and C / Z show up; the Gamepad API does not report them. The Live input view uses this stream (`fxParseDInputLive`, IPC `flydigix:live`, ~30 Hz with a trailing send so a release is never lost) and falls back to the Gamepad API until the first report arrives. Raw
 reporting can also be toggled with `05 F5` (Space Station's EnableRawDataTransportIn, DInput form), but the stream
 already runs without it. Rates: Space Station's `ReportRate` enum is None 0, 1000 = 1, 500 = 2, 250 = 4, 125 = 8,
 nothing faster.
