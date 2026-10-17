@@ -234,6 +234,30 @@ survived a DInput/XInput round trip, and 1000 Hz was restored. Stick Labs theref
 elevated helper run (`--set-rate CODE` / `--read-rate`, optionally `--to-dinput`): from DInput it
 sends `05 ED`, runs the helper, and waits for `04B4:2412` to return (about 20 seconds).
 
+Measured on the pad (2026-10-17, `scripts/flydigi-rate-probe.mjs`): in DInput mode the Direwolf 4 sends about 500
+input reports per second whatever the stored rate is, and sending `05 50 0A <code>` over plain HID changes neither the
+live rate (500/s after 125, 250, 500 and 1000 Hz codes alike) nor the stored one (the stored rate, read back through
+the XInput route, stayed at 500 Hz after a "125 Hz" command). So the rate cannot be set over plain HID. In XInput mode
+the filter driver route works; the helper waits up to 12 s for the driver to see the pad after the switch (it failed
+with "the filter driver cannot write to the pad" when started right after the DInput -> XInput switch), and the app
+waits 2.5 s after the pad appears as an Xbox controller.
+
+Raw USB (2026-10-17). UsbDk (PR #9, closed) did not work: its own tool lists the pad (a 49-byte configuration
+descriptor), but libusb 1.0.30 (the pip build and the official one) always answered "UsbDk backend not available", with
+the helper DLL on PATH, next to libusb and python.exe, preloaded, in the Windows system folder, and from an
+administrator shell. **Cause found (libusb source, v1.0.30):** `libusb_init` applies options set before it (`libusb_set_option(NULL, LIBUSB_OPTION_USE_USBDK)`) *before* it starts the backend, and UsbDk's availability is only determined inside that backend start, so the option can never succeed that way; with 1.0.30 it must be set after init, on the context (`libusb_init` then `libusb_set_option(ctx, LIBUSB_OPTION_USE_USBDK)`). The probe script's `--usbdk` flag does that (untested on the pad until you run it). **WinUSB works.** With Zadig's WinUSB driver bound to the pad (XInput mode,
+045E:028E), `scripts/flydigi-winusb-probe.py` talks to it through libusb: one interface (class FF/5D/01), interrupt IN
+`0x81` and interrupt OUT `0x05` (max packet 64; bInterval 1 for 1000 Hz, 2 for 500 Hz). The same frames as the
+filter-driver route are plain 15-byte interrupt writes to `0x05` (`A5 50 07` read, `A5 50 0A <code>` set), and the
+read reply arrives on `0x81` as the 32-byte report with `A5 50 07` at [14..16] and the rate code at [22]. Verified:
+set 500 Hz -> read back code 2, set 1000 Hz -> read back code 1. The pad applies a new rate by changing its USB
+descriptor (the IN endpoint's bInterval) and reconnecting, so the handle used for the set dies and the read-back needs a
+fresh open (which is why the rate is an XInput-mode feature). The catch is delivery: WinUSB has to replace the Xbox
+driver for the pad, so while it is bound the pad is not an Xbox controller (games, Steam Input) until the driver is rolled
+back in Device Manager (uninstall the device with "Delete the driver software", replug). The rate is stored in the pad, so
+the one-off recipe is: Zadig -> WinUSB, run the script's `--set`, roll back. Other things that could still hold the pad
+open and give `ACCESS` on the claim: the Xbox app (`XboxPcAppFT`), Steam, Space Station's service.
+
 Curve designer. The nine curve bytes are output heights at evenly spaced input steps (0, 12.5 … 100%):
 `raw = 50 + percent`, so 50 is 0% and 150 is 100%, and a deadzone writes the low points below 50, which the
 pad clamps to 0% (Space Station's deadzone writes are exactly linear in the point index, which is what pins the
@@ -298,11 +322,21 @@ values still used are the ones in the code: turbo frequency 1..30, gyro sensitiv
 3. **Trigger vibration**, if Space Station has it for this pad, and the live `CallGripVibration {leftValue, rightValue}`
    motor test (a button that buzzes the grips).
 4. **Edge cases in the key table.** What a turbo key with a remap target does, and `enableKey2` for gyro.
-5. **Polling rate without Space Station.** The mode switch no longer needs it (FN + D-pad combo), but the polling rate is only
-   exposed in XInput mode through its filter driver. A raw USB route (UsbDk, PR #9, did not start under libusb 1.0.30 on
-   the maintainer's machine; WinUSB via Zadig is untested) would remove the last dependency, and needs to confirm that
-   the pad accepts the frames as raw USB writes at all.
+5. **Polling rate without Space Station.** Proven possible over raw USB (see above), but only with WinUSB bound to the pad,
+   which removes its Xbox driver until rolled back. Shipping it needs a safe way to bind and roll back WinUSB (a
+   signed driver package or a guided Zadig step); until then the app keeps Space Station's driver route, and the manual
+   Zadig + script recipe works without it. Check the manual for a polling-rate combo on the pad as well.
 
 ### Not available on this pad
 - LED / RGB: Space Station's app has no LED or RGB settings for the Direwolf 4 (maintainer, 2026-10-17), so there is nothing to decode.
 - Calibration: Space Station has no calibration screen for the Direwolf 4, so there is nothing to copy.
+
+## Polling rate and mode switch without Space Station (UsbDk)
+
+`scripts/flydigi-usb-helper.py` does what `flydigi-xinput-helper.py` does (same arguments and result file) over raw USB
+with libusb and the signed UsbDk driver. UsbDk lends the pad to the helper only while it runs, so no driver is replaced
+and Space Station is not involved. Verified on the pad with the probe script: read, set 500 Hz and set 1000 Hz, each
+read back correctly (the pad re-enumerates after a set, so the helper re-reads in a fresh libusb session).
+libusb 1.0.30 needs `libusb_set_option(USE_USBDK)` **after** `libusb_init`; before it always fails.
+The app picks this helper when the `UsbDk` service exists and falls back to Space Station's driver otherwise.
+Needs: UsbDk installed, python, `pip install libusb-package` (or `FLYDIGI_LIBUSB`).

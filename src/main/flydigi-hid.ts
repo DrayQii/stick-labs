@@ -128,15 +128,25 @@ function spaceStationRunning(): boolean {
 
 const psq = (v: string): string => `'${v.replace(/'/g, "''")}'`
 
+/** UsbDk (signed USB filter driver) installed? It lets the raw-USB helper reach the pad without Space Station. */
+function usbdkInstalled(): boolean {
+  try {
+    return spawnSync('sc', ['query', 'UsbDk'], { encoding: 'utf8', windowsHide: true }).status === 0
+  } catch {
+    return false
+  }
+}
+
 /**
- * Run scripts/flydigi-xinput-helper.py elevated (it talks to Space Station's filter driver,
- * so the pad must be in XInput mode and Space Station closed) and return its result.
+ * Run an elevated helper script and return its result. With UsbDk installed that is
+ * scripts/flydigi-usb-helper.py (raw USB, no Space Station); otherwise scripts/flydigi-xinput-helper.py
+ * (Space Station's filter driver). The pad must be in XInput mode and Space Station closed either way.
  */
 async function runHelper(args: string[]): Promise<{ reportRate: number | null }> {
   if (spaceStationRunning()) {
     throw new Error('flydigi: Flydigi Space Station (or its background service) is running. Close it fully, then try again.')
   }
-  const script = join(__dirname, '../../scripts/flydigi-xinput-helper.py')
+  const script = join(__dirname, `../../scripts/${usbdkInstalled() ? 'flydigi-usb-helper.py' : 'flydigi-xinput-helper.py'}`)
   const out = join(tmpdir(), `flydigi-helper-${Date.now()}.json`)
   const py = process.env.FLYDIGI_PYTHON ?? 'python'
   const list = [`"${script}"`, '--out', `"${out}"`, ...args].map(psq).join(', ')
@@ -465,6 +475,7 @@ export function fxHidPollingRate(code: number | null): Promise<{ reportRate: num
     if (wasDInput) {
       if (!(await hidSwitchToXInput())) throw new Error('flydigi: the pad did not leave DInput mode; unplug and replug it and try again.')
       if (!(await waitFor(() => xinputDirewolfPresent(), 10000))) throw new Error('flydigi: the pad did not come back as an Xbox controller in time.')
+      await sleep(2500) // let Windows finish setting the pad up as an Xbox controller before the driver helper looks for it
     }
     const args = [...(code === null ? ['--read-rate'] : ['--set-rate', String(code)]), ...(wasDInput ? ['--to-dinput'] : [])]
     const r = await runHelper(args)
