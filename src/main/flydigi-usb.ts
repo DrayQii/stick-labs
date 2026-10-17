@@ -42,6 +42,7 @@ function load(): UsbLib {
   } catch (e) {
     throw new Error(`flydigi: the USB library could not be loaded (${(e as Error).message})`)
   }
+  if (process.env.FLYDIGI_USB_DEBUG) lib.usb.setDebugLevel(4) // libusb's own log on stderr
   try {
     lib.useUsbDkBackend()
   } catch {
