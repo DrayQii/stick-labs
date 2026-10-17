@@ -247,15 +247,17 @@ export interface FxLive {
   gyro: [number, number]
   /** Pressed buttons by name (FX_LIVE_BUTTONS). */
   pressed: string[]
+  /** The same as key ids (ControllerKey numbers, the key table's index). */
+  ids: number[]
 }
 
-/** Button bits in the live report: [name, report byte, bit]. */
-export const FX_LIVE_BUTTONS: ReadonlyArray<readonly [string, number, number]> = [
-  ['A', 9, 4], ['B', 9, 5], ['X', 9, 7], ['Y', 10, 0],
-  ['LB', 10, 2], ['RB', 10, 3], ['LT', 10, 4], ['RT', 10, 5], ['L3', 10, 6], ['R3', 10, 7],
-  ['Up', 9, 0], ['Down', 9, 2], ['Left', 9, 3], ['Right', 9, 1],
-  ['Select', 9, 6], ['Start', 10, 1], ['Menu', 8, 0], ['Home', 8, 3], ['Back', 8, 4],
-  ['M1', 7, 2], ['M2', 7, 3], ['M3', 7, 4], ['M4', 7, 5], ['M5', 7, 6], ['M6', 7, 7], ['C', 7, 0], ['Z', 7, 1]
+/** Button bits in the live report: [name, report byte, bit, key id]. The Direwolf 4 has M1 / M2 only of the extras. */
+export const FX_LIVE_BUTTONS: ReadonlyArray<readonly [string, number, number, number]> = [
+  ['A', 9, 4, 4], ['B', 9, 5, 5], ['X', 9, 7, 7], ['Y', 10, 0, 8],
+  ['LB', 10, 2, 10], ['RB', 10, 3, 11], ['LT', 10, 4, 12], ['RT', 10, 5, 13], ['L3', 10, 6, 14], ['R3', 10, 7, 15],
+  ['Up', 9, 0, 0], ['Down', 9, 2, 2], ['Left', 9, 3, 3], ['Right', 9, 1, 1],
+  ['Select', 9, 6, 6], ['Start', 10, 1, 9], ['Menu', 8, 0, 24], ['Home', 8, 3, 27], ['Back', 8, 4, 28],
+  ['M1', 7, 2, 18], ['M2', 7, 3, 19], ['M3', 7, 4, 20], ['M4', 7, 5, 21], ['M5', 7, 6, 22], ['M6', 7, 7, 23], ['C', 7, 0, 16], ['Z', 7, 1, 17]
 ]
 
 /** Parse a `04 FE …` live report, or null for anything else. */
@@ -269,7 +271,8 @@ export function fxParseDInputLive(r: Uint8Array): FxLive | null {
     lt: r[23],
     rt: r[24],
     gyro: [r[5], r[6]],
-    pressed: FX_LIVE_BUTTONS.filter(([, b, bit]) => (r[b] & (1 << bit)) !== 0).map(([n]) => n)
+    pressed: FX_LIVE_BUTTONS.filter(([, b, bit]) => (r[b] & (1 << bit)) !== 0).map(([n]) => n),
+    ids: FX_LIVE_BUTTONS.filter(([, b, bit]) => (r[b] & (1 << bit)) !== 0).map(([, , , id]) => id)
   }
 }
 
@@ -544,8 +547,8 @@ export const FX_KEY_NAMES: Readonly<Record<number, string>> = {
   13: 'RT',
   14: 'L3',
   15: 'R3',
-  18: 'M1',
-  19: 'M2',
+  18: 'M1 (back)',
+  19: 'M2 (back)',
   24: 'Menu',
   27: 'Home'
 }

@@ -8,7 +8,7 @@
  * axes 3/4); each control can be pointed at any axis (remembered in localStorage) while the raw axes are shown.
  */
 import { useEffect, useRef, useState } from 'react'
-import { FX_LIVE_BUTTONS, type FxLive } from '@shared/flydigi-xinput'
+import { FX_KEY_NAMES, FX_LIVE_BUTTONS, type FxLive } from '@shared/flydigi-xinput'
 import { api } from './api'
 import { useT } from './i18n'
 import { fxFmt } from './i18n-fx'
@@ -211,7 +211,7 @@ function PadLiveView({ live }: { live: FxLive }): JSX.Element {
         </div>
       </div>
       <div className="row" style={{ gap: 4, flexWrap: 'wrap' }}>
-        {FX_LIVE_BUTTONS.map(([name]) => (
+        {FX_LIVE_BUTTONS.filter(([, , , id]) => id in FX_KEY_NAMES).map(([name]) => (
           <span
             key={name}
             className="mono"

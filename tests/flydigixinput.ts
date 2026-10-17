@@ -276,6 +276,7 @@ check(
   !!busy && busy.lt === 255 && ['C', 'M1', 'Home', 'Back', 'Up', 'A', 'Y', 'LB'].every((b) => busy.pressed.includes(b)) && busy.pressed.length === 8,
   busy?.pressed.join(',')
 )
+check('live report: pressed key ids (M1 = 18, Home = 27)', !!busy && busy.ids.includes(18) && busy.ids.includes(27) && busy.ids.includes(4) && busy.ids.length === 8)
 check('config reply is not a live report', fxParseDInputLive(h2('04 ff f0 50 00 01 02 03 04 05 06 07 08 09 0a eb 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00')) === null)
 
 if (failures > 0) {

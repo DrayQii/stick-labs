@@ -2,7 +2,9 @@
  * Flydigi Direwolf 4 tab content for the main app: one section per tab (Sticks, Buttons, Device,
  * Profiles). State and actions come from useFlydigi; the topbar owns slots and Write.
  */
-import { FX_REPORT_RATES, fxHzFromReportRate, FX_KEY_DEFAULT, FX_KEY_NAMES, FX_KEY_ORDER, FX_MOTION_CLICK, FX_MOTION_LEFT, FX_MOTION_OFF, FX_MOTION_PRESS, FX_MOTION_RIGHT, FX_TURBO_CLICK, FX_TURBO_MAX, FX_TURBO_MIN, FX_TURBO_PRESS, fxTriggerRange, type FxMotion, type FxTurbo } from '@shared/flydigi-xinput'
+import { FX_REPORT_RATES, fxHzFromReportRate, FX_KEY_DEFAULT, FX_KEY_NAMES, FX_KEY_ORDER, FX_MOTION_CLICK, FX_MOTION_LEFT, FX_MOTION_OFF, FX_MOTION_PRESS, FX_MOTION_RIGHT, FX_TURBO_CLICK, FX_TURBO_MAX, FX_TURBO_MIN, FX_TURBO_PRESS, fxTriggerRange, type FxLive, type FxMotion, type FxTurbo } from '@shared/flydigi-xinput'
+import { useEffect, useRef, useState } from 'react'
+import { api } from './api'
 import FlydigiCurveDesigner from './FlydigiCurveDesigner'
 import { useT } from './i18n'
 import { fxFmt } from './i18n-fx'
@@ -85,13 +87,29 @@ export function FxSticks({ fx }: { fx: Flydigi }): JSX.Element | null {
 export function FxButtons({ fx }: { fx: Flydigi }): JSX.Element | null {
   const t = useT()
   const { snap, keyEdits, setKeyEdits, turboEdits, setTurboEdits } = fx
+  // Press a button on the pad: its card lights up and scrolls into view (live stream, flydigix:live).
+  const [down, setDown] = useState<number[]>([])
+  const downRef = useRef<number[]>([])
+  const cards = useRef<Record<number, HTMLDivElement | null>>({})
+  useEffect(
+    () =>
+      api().on('flydigix:live', (l: FxLive) => {
+        const prev = downRef.current
+        if (prev.length === l.ids.length && prev.every((id) => l.ids.includes(id))) return
+        const fresh = l.ids.find((id) => !prev.includes(id) && id in FX_KEY_NAMES)
+        if (fresh !== undefined) cards.current[fresh]?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+        downRef.current = l.ids
+        setDown(l.ids)
+      }),
+    []
+  )
   if (!snap) return null
   return (
     <>
           <div className="card" style={{ marginTop: 16 }}>
             <h3>{t('nav.buttons')}</h3>
             <div className="hint" style={{ margin: '4px 0 8px' }}>
-              {t('fx.buttons.hint')}
+              {t('fx.buttons.hint')} {t('fx.buttons.pressToFind')}
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(210px, 1fr))', gap: 8 }}>
               {FX_KEY_ORDER.map((id) => {
@@ -116,7 +134,12 @@ export function FxButtons({ fx }: { fx: Flydigi }): JSX.Element | null {
                   })
                 }
                 return (
-                  <div key={id} className="stack" style={{ gap: 4 }}>
+                  <div
+                    key={id}
+                    ref={(el) => (cards.current[id] = el)}
+                    className="stack"
+                    style={{ gap: 4, padding: 6, margin: -6, borderRadius: 4, outline: down.includes(id) ? '2px solid var(--accent, #f43f52)' : '2px solid transparent', transition: 'outline-color 0.1s' }}
+                  >
                     <div className="row spread">
                       <span className="label">{FX_KEY_NAMES[id]}</span>
                       {edited && <span className="mono">{t('fx.buttons.edited')}</span>}
