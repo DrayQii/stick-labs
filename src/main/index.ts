@@ -12,7 +12,7 @@ import { ljReadButtonTable, ljReadMainSnapshot, ljReadSnapshot, ljWriteButtonVer
 import type { LjButtonTarget, LjStickPatch } from '../shared/leadjoy'
 import { fdIdentify } from './flydigi'
 import { fxLeaveEnabled, fxLeaveInit, fxLeaveNoteMode, fxLeaveNow, fxLeaveOnQuit, fxLeaveSetEnabled } from './flydigi-leave'
-import { fxHidActivate, fxHidBackup, fxHidBackups, fxHidRestore, fxHidMode, fxHidPollingRate, fxHidRead, fxHidSwitchToXInput, fxHidWrite, fxHidStop } from './flydigi-hid'
+import { fxHidStatus, fxHidActivate, fxHidBackup, fxHidBackups, fxHidRestore, fxHidMode, fxHidPollingRate, fxHidRead, fxHidSwitchToXInput, fxHidWrite, fxHidStop } from './flydigi-hid'
 import type { FxPatch } from '../shared/flydigi-xinput'
 import { ljButtonWriteRecord } from '../shared/leadjoy'
 import { steamInfo, exportApexDeadzones, listInstalledGames, exportDeadzonesToGames } from './steam'
@@ -153,6 +153,7 @@ handle('flydigix:mode', () => {
 handle('flydigix:leaveXInput', () => fxLeaveEnabled())
 handle('flydigix:setLeaveXInput', (on: boolean) => fxLeaveSetEnabled(on === true))
 handle('flydigix:toXInput', () => fxHidSwitchToXInput())
+handle('flydigix:status', () => fxHidStatus())
 handle('flydigix:activate', (cfgId: number) => {
   if (!Number.isInteger(cfgId) || cfgId < 0 || cfgId > 7) throw new Error('flydigi: config id must be 0..7')
   return fxHidActivate(cfgId)

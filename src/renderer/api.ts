@@ -9,7 +9,7 @@ export interface Candidate {
 import type { DeepPollResult } from '@shared/deeppoll'
 import type { LjButtonTarget, LjSnapshot, LjStickPatch } from '@shared/leadjoy'
 import type { FdIdentifyResult } from '@shared/flydigi'
-import type { FxSnapshot, FxPatch } from '@shared/flydigi-xinput'
+import type { FxPadStatus, FxSnapshot, FxPatch } from '@shared/flydigi-xinput'
 export interface DeviceInfo {
   firmware: string
   dongle: string
@@ -94,6 +94,8 @@ interface LabApi {
   flydigiXMode(): Promise<'dinput' | 'xinput' | 'none'>
   /** Switch the pad from DInput back to XInput mode; it drops off the bus and returns as an Xbox 360 pad. */
   flydigiXToXInput(): Promise<{ switched: boolean }>
+  /** Pad settings over plain HID (DInput status read): polling rate, sleep time, stick options. Null if no reply. */
+  flydigiXStatus(): Promise<FxPadStatus | null>
   /** "Return the pad to XInput when I leave" (default on): quit, crash, sleep, logoff, disconnect. */
   flydigiXLeaveXInput(): Promise<boolean>
   flydigiXSetLeaveXInput(on: boolean): Promise<boolean>
