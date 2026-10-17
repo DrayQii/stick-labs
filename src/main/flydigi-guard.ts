@@ -3,10 +3,12 @@
  * Direwolf 4 is seen in DInput mode. While the app runs it only checks, every second, that the app is alive. When
  * the app is gone (quit, crash, killed) and the pad may still be in DInput mode (state.armed), it switches the pad
  * back to XInput (05 ED); if the pad is unplugged it waits up to 30 minutes for it to come back. Then it exits.
- * Usage: flydigi-guard.js --parent PID --state FILE
+ * Usage: flydigi-guard.js --parent PID --state FILE [--launch]
  */
 import { readGuardState, writeGuardState } from './flydigi-guard-state'
 import { fxPadMode, fxSendToXInput } from './flydigi-switch'
+
+import { spawn } from 'node:child_process'
 
 const arg = (n: string): string | null => (process.argv.includes(n) ? (process.argv[process.argv.indexOf(n) + 1] ?? '') : null)
 const parent = Number(arg('--parent'))
@@ -43,6 +45,14 @@ async function main(): Promise<void> {
     }
     await sleep(2000)
   }
+}
+
+// Started with --launch by the app: start the real helper detached and exit at once. The helper then has no living
+// parent, so Task Manager does not list it in the Stick Labs group and "End task" on the app does not kill it too.
+if (process.argv.includes('--launch')) {
+  const rest = process.argv.slice(2).filter((a) => a !== '--launch')
+  spawn(process.execPath, [process.argv[1], ...rest], { env: process.env, detached: true, stdio: 'ignore', windowsHide: true }).unref()
+  process.exit(0)
 }
 
 main()

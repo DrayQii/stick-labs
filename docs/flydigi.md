@@ -345,8 +345,8 @@ by default) sends `05 ED` on every way out:
 
 State lives in `flydigi-leave-xinput.json` in the app data folder (`enabled`, `armed` = last seen in DInput, `pid` of
 the owning app run; a helper from an older run stands down when the pid changes). Code: `src/main/flydigi-leave.ts`,
-`flydigi-guard.ts`, `flydigi-switch.ts`. Killing the whole process tree from Task Manager also kills the helper; the
-next start covers that.
+`flydigi-guard.ts`, `flydigi-switch.ts`. The helper is started through a launcher that exits at once, so it has no
+living parent: Task Manager does not list it in the Stick Labs group and "End task" on the app does not kill it.
 
 ## Polling rate and mode switch without Space Station (UsbDk, native) — verified
 

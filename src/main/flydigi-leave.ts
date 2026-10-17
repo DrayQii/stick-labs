@@ -33,7 +33,7 @@ function startGuard(): void {
   const script = join(__dirname, 'flydigi-guard.js')
   if (!existsSync(script)) return
   try {
-    const c = spawn(process.execPath, [script, '--parent', String(process.pid), '--state', stateFile], {
+    const c = spawn(process.execPath, [script, '--launch', '--parent', String(process.pid), '--state', stateFile], {
       env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' },
       detached: true,
       stdio: 'ignore',
