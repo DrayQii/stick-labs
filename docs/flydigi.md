@@ -47,15 +47,18 @@ Plain HID only. The pad must be in **DInput mode** (USB `04B4:2412`, vendor inte
 usage page `0xFFA0`) and Flydigi Space Station must be **closed**: launching it switches the
 pad back to XInput (`045E:028E`). No driver, no Space Station DLL and no admin rights are used.
 
-Getting the pad into DInput mode: from XInput mode the only known way is the legacy `A5 17`
-frame sent through Space Station's Xbox 360 filter driver (`XboxComm64.dll`). Stick Labs does
-this on "Read pad" when it finds the pad in XInput mode (USB `045E:028E`, serial
-`FLYDIGI_DIREWOLF_4`): it launches `scripts/flydigi-xinput-helper.py` elevated (one UAC
-prompt), which sends that single frame, then waits for `04B4:2412`. It needs python on PATH
-(or `FLYDIGI_PYTHON`), Space Station installed but not running, and nothing else. The mode then
-survives replugs until Space Station runs again. "Switch to XInput" (`05 ED`, plain HID) puts
-the pad back for games and closes the Direwolf screen. The sections below that mention the
-driver describe how the protocol was first captured; the config traffic itself is plain HID.
+Getting the pad into DInput mode: the pad has a hardware combo, **FN + D-pad Left for DInput and FN + D-pad
+Right for XInput** (found by the maintainer, 2026-10-17). Stick Labs uses that: a pad found in XInput mode
+(USB `045E:028E`, serial `FLYDIGI_DIREWOLF_4`) shows a card asking you to hold FN + D-pad Left, and connects by
+itself when `04B4:2412` appears. Nothing from Flydigi is needed for this. The mode survives replugs until Space
+Station runs again. "Switch to XInput" in the app (`05 ED`, plain HID) puts the pad back for games.
+
+The only piece that still needs Space Station is the optional driver route: the legacy `A5 17` frame sent
+through its Xbox 360 filter driver (`XboxComm64.dll`) via `scripts/flydigi-xinput-helper.py`, run elevated (one
+UAC prompt). The card offers it as "Or switch with Space Station's driver", and the polling rate (only exposed in
+XInput mode) always uses it. It needs python on PATH (or `FLYDIGI_PYTHON`) and Space Station installed but not
+running. The sections below that mention the driver describe how the protocol was first captured; the config
+traffic itself is plain HID.
 
 Where the work stands and what is left is in **Direwolf 4: status and next steps** at the end of this file.
 
@@ -291,6 +294,11 @@ values still used are the ones in the code: turbo frequency 1..30, gyro sensitiv
    verified). The service log has `GetDeviceDetailInfo` for firmware; the old identify code in `src/main/flydigi.ts`
    already parses a handshake for other Flydigi pads.
 9. **Clean-ups.** The header comment of `FlydigiLiveView.tsx` still describes the old standard-only axis default.
+
+10. **Polling rate without Space Station.** The mode switch no longer needs it (FN + D-pad combo), but the polling rate is only
+   exposed in XInput mode through its filter driver. A raw USB route (UsbDk, PR #9, did not start under libusb 1.0.30 on
+   the maintainer's machine; WinUSB via Zadig is untested) would remove the last dependency, and needs to confirm that
+   the pad accepts the frames as raw USB writes at all.
 
 ### Not available on this pad
 - Calibration: Space Station has no calibration screen for the Direwolf 4, so there is nothing to copy.

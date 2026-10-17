@@ -2576,7 +2576,15 @@ export default function App(): JSX.Element {
         .catch(() => setFxProbe((p) => ({ ...p, [c.path]: null })))
     }
   }, [connected, fx.busy, fxDInputCandidates])
-  const showFxCard = !connected && (fxDInputCandidates.length > 0 || fxXInputDetected)
+  // When the pad goes XInput -> DInput (FN + D-pad Left) while nothing is connected, connect to it.
+  const prevFxMode = useRef(fx.mode)
+  useEffect(() => {
+    if (prevFxMode.current === 'xinput' && fx.mode === 'dinput' && !connected && !fx.busy) void connectFlydigi(null)
+    prevFxMode.current = fx.mode
+  }, [fx.mode])
+  // DInput shows up through the pad-mode poll even before the USB list is rescanned.
+  const fxDInputDetected = !fx.active && fx.mode === 'dinput' && fxDInputCandidates.length === 0
+  const showFxCard = !connected && (fxDInputCandidates.length > 0 || fxDInputDetected || fxXInputDetected)
   const [measuring, setMeasuring] = useState<{ left: number; suggestion: { dev: number; pct10: number } | null } | null>(null)
   const wanderRef = useRef(0)
   const modelLenRef = useRef(PROFILE_LENGTH)
@@ -2802,12 +2810,12 @@ export default function App(): JSX.Element {
     }
   }
 
-  /** Direwolf 4: read the active config over HID (switching it out of XInput mode if needed) and drive the normal tabs from it. */
-  async function connectFlydigi(path: string | null): Promise<void> {
+  /** Direwolf 4: read the active config over HID and drive the normal tabs from it. A pad in XInput mode is only switched through Space Station's driver when `viaDriver` is set. */
+  async function connectFlydigi(path: string | null, viaDriver = false): Promise<void> {
     setErr(null)
     setMsg(null)
     if (connected && !fx.active) await api().disconnect().catch(() => undefined)
-    if (!(await fx.load())) return
+    if (!(await fx.load(undefined, viaDriver))) return
     const base = MODELS.find((x) => x.id === 'FlydigiV1') ?? null
     setModel(base ? { ...base, marketingName: 'Flydigi Direwolf 4' } : null)
     setPid(0x2412)
@@ -3550,7 +3558,8 @@ export default function App(): JSX.Element {
               {fxDInputCandidates.map((c) => (
                 <FlydigiCard key={c.path} mode="DInput" busy={fx.busy} batteryPercent={fxProbe[c.path]?.batteryPercent ?? null} charging={fxProbe[c.path]?.power === 'charging'} probeHex={fxProbe[c.path]?.rawHex ?? null} onConnect={() => void connect(c.path)} />
               ))}
-              {fxXInputDetected && <FlydigiCard mode="XInput" busy={fx.busy} onConnect={() => void connectFlydigi(null)} />}
+              {fxDInputDetected && <FlydigiCard mode="DInput" busy={fx.busy} onConnect={() => void connectFlydigi(null)} />}
+              {fxXInputDetected && <FlydigiCard mode="XInput" busy={fx.busy} onConnect={() => void connectFlydigi(null)} onDriverSwitch={() => void connectFlydigi(null, true)} />}
             </div>
           )}
           {isLj && (

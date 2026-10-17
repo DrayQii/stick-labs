@@ -135,9 +135,9 @@ handle('flydigi:identify', (path: string) => {
 })
 /** Flydigi Direwolf 4 in DInput mode (04B4:2412): config over plain HID, no driver or admin (docs/flydigi.md). */
 const cfgOk = (v: unknown): boolean => v === undefined || (Number.isInteger(v) && (v as number) >= 0 && (v as number) <= 7)
-handle('flydigix:read', (cfgId?: number) => {
+handle('flydigix:read', (cfgId?: number, viaDriver?: boolean) => {
   if (!cfgOk(cfgId)) throw new Error('flydigi: config id must be 0..7')
-  return fxHidRead(cfgId)
+  return fxHidRead(cfgId, viaDriver === true)
 })
 /** Polling rate: code 1/2/4/8 sets it, null reads it. XInput-only on the pad, so this drives the elevated helper. */
 handle('flydigix:rate', (code: number | null) => {

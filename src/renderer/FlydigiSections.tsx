@@ -279,7 +279,7 @@ export function FxDevice({ fx }: { fx: Flydigi }): JSX.Element | null {
           <div className="card" style={{ marginTop: 16 }}>
           <h3>Polling rate</h3>
           <div className="hint" style={{ margin: '4px 0 8px' }}>
-            How often the pad reports to the PC. The Direwolf only exposes this in XInput mode, so changing it switches the pad to XInput and back through the Flydigi driver (one administrator step, about 20 seconds). Keep Flydigi Space Station closed.
+            How often the pad reports to the PC. The Direwolf only exposes this in XInput mode, so changing it switches the pad to XInput and back through Flydigi&apos;s Xbox filter driver (one administrator step, about 20 seconds). This is the one feature that still needs Flydigi Space Station installed (only its driver is used) and closed; everything else works without it.
           </div>
           <div className="row" style={{ gap: 6, flexWrap: 'wrap' }}>
             {FX_REPORT_RATES.map((r) => (
@@ -297,7 +297,7 @@ export function FxDevice({ fx }: { fx: Flydigi }): JSX.Element | null {
           <div className="card" style={{ marginTop: 16 }}>
             <h3>Pad mode</h3>
             <div className="hint" style={{ margin: '4px 0 8px' }}>
-              Stick Labs configures the pad in DInput mode. Switch to XInput to give games an Xbox controller again; the pad returns here when you click its button in the sidebar (or launch Space Station, which also switches it back).
+              Stick Labs configures the pad in DInput mode. Switch to XInput to give games an Xbox controller again. To come back, hold FN + D-pad Left on the pad (FN + D-pad Right does the XInput switch from the pad itself); the app connects again once the pad is in DInput. Launching Space Station also switches the pad back to XInput.
             </div>
             <div className="row" style={{ gap: 8 }}>
               {mode === 'dinput' && (
