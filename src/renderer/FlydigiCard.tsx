@@ -1,5 +1,6 @@
 import type { JSX } from 'react'
 import direwolf4 from './assets/direwolf4.png'
+import { useT } from './i18n'
 
 /** Connect card for the Direwolf 4, drawn inside the "Connect a controller" panel. Battery is shown only once the app can read it. */
 export function FlydigiCard(props: {
@@ -14,6 +15,7 @@ export function FlydigiCard(props: {
   onDriverSwitch?: () => void
 }): JSX.Element {
   const { mode, busy, batteryPercent = null, charging = false, probeHex = null, onConnect, onDriverSwitch } = props
+  const t = useT()
   const xinput = mode === 'XInput'
   const pct = batteryPercent === null ? null : Math.max(0, Math.min(100, batteryPercent))
   const Root = xinput ? 'div' : 'button'
@@ -27,30 +29,30 @@ export function FlydigiCard(props: {
         <span className="fx-card-name">Direwolf 4</span>
         <span className="fx-card-grid">
           <span className="fx-cell">
-            <span className="fx-cell-k">Mode</span>
+            <span className="fx-cell-k">{t('fx.card.mode')}</span>
             <span className="fx-cell-v">[ {mode} ]</span>
           </span>
-          <span className="fx-cell" title={pct === null ? 'Battery level is not readable over USB yet' : `${pct}%`}>
-            <span className="fx-cell-k">Battery</span>
+          <span className="fx-cell" title={pct === null ? t('fx.card.batteryTip') : `${pct}%`}>
+            <span className="fx-cell-k">{t('fx.card.battery')}</span>
             <span className="fx-cell-v">
               <span className="fx-battery-bar"><span className="fx-battery-fill" style={{ width: `${pct ?? 0}%` }} data-charging={charging || undefined} /></span>
-              {pct === null ? 'N/A' : `${pct}%${charging ? ' CHG' : ''}`}
+              {pct === null ? t('fx.card.batteryNA') : `${pct}%${charging ? ` ${t('fx.card.charging')}` : ''}`}
             </span>
           </span>
         </span>
-        {pct === null && probeHex && <span className="fx-probe">Reply {probeHex}</span>}
+        {pct === null && probeHex && <span className="fx-probe">{t('fx.card.reply')} {probeHex}</span>}
         {xinput ? (
           <span className="fx-card-cta" style={{ display: 'block' }}>
-            <span style={{ display: 'block' }}>Hold FN + D-pad Left on the pad to switch to DInput. It connects automatically once it switches.</span>
+            <span style={{ display: 'block' }}>{t('fx.card.xinputHint')}</span>
             {onDriverSwitch && (
-              <button type="button" className="btn ghost sm" style={{ marginTop: 8 }} disabled={busy} onClick={onDriverSwitch} title="Uses Flydigi Space Station's driver (it must be installed but not running); Windows asks for permission once">
-                {busy ? 'Working' : 'Or switch with Space Station’s driver'}
+              <button type="button" className="btn ghost sm" style={{ marginTop: 8 }} disabled={busy} onClick={onDriverSwitch} title={t('fx.card.driverTip')}>
+                {busy ? t('fx.card.working') : t('fx.card.driverSwitch')}
               </button>
             )}
           </span>
         ) : (
           <span className="fx-card-cta">
-            <span>{busy ? 'Working' : 'Connect'}</span>
+            <span>{busy ? t('fx.card.working') : t('fx.card.connect')}</span>
             <span className="fx-card-arrows" aria-hidden>&gt;&gt;&gt;</span>
           </span>
         )}
@@ -61,7 +63,7 @@ export function FlydigiCard(props: {
         <span className="fx-corner bl" aria-hidden />
         <span className="fx-corner br" aria-hidden />
         <span className="fx-scan" aria-hidden />
-        <img src={direwolf4} alt="Flydigi Direwolf 4 controller" draggable={false} />
+        <img src={direwolf4} alt={t('fx.card.alt')} draggable={false} />
       </span>
     </Root>
   )

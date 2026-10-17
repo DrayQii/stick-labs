@@ -245,6 +245,9 @@ hardware: how the pad responds to a non-linear custom curve (the points are assu
 ## Direwolf 4: status and next steps
 
 ### How it is wired into the app
+- Texts: the Direwolf screens are translated (English, Chinese, Japanese, Russian). The strings live in
+  `src/renderer/i18n-fx.ts` (keys `fx.*`, merged into the app dictionary); key and button names, units and tool
+  names stay English. Add new text there, not inline.
 - Connect from the Direwolf card in the "Connect a controller" panel (`FlydigiCard.tsx`, DInput or XInput mode; the
   sidebar no longer lists it). `src/renderer/useFlydigi.ts` holds the session state; `FlydigiSections.tsx` renders
   the tabs: Sticks (live view, Center/Edge sliders, curve designers), Buttons (remaps and turbo), Device (triggers,
@@ -288,14 +291,13 @@ values still used are the ones in the code: turbo frequency 1..30, gyro sensitiv
 4. **Trigger vibration**, if Space Station has it for this pad, and the live `CallGripVibration {leftValue, rightValue}`
    motor test (a button that buzzes the grips).
 5. **Edge cases in the key table.** What a turbo key with a remap target does, and `enableKey2` for gyro.
-6. **Translations** for the Direwolf tabs (the rest of the app has zh, ja and ru).
-7. **Steam export** for the Direwolf curves, as the GameSir side has.
-8. **Firmware readout.** The card already shows mode and battery (get-info byte 11, top of the level scale not fully
+6. **Steam export** for the Direwolf curves, as the GameSir side has.
+7. **Firmware readout.** The card already shows mode and battery (get-info byte 11, top of the level scale not fully
    verified). The service log has `GetDeviceDetailInfo` for firmware; the old identify code in `src/main/flydigi.ts`
    already parses a handshake for other Flydigi pads.
-9. **Clean-ups.** The header comment of `FlydigiLiveView.tsx` still describes the old standard-only axis default.
+8. **Clean-ups.** The header comment of `FlydigiLiveView.tsx` still describes the old standard-only axis default.
 
-10. **Polling rate without Space Station.** The mode switch no longer needs it (FN + D-pad combo), but the polling rate is only
+9. **Polling rate without Space Station.** The mode switch no longer needs it (FN + D-pad combo), but the polling rate is only
    exposed in XInput mode through its filter driver. A raw USB route (UsbDk, PR #9, did not start under libusb 1.0.30 on
    the maintainer's machine; WinUSB via Zadig is untested) would remove the last dependency, and needs to confirm that
    the pad accepts the frames as raw USB writes at all.

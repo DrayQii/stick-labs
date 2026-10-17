@@ -4,6 +4,7 @@
  * English). Locale persists in localStorage.
  */
 import { createContext, useContext, useState } from 'react'
+import { FX_STR } from './i18n-fx'
 
 export type Lang = 'en' | 'zh' | 'ja' | 'ru'
 
@@ -17,6 +18,7 @@ export const LANGS: ReadonlyArray<{ id: Lang; label: string }> = [
 type Dict = Record<string, Record<Lang, string>>
 
 const STR: Dict = {
+  ...FX_STR,
   'nav.tuning': { en: 'Tuning', zh: '调校', ja: '調整', ru: 'Настройка' },
   'nav.sticks': { en: 'Sticks', zh: '摇杆', ja: 'スティック', ru: 'Стики' },
   'nav.device': { en: 'Device', zh: '设备', ja: 'デバイス', ru: 'Устройство' },
