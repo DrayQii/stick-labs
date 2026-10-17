@@ -9,7 +9,11 @@
  * the first OUT endpoint, replies are 32-byte reports from the first IN endpoint (`A5 50 07` at [14..16], rate at [22]).
  * Codes: 1 = 1000 Hz, 2 = 500, 4 = 250, 8 = 125. The pad re-enumerates to apply a new rate.
  */
+import { spawn } from 'node:child_process'
+import { readFileSync, rmSync } from 'node:fs'
 import { createRequire } from 'module'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 
 export const FX_USB_VID = 0x045e
 export const FX_USB_PID = 0x028e
@@ -149,8 +153,9 @@ export async function fxUsbReadRate(): Promise<number> {
 }
 
 /**
- * Set the polling-rate code and read it back. The pad re-enumerates to apply it, which kills the handle, so the
- * read-back is a fresh open once the pad is back. `toDInput` then sends the legacy switch (A5 17) in its own session.
+ * Set the polling-rate code and read it back. The pad re-enumerates to apply it, which leaves this libusb session
+ * holding the old device, so the read-back (and the optional switch to DInput, A5 17) runs in a fresh process once
+ * the pad is back: this executable again, as node, on flydigi-usb-run.js.
  */
 export async function fxUsbSetRate(code: number, toDInput: boolean): Promise<number> {
   if (![1, 2, 4, 8].includes(code)) throw new Error('flydigi: polling-rate code must be 1, 2, 4 or 8')
@@ -163,10 +168,25 @@ export async function fxUsbSetRate(code: number, toDInput: boolean): Promise<num
     closePad(p)
   }
   await sleep(4000)
-  const back = await fxUsbReadRate()
-  if (back !== code) throw new Error(`flydigi: the pad reports polling-rate code ${back} after setting ${code}`)
-  if (toDInput) await fxUsbSwitchToDInput()
-  return back
+  const out = join(tmpdir(), `flydigi-usb-readback-${Date.now()}.json`)
+  const script = join(__dirname, '..', 'flydigi-usb-run.js')
+  const args = [script, '--read-rate', ...(toDInput ? ['--to-dinput'] : []), '--out', out]
+  const done = await new Promise<number>((resolve) => {
+    const c = spawn(process.execPath, args, { env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' }, windowsHide: true, stdio: 'ignore' })
+    c.on('error', () => resolve(-1))
+    c.on('exit', (n) => resolve(n ?? -1))
+  })
+  let back: { ok: boolean; error?: string; reportRate?: number | null } | null = null
+  try {
+    back = JSON.parse(readFileSync(out, 'utf8'))
+    rmSync(out, { force: true })
+  } catch {
+    /* handled below */
+  }
+  if (!back) throw new Error(`flydigi: the read-back after the rate change did not run (exit ${done}).`)
+  if (!back.ok) throw new Error(back.error ?? 'flydigi: the read-back after the rate change failed.')
+  if (back.reportRate !== code) throw new Error(`flydigi: the pad reports polling-rate code ${back.reportRate} after setting ${code}`)
+  return code
 }
 
 /** XInput -> DInput (legacy frame A5 17). */
