@@ -125,13 +125,6 @@ export function useFlydigi(onLost: () => void, lang: Lang) {
     try {
       adopt(await api().flydigiXRead(cfgId))
       setActive(true)
-      // The polling rate is readable over plain HID too (status read), so show it without the admin prompt.
-      api()
-        .flydigiXStatus()
-        .then((st) => {
-          if (st && [1, 2, 4, 8].includes(st.reportRate)) setRate(st.reportRate)
-        })
-        .catch(() => undefined)
       setMsg({ kind: 'ok', text: cfgId === undefined ? t('fx.msg.readActive') : t('fx.msg.readConfig', { n: cfgId + 1 }) })
       return true
     } catch (e) {

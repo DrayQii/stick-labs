@@ -207,7 +207,11 @@ export const fxDInputSwitchToXInput = (): Uint8Array => {
   return f
 }
 
-/** DInput status read (Space Station's ReadHardwareFunctionStatus, `05 F2 03`); its reply carries the pad settings. */
+/**
+ * DInput status read (`05 F2 03`). Space Station has two readers for it: a long one (nine settings, incl. the polling
+ * rate) and a short one (ReadAutoSleepPeriod). The Direwolf 4 answers the short form only, verified on the pad:
+ * `04 FF F0 F2 03 0f 01 00 …` = sleep 15 min, quick config switch on. The polling rate is only in the XInput status.
+ */
 export const FXD_CMD_STATUS = 0xf2
 export const fxDInputReadStatus = (): Uint8Array => {
   const f = new Uint8Array(FX_FRAME_LEN)
@@ -217,32 +221,14 @@ export const fxDInputReadStatus = (): Uint8Array => {
   return f
 }
 
-/** Pad settings from the DInput status reply (`04 FF F0 F2 03` then nine bytes; docs/flydigi.md). */
 export interface FxPadStatus {
-  mappingSwitchOn: boolean
-  stickDebounceOn: boolean
-  autoCalibrationOn: boolean
+  /** Auto-sleep in minutes, 0 = never (Space Station offers 1 / 5 / 15 / 60). */
   sleepMinutes: number
   quickSwitchOn: boolean
-  /** Polling-rate code: 1 = 1000 Hz, 2 = 500, 4 = 250, 8 = 125. */
-  reportRate: number
-  precision: number
-  sensitivity: number
-  reboundOn: boolean
 }
 
 export function fxDecodeStatus(d: Uint8Array): FxPadStatus {
-  return {
-    mappingSwitchOn: d[0] === 0,
-    stickDebounceOn: d[1] === 0,
-    autoCalibrationOn: d[2] === 0,
-    sleepMinutes: d[3],
-    quickSwitchOn: d[4] === 1,
-    reportRate: d[5],
-    precision: d[6],
-    sensitivity: d[7],
-    reboundOn: d[8] === 0
-  }
+  return { sleepMinutes: d[0], quickSwitchOn: d[1] === 1 }
 }
 
 /**

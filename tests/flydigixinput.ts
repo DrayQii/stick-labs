@@ -258,16 +258,12 @@ check('plain input report is not an ack', fxParseAck(new Uint8Array(32)) === nul
 const saveAck = fxParseAck(rep(0x50, [3, 1]))
 check('save ack recognised', !!saveAck && fxSaveAcked(saveAck))
 
-// DInput status read (05 F2 03): reply 04 FF F0 F2 03 then mapping switch, stick debounce, auto-calibration, sleep,
-// quick switch, report rate, precision, sensitivity, rebound (Space Station's ReadHardwareFunctionStatus layout).
+// DInput status read (05 F2 03): the Direwolf 4 answers the short form, captured on the pad: sleep 15 min, quick switch on.
 check('status read frame is 05 F2 03', hex(fxDInputReadStatus().subarray(0, 3)) === '05 f2 03')
-const st = fxFromDInput(h2('04 ff f0 f2 03 00 00 01 0f 01 02 03 11 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00'))
+const st = fxFromDInput(h2('04 ff f0 f2 03 0f 01 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00'))
 check('status reply becomes one status ack', st.length === 1 && st[0].cmd === FXD_CMD_STATUS)
 const ps = fxDecodeStatus(st[0].data)
-check(
-  'status decodes: rate 500 Hz, sleep 15 min, auto-calibration off',
-  ps.reportRate === 2 && ps.sleepMinutes === 15 && !ps.autoCalibrationOn && ps.stickDebounceOn && ps.quickSwitchOn && ps.reboundOn && ps.sensitivity === 17
-)
+check('status decodes: sleep 15 min, quick switch on', ps.sleepMinutes === 15 && ps.quickSwitchOn)
 
 if (failures > 0) {
   console.error(`\n${failures} failure(s)`)

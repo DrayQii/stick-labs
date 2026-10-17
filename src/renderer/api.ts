@@ -94,7 +94,7 @@ interface LabApi {
   flydigiXMode(): Promise<'dinput' | 'xinput' | 'none'>
   /** Switch the pad from DInput back to XInput mode; it drops off the bus and returns as an Xbox 360 pad. */
   flydigiXToXInput(): Promise<{ switched: boolean }>
-  /** Pad settings over plain HID (DInput status read): polling rate, sleep time, stick options. Null if no reply. */
+  /** Sleep time and quick-switch setting over plain HID (DInput status read). Null if no reply. */
   flydigiXStatus(): Promise<FxPadStatus | null>
   /** "Return the pad to XInput when I leave" (default on): quit, crash, sleep, logoff, disconnect. */
   flydigiXLeaveXInput(): Promise<boolean>

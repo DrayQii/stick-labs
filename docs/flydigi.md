@@ -393,8 +393,9 @@ the macro start, in 10 ms units on this protocol (1 ms from 0x0302). Up to 5 mac
 
 Status reply: XInput (`A5 50 07`) bytes 17..27 = mapping switch (0 = on), stick debounce (0 = on), auto-calibration
 (0 = on), sleep minutes, quick switch (1 = on), report rate (the byte already used here), precision, sensitivity,
-rebound (0 = on), circle (1 = on), dock smart stop. DInput (`05 F2 03`) bytes 4..12 = the first nine in the same
-order. Space Station marks rebound, auto-calibration, debounces, quick switch and the Xbox home button as available
+rebound (0 = on), circle (1 = on), dock smart stop. DInput (`05 F2 03`): Space Station also has a nine-field reader,
+but the Direwolf 4 answers the short form (its ReadAutoSleepPeriod reader), verified on the pad: `04 FF F0 F2 03 0f 01
+00 ...` = sleep 15 min, quick config switch on, nothing else. So the polling rate is only readable in XInput mode. Space Station marks rebound, auto-calibration, debounces, quick switch and the Xbox home button as available
 on the Direwolf 4 (`fp4`).
 
 

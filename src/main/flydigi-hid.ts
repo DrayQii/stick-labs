@@ -439,10 +439,7 @@ async function hidSwitchToXInput(): Promise<boolean> {
   return gone
 }
 
-/**
- * Read the pad's settings over plain HID (DInput `05 F2 03`): polling rate, sleep time, stick debounce /
- * auto-calibration / rebound and more. Null when the pad does not answer.
- */
+/** Read the pad's sleep time and quick-switch setting over plain HID (DInput `05 F2 03`). Null when it does not answer. */
 export function fxHidStatus(): Promise<FxPadStatus | null> {
   return exclusive(async () => {
     ensureOpen()
