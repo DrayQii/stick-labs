@@ -2810,12 +2810,12 @@ export default function App(): JSX.Element {
     }
   }
 
-  /** Direwolf 4: read the active config over HID and drive the normal tabs from it. A pad in XInput mode is only switched through Space Station's driver when `viaDriver` is set. */
-  async function connectFlydigi(path: string | null, viaDriver = false): Promise<void> {
+  /** Direwolf 4: read the active config over HID and drive the normal tabs from it. */
+  async function connectFlydigi(path: string | null): Promise<void> {
     setErr(null)
     setMsg(null)
     if (connected && !fx.active) await api().disconnect().catch(() => undefined)
-    if (!(await fx.load(undefined, viaDriver))) return
+    if (!(await fx.load(undefined))) return
     const base = MODELS.find((x) => x.id === 'FlydigiV1') ?? null
     setModel(base ? { ...base, marketingName: 'Flydigi Direwolf 4' } : null)
     setPid(0x2412)
@@ -3559,7 +3559,7 @@ export default function App(): JSX.Element {
                 <FlydigiCard key={c.path} mode="DInput" busy={fx.busy} batteryPercent={fxProbe[c.path]?.batteryPercent ?? null} charging={fxProbe[c.path]?.power === 'charging'} probeHex={fxProbe[c.path]?.rawHex ?? null} firmware={fxProbe[c.path]?.firmwareText ?? null} connection={fxProbe[c.path]?.connection ?? 'unknown'} onConnect={() => void connect(c.path)} />
               ))}
               {fxDInputDetected && <FlydigiCard mode="DInput" busy={fx.busy} onConnect={() => void connectFlydigi(null)} />}
-              {fxXInputDetected && <FlydigiCard mode="XInput" busy={fx.busy} onConnect={() => void connectFlydigi(null)} onDriverSwitch={() => void connectFlydigi(null, true)} />}
+              {fxXInputDetected && <FlydigiCard mode="XInput" busy={fx.busy} onConnect={() => void connectFlydigi(null)} />}
             </div>
           )}
           {isLj && (

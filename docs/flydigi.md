@@ -53,12 +53,12 @@ Right for XInput** (found by the maintainer, 2026-10-17). Stick Labs uses that: 
 itself when `04B4:2412` appears. Nothing from Flydigi is needed for this. The mode survives replugs until Space
 Station runs again. "Switch to XInput" in the app (`05 ED`, plain HID) puts the pad back for games.
 
-The only piece that still needs Space Station is the optional driver route: the legacy `A5 17` frame sent
-through its Xbox 360 filter driver (`XboxComm64.dll`) via `scripts/flydigi-xinput-helper.py`, run elevated (one
-UAC prompt). The card offers it as "Or switch with Space Station's driver", and the polling rate (only exposed in
-XInput mode) always uses it. It needs python on PATH (or `FLYDIGI_PYTHON`) and Space Station installed but not
-running. The sections below that mention the driver describe how the protocol was first captured; the config
-traffic itself is plain HID.
+Nothing in the app needs Space Station any more. The polling rate (only exposed in XInput mode) goes over raw USB with
+UsbDk (see "Polling rate and mode switch without Space Station" below), one UAC prompt per change. Only when UsbDk is not
+installed does it fall back to the legacy route through Space Station's Xbox 360 filter driver (`XboxComm64.dll`) via
+`scripts/flydigi-xinput-helper.py` (python, Space Station installed but not running). The old "Or switch with Space
+Station's driver" button is gone: FN + D-pad Left does the same. The sections below that mention the driver describe
+how the protocol was first captured; the config traffic itself is plain HID.
 
 Where the work stands and what is left is in **Direwolf 4: status and next steps** at the end of this file.
 
@@ -322,10 +322,7 @@ values still used are the ones in the code: turbo frequency 1..30, gyro sensitiv
 3. **Trigger vibration**, if Space Station has it for this pad, and the live `CallGripVibration {leftValue, rightValue}`
    motor test (a button that buzzes the grips).
 4. **Edge cases in the key table.** What a turbo key with a remap target does, and `enableKey2` for gyro.
-5. **Polling rate without Space Station.** Proven possible over raw USB (see above), but only with WinUSB bound to the pad,
-   which removes its Xbox driver until rolled back. Shipping it needs a safe way to bind and roll back WinUSB (a
-   signed driver package or a guided Zadig step); until then the app keeps Space Station's driver route, and the manual
-   Zadig + script recipe works without it. Check the manual for a polling-rate combo on the pad as well.
+5. ~~**Polling rate without Space Station.**~~ Done: native over UsbDk, verified on the pad (section below).
 
 ### Not available on this pad
 - LED / RGB: Space Station's app has no LED or RGB settings for the Direwolf 4 (maintainer, 2026-10-17), so there is nothing to decode.

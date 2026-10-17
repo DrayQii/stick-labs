@@ -7,10 +7,10 @@
  * Every write is read back; a mismatch is rolled back to the config captured
  * just before the write. Framing: src/shared/flydigi-xinput.ts, docs/flydigi.md.
  *
- * The one exception: if the pad is in XInput mode, "Read pad" first switches it to
- * DInput by launching scripts/flydigi-xinput-helper.py elevated (UAC prompt). The same helper
- * sets/reads the polling rate, which the pad only exposes in XInput mode. That helper is the
- * only thing that touches Space Station's filter driver.
+ * The one exception is the polling rate, which the pad only exposes in XInput mode: it goes over raw
+ * USB with UsbDk in an elevated helper process (flydigi-usb.ts), or, without UsbDk, through Space
+ * Station's filter driver (scripts/flydigi-xinput-helper.py). A pad in XInput mode is switched to
+ * DInput with its own combo (FN + D-pad Left), not by the app.
  */
 import { app } from 'electron'
 import HIDModule, { type HID as HIDInstance } from 'node-hid'
@@ -193,26 +193,13 @@ async function waitFor(cond: () => boolean, ms: number): Promise<boolean> {
   return cond()
 }
 
-/** Switch an XInput-mode Direwolf to DInput via the elevated helper, then wait for 04B4:2412. */
-async function switchToDInput(): Promise<void> {
-  await runHelper(['--to-dinput'])
-  if (!(await waitFor(() => dinputPath() !== null, 12000))) {
-    throw new Error('flydigi: the switch was sent but the pad did not appear as 04B4:2412. Unplug and replug it and try again.')
-  }
-}
-
-/** Open the vendor interface, switching the pad into DInput mode first if it is in XInput mode. */
 /**
- * Open the DInput interface. A pad in XInput mode is not switched automatically: the pad has its own
- * combo for that (FN + D-pad Left = DInput, FN + D-pad Right = XInput), which needs nothing installed.
- * Only with `viaDriver` (an explicit choice in the UI) is Space Station's filter driver used for it.
+ * Open the DInput interface. A pad in XInput mode is not switched by the app: the pad has its own combo for that
+ * (FN + D-pad Left = DInput, FN + D-pad Right = XInput), which needs nothing installed.
  */
-async function ensureOpen(viaDriver = false): Promise<void> {
+function ensureOpen(): void {
   if (dinputPath() === null && xinputDirewolfPresent()) {
-    if (!viaDriver) {
-      throw new Error('flydigi: the pad is in XInput mode. Hold FN + D-pad Left on the pad to switch it to DInput, then connect again.')
-    }
-    await switchToDInput()
+    throw new Error('flydigi: the pad is in XInput mode. Hold FN + D-pad Left on the pad to switch it to DInput, then connect again.')
   }
   open()
 }
@@ -295,9 +282,9 @@ function exclusive<T>(fn: () => Promise<T>): Promise<T> {
   return run
 }
 
-export function fxHidRead(cfgId?: number, viaDriver = false): Promise<FxSnapshot> {
+export function fxHidRead(cfgId?: number): Promise<FxSnapshot> {
   return exclusive(async () => {
-    await ensureOpen(viaDriver)
+    ensureOpen()
     const r = await readBlob(cfgId)
     return snapshot(r.cfgId, r.activeCfgId, r.cfgCount, r.blob)
   })
@@ -306,7 +293,7 @@ export function fxHidRead(cfgId?: number, viaDriver = false): Promise<FxSnapshot
 /** Make a config slot the one the pad runs, then read it back to confirm. */
 export function fxHidActivate(cfgId: number): Promise<FxSnapshot> {
   return exclusive(async () => {
-    await ensureOpen()
+    ensureOpen()
     const before = await readBlob(cfgId)
     if (before.activeCfgId !== cfgId) {
       acks = []
@@ -361,7 +348,7 @@ export function fxHidBackups(): FxBackup[] {
 /** Read a config slot (the active one when omitted) and save it as a backup file. */
 export function fxHidBackup(cfgId?: number): Promise<FxBackup> {
   return exclusive(async () => {
-    await ensureOpen()
+    ensureOpen()
     const r = await readBlob(cfgId)
     const name = backupBlob(r.cfgId, r.blob)
     if (!name) throw new Error('flydigi: could not write the backup file')
@@ -412,7 +399,7 @@ async function commit(
 
 export function fxHidWrite(patch: FxPatch): Promise<{ verified: boolean; restored: boolean; saved: boolean; changedPacks: number }> {
   return exclusive(async () => {
-    await ensureOpen()
+    ensureOpen()
     const { cfgId, activeCfgId, blob: before } = await readBlob(patch.cfgId)
     backupBlob(cfgId, before)
 
@@ -442,7 +429,7 @@ export function fxHidRestore(name: string, save: boolean): Promise<{ verified: b
     const cfgId = Number(m[1])
     const want = new Uint8Array(readFileSync(join(backupDir(), name)))
     if (want.length !== FX_BLOB_LEN) throw new Error(`flydigi: backup is ${want.length} bytes, expected ${FX_BLOB_LEN}`)
-    await ensureOpen()
+    ensureOpen()
     const { activeCfgId, cfgCount, blob: before } = await readBlob(cfgId)
     if (cfgId >= Math.max(cfgCount, 1)) throw new Error(`flydigi: the pad has no config ${cfgId + 1}`)
     if (fxDataVersion(want) !== fxDataVersion(before)) throw new Error('flydigi: the backup is from a different config data version than the pad; not restoring it')
