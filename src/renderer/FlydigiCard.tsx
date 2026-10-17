@@ -10,16 +10,17 @@ export function FlydigiCard(props: {
   /** Raw get-info reply from the pad, shown while the battery byte is still unconfirmed. */
   probeHex?: string | null
   onConnect: () => void
+  /** XInput mode only: switch through Space Station's driver instead of the pad's FN + D-pad Left combo. */
+  onDriverSwitch?: () => void
 }): JSX.Element {
-  const { mode, busy, batteryPercent = null, charging = false, probeHex = null, onConnect } = props
+  const { mode, busy, batteryPercent = null, charging = false, probeHex = null, onConnect, onDriverSwitch } = props
+  const xinput = mode === 'XInput'
   const pct = batteryPercent === null ? null : Math.max(0, Math.min(100, batteryPercent))
+  const Root = xinput ? 'div' : 'button'
   return (
-    <button
-      type="button"
+    <Root
+      {...(xinput ? { role: 'group' } : { type: 'button' as const, disabled: busy, onClick: onConnect })}
       className="fx-card"
-      disabled={busy}
-      onClick={onConnect}
-      title={mode === 'XInput' ? 'The pad is in XInput mode: connecting switches it to DInput (Windows asks permission once)' : undefined}
     >
       <span className="fx-card-body">
         <span className="fx-card-brand">FLYDIGI<sup>®</sup></span>
@@ -38,10 +39,21 @@ export function FlydigiCard(props: {
           </span>
         </span>
         {pct === null && probeHex && <span className="fx-probe">Reply {probeHex}</span>}
-        <span className="fx-card-cta">
-          <span>{busy ? 'Working' : mode === 'XInput' ? 'Switch and connect' : 'Connect'}</span>
-          <span className="fx-card-arrows" aria-hidden>&gt;&gt;&gt;</span>
-        </span>
+        {xinput ? (
+          <span className="fx-card-cta" style={{ display: 'block' }}>
+            <span style={{ display: 'block' }}>Hold FN + D-pad Left on the pad to switch to DInput. It connects automatically once it switches.</span>
+            {onDriverSwitch && (
+              <button type="button" className="btn ghost sm" style={{ marginTop: 8 }} disabled={busy} onClick={onDriverSwitch} title="Uses Flydigi Space Station's driver (it must be installed but not running); Windows asks for permission once">
+                {busy ? 'Working' : 'Or switch with Space Station’s driver'}
+              </button>
+            )}
+          </span>
+        ) : (
+          <span className="fx-card-cta">
+            <span>{busy ? 'Working' : 'Connect'}</span>
+            <span className="fx-card-arrows" aria-hidden>&gt;&gt;&gt;</span>
+          </span>
+        )}
       </span>
       <span className="fx-card-pic">
         <span className="fx-corner tl" aria-hidden />
@@ -51,6 +63,6 @@ export function FlydigiCard(props: {
         <span className="fx-scan" aria-hidden />
         <img src={direwolf4} alt="Flydigi Direwolf 4 controller" draggable={false} />
       </span>
-    </button>
+    </Root>
   )
 }

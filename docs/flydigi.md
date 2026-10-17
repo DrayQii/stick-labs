@@ -47,15 +47,18 @@ Plain HID only. The pad must be in **DInput mode** (USB `04B4:2412`, vendor inte
 usage page `0xFFA0`) and Flydigi Space Station must be **closed**: launching it switches the
 pad back to XInput (`045E:028E`). No driver, no Space Station DLL and no admin rights are used.
 
-Getting the pad into DInput mode: from XInput mode the only known way is the legacy `A5 17`
-frame sent through Space Station's Xbox 360 filter driver (`XboxComm64.dll`). Stick Labs does
-this on "Read pad" when it finds the pad in XInput mode (USB `045E:028E`, serial
-`FLYDIGI_DIREWOLF_4`): it launches `scripts/flydigi-xinput-helper.py` elevated (one UAC
-prompt), which sends that single frame, then waits for `04B4:2412`. It needs python on PATH
-(or `FLYDIGI_PYTHON`), Space Station installed but not running, and nothing else. The mode then
-survives replugs until Space Station runs again. "Switch to XInput" (`05 ED`, plain HID) puts
-the pad back for games and closes the Direwolf screen. The sections below that mention the
-driver describe how the protocol was first captured; the config traffic itself is plain HID.
+Getting the pad into DInput mode: the pad has a hardware combo, **FN + D-pad Left for DInput and FN + D-pad
+Right for XInput** (found by the maintainer, 2026-10-17). Stick Labs uses that: a pad found in XInput mode
+(USB `045E:028E`, serial `FLYDIGI_DIREWOLF_4`) shows a card asking you to hold FN + D-pad Left, and connects by
+itself when `04B4:2412` appears. Nothing from Flydigi is needed for this. The mode survives replugs until Space
+Station runs again. "Switch to XInput" in the app (`05 ED`, plain HID) puts the pad back for games.
+
+The only piece that still needs Space Station is the optional driver route: the legacy `A5 17` frame sent
+through its Xbox 360 filter driver (`XboxComm64.dll`) via `scripts/flydigi-xinput-helper.py`, run elevated (one
+UAC prompt). The card offers it as "Or switch with Space Station's driver", and the polling rate (only exposed in
+XInput mode) always uses it. It needs python on PATH (or `FLYDIGI_PYTHON`) and Space Station installed but not
+running. The sections below that mention the driver describe how the protocol was first captured; the config
+traffic itself is plain HID.
 
 Where the work stands and what is left is in **Direwolf 4: status and next steps** at the end of this file.
 
@@ -242,8 +245,8 @@ hardware: how the pad responds to a non-linear custom curve (the points are assu
 ## Direwolf 4: status and next steps
 
 ### How it is wired into the app
-- Connect from the sidebar like any pad (the "Flydigi (DInput mode)" candidate, or "Flydigi Direwolf 4 (XInput mode)"
-  when the pad is in XInput mode). `src/renderer/useFlydigi.ts` holds the session state; `FlydigiSections.tsx` renders
+- Connect from the Direwolf card in the "Connect a controller" panel (`FlydigiCard.tsx`, DInput or XInput mode; the
+  sidebar no longer lists it). `src/renderer/useFlydigi.ts` holds the session state; `FlydigiSections.tsx` renders
   the tabs: Sticks (live view, Center/Edge sliders, curve designers), Buttons (remaps and turbo), Device (triggers,
   gyro, vibration, polling rate, pad mode) and Profiles (config slots, save-to-pad, backups). P1..P4 in the top bar
   switch config slots and Write to controller applies every edit. Calibrate and Lab are hidden while it is connected.
@@ -260,34 +263,42 @@ hardware: how the pad responds to a non-linear custom curve (the points are assu
   shows the bytes written, so it pins a field down faster than blob diffs. `scripts/flydigi-blobdiff.mjs` compares two
   backups when the log is not enough.
 
-### Decoded and built, not yet tried on the pad
-These match Space Station's logged bytes in the tests but have not been confirmed on hardware:
-- Turbo editor (Press = 1, Click = 2, frequency; the 1..30 range and the Press/Click behaviour are assumptions).
-- Gyro card (mapping Left/Right, activation key, Press, sensitivity, dead zone, Racer; slider ranges 0..100 are assumed).
+### Verified on the pad (2026-10-16)
+Everything below was decoded from Space Station's logged bytes, matched in the tests, and then tried on a Direwolf 4
+by the maintainer, with no problems reported. The details of what was checked (for example the exact turbo
+frequency range, the gyro slider ranges and which of Press/Click holds or toggles) were not written down, so the
+values still used are the ones in the code: turbo frequency 1..30, gyro sensitivity and dead zone 0..100.
+- Turbo editor (Press = 1, Click = 2, frequency).
+- Gyro card (mapping Left/Right, activation key, Press, sensitivity, dead zone, Racer).
 - Center/Edge model for the curve (-100..100 each; five logged combinations exact, two within 1).
-- Axis defaults for the live view in DInput mode (LX 0, LY 1, RX 2, RY 5, LT axis 3, RT axis 4, inferred from rest values).
-- The curve designer's assumption that the pad interpolates the nine points linearly.
+- Axis defaults for the live view in DInput mode (LX 0, LY 1, RX 2, RY 5, LT axis 3, RT axis 4).
 - Backup and restore, config-slot switching from the top bar, and the integrated connect flow.
+- Linear interpolation of the nine curve points by the pad.
 
 ### Next steps
-1. **Hardware pass** over the list above, in the app: write each setting, read it back, compare with Space Station.
-2. **Gyro, remaining fields.** Mouse mapping (and its X/Y sensitivities), the other enable types, the second activation
+1. **Gyro, remaining fields.** Mouse mapping (and its X/Y sensitivities), the other enable types, the second activation
    key and the smoothing curve (`smoothness` point1/point2/end in the log). Capture with the service log while
    changing one thing at a time in Space Station, plus a backup before and after (`flydigi-blobdiff.mjs`). Whether
    mapping 0 is "off" is also unconfirmed.
-3. **LED / RGB.** Nothing in the logs yet. Change colour, brightness and effect in Space Station one at a time. The
+2. **LED / RGB.** Nothing in the logs yet. Change colour, brightness and effect in Space Station one at a time. The
    undecoded config region is blob 154..770; LED is probably there. If the blob does not change it is a live command
    and needs a wire capture.
-4. **Macros.** Key entry target 32 marks a macro; the macro data is elsewhere in the 154..770 region. Capture one
+3. **Macros.** Key entry target 32 marks a macro; the macro data is elsewhere in the 154..770 region. Capture one
    simple macro and the one after adding a step.
-5. **Trigger vibration**, if Space Station has it for this pad, and the live `CallGripVibration {leftValue, rightValue}`
+4. **Trigger vibration**, if Space Station has it for this pad, and the live `CallGripVibration {leftValue, rightValue}`
    motor test (a button that buzzes the grips).
-6. **Edge cases in the key table.** What a turbo key with a remap target does, and `enableKey2` for gyro.
-7. **Translations** for the Direwolf tabs (the rest of the app has zh, ja and ru).
-8. **Steam export** for the Direwolf curves, as the GameSir side has.
-9. **Firmware and battery readout.** The service log has `GetDeviceDetailInfo`; the old identify code in
-   `src/main/flydigi.ts` already parses a handshake for other Flydigi pads.
-10. **Clean-ups.** The header comment of `FlydigiLiveView.tsx` still describes the old standard-only axis default.
+5. **Edge cases in the key table.** What a turbo key with a remap target does, and `enableKey2` for gyro.
+6. **Translations** for the Direwolf tabs (the rest of the app has zh, ja and ru).
+7. **Steam export** for the Direwolf curves, as the GameSir side has.
+8. **Firmware readout.** The card already shows mode and battery (get-info byte 11, top of the level scale not fully
+   verified). The service log has `GetDeviceDetailInfo` for firmware; the old identify code in `src/main/flydigi.ts`
+   already parses a handshake for other Flydigi pads.
+9. **Clean-ups.** The header comment of `FlydigiLiveView.tsx` still describes the old standard-only axis default.
+
+10. **Polling rate without Space Station.** The mode switch no longer needs it (FN + D-pad combo), but the polling rate is only
+   exposed in XInput mode through its filter driver. A raw USB route (UsbDk, PR #9, did not start under libusb 1.0.30 on
+   the maintainer's machine; WinUSB via Zadig is untested) would remove the last dependency, and needs to confirm that
+   the pad accepts the frames as raw USB writes at all.
 
 ### Not available on this pad
 - Calibration: Space Station has no calibration screen for the Direwolf 4, so there is nothing to copy.

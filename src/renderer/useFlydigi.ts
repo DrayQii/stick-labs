@@ -88,11 +88,11 @@ export function useFlydigi(onLost: () => void) {
   const dirty = !!snap && (sig(vib, left, right, curves, triggers) !== base || motionDiff() !== null || Object.keys(keyEdits).length > 0 || Object.keys(turboEdits).length > 0)
 
   /** Read a slot (the active one when omitted). Returns whether it worked; marks the pad connected on success. */
-  async function load(cfgId?: number): Promise<boolean> {
+  async function load(cfgId?: number, viaDriver = false): Promise<boolean> {
     setBusy(true)
-    setMsg({ kind: 'ok', text: 'Reading the pad… if it is in XInput mode, Windows will ask permission to switch it to DInput (this takes a few seconds).' })
+    setMsg({ kind: 'ok', text: viaDriver ? 'Switching the pad to DInput through Space Station’s driver… Windows will ask for permission (this takes a few seconds).' : 'Reading the pad…' })
     try {
-      adopt(await api().flydigiXRead(cfgId))
+      adopt(await api().flydigiXRead(cfgId, viaDriver))
       setActive(true)
       setMsg({ kind: 'ok', text: cfgId === undefined ? 'Read the active config from the pad.' : `Read config ${cfgId + 1}.` })
       return true
@@ -118,7 +118,7 @@ export function useFlydigi(onLost: () => void) {
 
   async function toXInput(): Promise<void> {
     const ok = window.confirm(
-      'Switch the Direwolf back to XInput mode?\n\nThe pad will disconnect and return as an Xbox 360 controller (for games). Stick Labs cannot configure it again until it is put back in DInput mode.'
+      'Switch the Direwolf back to XInput mode?\n\nThe pad will disconnect and return as an Xbox 360 controller (for games). Stick Labs cannot configure it again until it is put back in DInput mode (hold FN + D-pad Left on the pad).'
     )
     if (!ok) return
     setBusy(true)

@@ -180,8 +180,18 @@ async function switchToDInput(): Promise<void> {
 }
 
 /** Open the vendor interface, switching the pad into DInput mode first if it is in XInput mode. */
-async function ensureOpen(): Promise<void> {
-  if (dinputPath() === null && xinputDirewolfPresent()) await switchToDInput()
+/**
+ * Open the DInput interface. A pad in XInput mode is not switched automatically: the pad has its own
+ * combo for that (FN + D-pad Left = DInput, FN + D-pad Right = XInput), which needs nothing installed.
+ * Only with `viaDriver` (an explicit choice in the UI) is Space Station's filter driver used for it.
+ */
+async function ensureOpen(viaDriver = false): Promise<void> {
+  if (dinputPath() === null && xinputDirewolfPresent()) {
+    if (!viaDriver) {
+      throw new Error('flydigi: the pad is in XInput mode. Hold FN + D-pad Left on the pad to switch it to DInput, then connect again.')
+    }
+    await switchToDInput()
+  }
   open()
 }
 
@@ -263,9 +273,9 @@ function exclusive<T>(fn: () => Promise<T>): Promise<T> {
   return run
 }
 
-export function fxHidRead(cfgId?: number): Promise<FxSnapshot> {
+export function fxHidRead(cfgId?: number, viaDriver = false): Promise<FxSnapshot> {
   return exclusive(async () => {
-    await ensureOpen()
+    await ensureOpen(viaDriver)
     const r = await readBlob(cfgId)
     return snapshot(r.cfgId, r.activeCfgId, r.cfgCount, r.blob)
   })

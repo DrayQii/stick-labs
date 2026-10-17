@@ -79,8 +79,8 @@ interface LabApi {
   deeppoll(vid: number, pid: number, seconds?: number): Promise<DeepPollResult>
   /** Flydigi: read-only identify handshake (model, firmware, connection, battery). */
   flydigiIdentify(path: string): Promise<FdIdentifyResult>
-  /** Flydigi Direwolf 4 (DInput mode, plain HID): read a config slot. Space Station must be closed. */
-  flydigiXRead(cfgId?: number): Promise<FxSnapshot>
+  /** Flydigi Direwolf 4 (DInput mode, plain HID): read a config slot. A pad in XInput mode is only switched through Space Station's driver when `viaDriver` is true. */
+  flydigiXRead(cfgId?: number, viaDriver?: boolean): Promise<FxSnapshot>
   /** Polling rate (code 1/2/4/8 = 1000/500/250/125 Hz; null = just read it). Switches the pad to XInput and back via the elevated helper. */
   flydigiXRate(code: number | null): Promise<{ reportRate: number | null; verified: boolean }>
   /** Which mode the Direwolf is in right now (cheap; no traffic to the pad). */
