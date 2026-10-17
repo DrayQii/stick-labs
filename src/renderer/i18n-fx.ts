@@ -132,6 +132,25 @@ export const FX_STR: Record<string, Row> = {
   'fx.backups.none': { en: 'No backups yet.', zh: '还没有备份。', ja: 'まだバックアップはありません。', ru: 'Резервных копий пока нет.' },
   'fx.backups.restore': { en: 'Restore', zh: '恢复', ja: '復元', ru: 'Восстановить' },
 
+  // --- Steam export ---
+  'fx.steam.title': { en: 'Export to Steam', zh: '导出到 Steam', ja: 'Steam へエクスポート', ru: 'Экспорт в Steam' },
+  'fx.steam.hint': { en: "Writes the stick window from the Sticks tab (Center → Steam's inner deadzone, Edge → its outer deadzone) into Steam Input's controller configs for the games you tick. Steam applies it on top of whatever the pad already does, so use it when you want Steam to do the shaping. Close Steam first: it overwrites configs when it exits. Each game's old file is kept next to it as .sticklabs.bak.", zh: '把“摇杆”页中的摇杆区间（中心 → Steam 的内死区，边缘 → 其外死区）写入您勾选的游戏的 Steam 输入手柄配置。Steam 会在手柄自身处理的基础上再叠加一次，所以只在希望由 Steam 来调整时使用。请先关闭 Steam：它退出时会覆盖配置。每个游戏原有的文件会以 .sticklabs.bak 保存在旁边。', ja: '「スティック」タブのスティック範囲（センター → Steam の内側デッドゾーン、エッジ → 外側デッドゾーン）を、チェックしたゲームの Steam Input コントローラー設定に書き込みます。Steam はパッド自身の処理の上にさらに適用するので、Steam に調整させたいときに使ってください。先に Steam を終了してください。終了時に設定を上書きされます。各ゲームの元のファイルは .sticklabs.bak として隣に残ります。', ru: 'Записывает диапазон стика с вкладки «Стики» (Center → внутренняя мёртвая зона Steam, Edge → внешняя) в конфиги контроллера Steam Input для отмеченных игр. Steam применяет его поверх того, что уже делает сам геймпад, поэтому используйте, когда хотите, чтобы формой занимался Steam. Сначала закройте Steam: при выходе он перезаписывает конфиги. Прежний файл каждой игры сохраняется рядом как .sticklabs.bak.' },
+  'fx.steam.notFound': { en: 'Steam was not found (no userdata folder).', zh: '未找到 Steam（没有 userdata 文件夹）。', ja: 'Steam が見つかりません（userdata フォルダーがありません）。', ru: 'Steam не найден (нет папки userdata).' },
+  'fx.steam.running': { en: 'Steam is running. Close it completely before exporting.', zh: 'Steam 正在运行。导出前请将其完全关闭。', ja: 'Steam が起動中です。エクスポートの前に完全に終了してください。', ru: 'Steam запущен. Полностью закройте его перед экспортом.' },
+  'fx.steam.window': { en: 'inner {i}%, outer {o}%', zh: '内死区 {i}%，外死区 {o}%', ja: '内側 {i}%、外側 {o}%', ru: 'внутр. {i}%, внешн. {o}%' },
+  'fx.steam.antiOn': { en: ', anti-deadzone on', zh: '，反死区开启', ja: '、アンチデッドゾーン オン', ru: ', анти-мёртвая зона включена' },
+  'fx.steam.curve': { en: "Also send a curve exponent {k} (experimental, fitted roughly from the right stick's curve)", zh: '同时发送曲线指数 {k}（实验性，根据右摇杆曲线粗略拟合）', ja: 'カーブ指数 {k} も送る（実験的、右スティックのカーブからおおまかに近似）', ru: 'Также отправить показатель кривой {k} (экспериментально, грубо подобран по кривой правого стика)' },
+  'fx.steam.lost': { en: "Not transferred: the curve shape (unless the experimental option is ticked) and the size of a negative Center offset (Steam only has anti-deadzone on or off).", zh: '不会传递：曲线形状（除非勾选了实验选项）以及负的中心偏移量大小（Steam 只有反死区的开/关）。', ja: '転送されないもの：カーブの形（実験オプションをオンにした場合を除く）と、負のセンターオフセットの大きさ（Steam にはアンチデッドゾーンのオン/オフしかありません）。', ru: 'Не переносится: форма кривой (если не отмечена экспериментальная опция) и величина отрицательного смещения Center (в Steam анти-мёртвая зона только включается или выключается).' },
+  'fx.steam.lostNow': { en: 'A negative Edge (lower maximum output) is also not transferred.', zh: '负的边缘值（降低最大输出）同样不会传递。', ja: '負のエッジ（最大出力を下げる）も転送されません。', ru: 'Отрицательный Edge (сниженный максимальный выход) тоже не переносится.' },
+  'fx.steam.games': { en: 'Games ({n} installed)', zh: '游戏（已安装 {n} 个）', ja: 'ゲーム（{n} 本インストール済み）', ru: 'Игры (установлено: {n})' },
+  'fx.steam.search': { en: 'Search…', zh: '搜索…', ja: '検索…', ru: 'Поиск…' },
+  'fx.steam.none': { en: 'None', zh: '全不选', ja: 'すべて解除', ru: 'Снять все' },
+  'fx.steam.refresh': { en: 'Refresh', zh: '刷新', ja: '更新', ru: 'Обновить' },
+  'fx.steam.noGames': { en: 'No installed games found.', zh: '没有找到已安装的游戏。', ja: 'インストール済みのゲームが見つかりません。', ru: 'Установленных игр не найдено.' },
+  'fx.steam.export': { en: 'Export to {n} selected', zh: '导出到已选的 {n} 个', ja: '選択した {n} 本にエクスポート', ru: 'Экспорт в выбранные ({n})' },
+  'fx.steam.exporting': { en: 'Exporting…', zh: '正在导出…', ja: 'エクスポート中…', ru: 'Экспортирую…' },
+  'fx.steam.done': { en: 'Exported to {ok} of {n} games.', zh: '已导出到 {n} 个游戏中的 {ok} 个。', ja: '{n} 本中 {ok} 本にエクスポートしました。', ru: 'Экспортировано в игр: {ok} из {n}.' },
+
   // --- messages and dialogs (useFlydigi) ---
   'fx.err.xinputMode': { en: 'The pad is in XInput mode. Hold FN + D-pad Left on the pad to switch it to DInput, then connect again.', zh: '手柄处于 XInput 模式。请在手柄上按住 FN + 十字键左键切换到 DInput，然后重新连接。', ja: 'パッドは XInput モードです。パッドの FN + 十字キー左を押し続けて DInput に切り替えてから、もう一度接続してください。', ru: 'Геймпад в режиме XInput. Удерживайте на геймпаде FN + D-pad влево, чтобы переключить его в DInput, затем подключитесь снова.' },
   'fx.msg.reading': { en: 'Reading the pad…', zh: '正在读取手柄…', ja: 'パッドを読み取り中…', ru: 'Читаю геймпад…' },

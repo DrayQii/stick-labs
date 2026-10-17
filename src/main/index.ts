@@ -272,6 +272,15 @@ handle('steam:exportAll', (left: { begin: number; end: number }, right: { begin:
   const games = listInstalledGames()
   return { games: listInstalledGames(), result: exportDeadzonesToGames(left, right, games, mouseRate ?? null, curveExp ?? null) }
 })
+handle('steam:exportSelected', (left: { begin: number; end: number; anti?: number }, right: { begin: number; end: number; anti?: number }, appIds: number[], curveExp?: number | null) => {
+  const pct = (v: unknown): boolean => typeof v === 'number' && Number.isFinite(v) && v >= 0 && v <= 100
+  if (![left?.begin, left?.end, right?.begin, right?.end].every(pct)) throw new Error('steam: deadzone windows must be 0..100')
+  if (!Array.isArray(appIds) || appIds.length === 0 || !appIds.every((id) => Number.isInteger(id) && id > 0)) throw new Error('steam: pick at least one game')
+  const wanted = new Set(appIds)
+  const games = listInstalledGames().filter((g) => wanted.has(g.appId))
+  if (games.length === 0) throw new Error('steam: none of the chosen games is installed')
+  return { result: exportDeadzonesToGames(left, right, games, null, curveExp ?? null) }
+})
 handle('diag:ping', async (count: number) => {
   const n = Math.max(1, Math.min(50, count))
   const samples: number[] = []

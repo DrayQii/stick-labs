@@ -7,6 +7,7 @@ import FlydigiCurveDesigner from './FlydigiCurveDesigner'
 import { useT } from './i18n'
 import { fxFmt } from './i18n-fx'
 import FlydigiLiveView from './FlydigiLiveView'
+import FlydigiSteam from './FlydigiSteam'
 import type { Flydigi } from './useFlydigi'
 
 function Num(props: { label: string; value: number; min: number; max: number; onChange: (v: number) => void }): JSX.Element {
@@ -372,6 +373,7 @@ export function FxProfiles({ fx }: { fx: Flydigi }): JSX.Element | null {
             )}
           </div>
 
+      <FlydigiSteam fx={fx} />
     </>
   )
 }

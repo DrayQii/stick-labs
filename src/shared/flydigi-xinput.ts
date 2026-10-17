@@ -344,6 +344,18 @@ export function fxDeadzonePoints(c: number, e = 0): number[] {
 }
 
 /**
+ * Steam Input stick window for a pad's Center / Edge sliders (each -100..100): a positive Center is a deadzone
+ * (Steam's inner deadzone), a positive Edge reaches full output early (Steam's outer deadzone, 100 - edge).
+ * A negative Center is an output offset, which Steam only has as an anti-deadzone on/off flag, and a negative
+ * Edge (lower maximum output) has no Steam equivalent, so those two are flagged as not fully transferred.
+ */
+export function fxSteamWindow(center: number, edge: number): { begin: number; end: number; anti: number; edgeLost: boolean } {
+  const c = Math.max(-100, Math.min(100, center))
+  const e = Math.max(-100, Math.min(100, edge))
+  return { begin: c > 0 ? c : 0, end: e > 0 ? 100 - e : 100, anti: c < 0 ? -c : 0, edgeLost: e < 0 }
+}
+
+/**
  * Curve values are bytes where 50 is 0% output and 150 is 100% (the stock ramp runs 50..150, and a
  * deadzone pushes the low points below 50, which the pad clamps to 0%). The nine points sit at evenly
  * spaced input positions (0, 12.5 … 100%): Space Station's deadzone writes are linear in the index.
