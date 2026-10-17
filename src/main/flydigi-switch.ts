@@ -30,10 +30,22 @@ export function fxXInputPresent(): boolean {
   }
 }
 
-/** Which mode the Direwolf is in right now. */
+let scansPaused = false
+let lastMode: 'dinput' | 'xinput' | 'none' = 'none'
+
+/**
+ * Pause the background mode checks (listing HID devices opens each one briefly, which can make UsbDk's take-over of
+ * the pad fail). While paused, fxPadMode returns the last mode seen.
+ */
+export function fxPauseScans(on: boolean): void {
+  scansPaused = on
+}
+
+/** Which mode the Direwolf is in right now (the last one seen while scans are paused). */
 export function fxPadMode(): 'dinput' | 'xinput' | 'none' {
-  if (fxDinputPath()) return 'dinput'
-  return fxXInputPresent() ? 'xinput' : 'none'
+  if (scansPaused) return lastMode
+  lastMode = fxDinputPath() ? 'dinput' : fxXInputPresent() ? 'xinput' : 'none'
+  return lastMode
 }
 
 /**

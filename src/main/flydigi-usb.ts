@@ -83,7 +83,12 @@ async function openPad(waitMs: number): Promise<Pad> {
       } catch (e) {
         try { dev.close() } catch { /* not open */ }
         const msg = (e as Error).message ?? ''
-        // UsbDk's StartRedirect needs administrator rights and reports a refusal as LIBUSB_ERROR_OTHER on open.
+        // UsbDk's StartRedirect reports a refusal as LIBUSB_ERROR_OTHER on open: no administrator rights, or another
+        // program has the pad open for a moment (a device scan). Retry until the deadline, then give up.
+        if (/opening the pad|ACCESS|NOT_SUPPORTED|BUSY/i.test(msg) && Date.now() < end) {
+          await sleep(500)
+          continue
+        }
         if (/opening the pad|ACCESS|NOT_SUPPORTED|BUSY/i.test(msg)) {
           throw new FxUsbAccessError(`flydigi: UsbDk could not open the pad (${msg}). It needs administrator rights, and Space Station, the Xbox app and games must not hold the pad.`)
         }
@@ -119,22 +124,28 @@ const write = (p: Pad, cmd: number, ...args: number[]): Promise<void> =>
     p.outEp.transfer(frame, (err?: Error) => (err ? reject(new Error(`flydigi: writing to the pad failed (${err.message}, errno ${(err as Error & { errno?: number }).errno})`)) : resolve()))
   })
 
-async function readRate(p: Pad): Promise<number> {
+/** The settings reply: rate code (byte 22) and the pad settings block (bytes 17..27, docs/flydigi.md). */
+interface RateRead {
+  rate: number
+  status: number[]
+}
+
+async function readRate(p: Pad): Promise<RateRead> {
   // The pad streams input non-stop; skip what is queued, but never wait for it to run dry.
   for (const end = Date.now() + 400; Date.now() < end; ) if (!(await readOnce(p).catch(() => null))) break
   await write(p, 0x50, 0x07)
   for (const end = Date.now() + 3000; Date.now() < end; ) {
     const d = await readOnce(p)
-    if (d && d.length >= 23 && d[14] === 0xa5 && d[15] === 0x50 && d[16] === 0x07) return d[22]
+    if (d && d.length >= 28 && d[14] === 0xa5 && d[15] === 0x50 && d[16] === 0x07) return { rate: d[22], status: Array.from(d.subarray(17, 28)) }
   }
   throw new Error('flydigi: the pad did not answer the settings read.')
 }
 
 /**
- * Read the stored polling-rate code. Right after a mode switch or a rate change the pad is still re-enumerating and
+ * Read the stored polling-rate code and the pad settings block. Right after a mode switch or a rate change the pad is still re-enumerating and
  * its endpoints answer with transfer errors, so a failed attempt is retried with a fresh open for up to ~15 s.
  */
-export async function fxUsbReadRate(): Promise<number> {
+export async function fxUsbReadRate(): Promise<RateRead> {
   let last: Error = new Error('flydigi: the pad did not answer the settings read.')
   for (const end = Date.now() + 15000; Date.now() < end; ) {
     let p: Pad | null = null
@@ -163,8 +174,21 @@ export async function fxUsbSendRate(code: number): Promise<void> {
   }
 }
 
+/** Send settings frames (`[cmd, sub, val]` each) in one open, a little apart. No read-back here: that runs in its own process. */
+export async function fxUsbSendSettings(frames: number[][]): Promise<void> {
+  const p = await openPad(12000)
+  try {
+    for (const [cmd, ...args] of frames) {
+      await write(p, cmd, ...args)
+      await sleep(300)
+    }
+  } finally {
+    closePad(p)
+  }
+}
+
 /** Run flydigi-usb-run.js in its own process (this executable as node) and return what it wrote. */
-export async function runChild(args: string[]): Promise<{ ok: boolean; error?: string; reportRate?: number | null }> {
+export async function runChild(args: string[]): Promise<{ ok: boolean; error?: string; reportRate?: number | null; status?: number[] | null }> {
   const out = join(tmpdir(), `flydigi-usb-child-${Date.now()}.json`)
   // the bundler may inline this file into the runner (same folder) or put it in chunks/ (one level down)
   const script = [join(__dirname, 'flydigi-usb-run.js'), join(__dirname, '..', 'flydigi-usb-run.js')].find((f) => existsSync(f)) ?? join(__dirname, 'flydigi-usb-run.js')

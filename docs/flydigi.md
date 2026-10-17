@@ -395,7 +395,23 @@ Status reply: XInput (`A5 50 07`) bytes 17..27 = mapping switch (0 = on), stick 
 (0 = on), sleep minutes, quick switch (1 = on), report rate (the byte already used here), precision, sensitivity,
 rebound (0 = on), circle (1 = on), dock smart stop. DInput (`05 F2 03`): Space Station also has a nine-field reader,
 but the Direwolf 4 answers the short form (its ReadAutoSleepPeriod reader), verified on the pad: `04 FF F0 F2 03 0f 01
-00 ...` = sleep 15 min, quick config switch on, nothing else. So the polling rate is only readable in XInput mode. Space Station marks rebound, auto-calibration, debounces, quick switch and the Xbox home button as available
+00 ...` = sleep 15 min, quick config switch on, nothing else. So the polling rate is only readable in XInput mode.
+
+The Device tab's **Pad settings** card uses these: sleep time and quick switch are read on connect and set with the
+DInput commands, then read back with `05 F2 03`. The pad **ignores** the DInput forms of stick debounce /
+auto-calibration / rebound (tested: auto-calibration off over DInput, the XInput read still said on), so those and gyro
+debounce are staged in the card and sent together by **Apply stick settings**: switch to XInput, one elevated UsbDk
+helper (`--settings 50:09:01,...`) writes the `A5 cmd sub val` frames in one child process, reads the settings reply
+back in another (bytes 17..27, `fxDecodeXStatus`) and switches back to DInput in a third. Gyro debounce is not in the
+reply, so it stays marked "sent". "Check current" under Polling rate reads the same block.
+
+What they do, from Space Station's own help texts (`locales/en/translation.json`, paraphrased in the card's
+tooltips): sleep = sleep after that long unused, Home wakes (UI offers never / 1 / 5 / 15 min / 1 h / 3 h); quick
+switch = FN + A/B/X/Y selects config 1..4; stick debounce = anti-jitter filter, off makes tiny movements register but
+the output wobbles at rest, and auto-calibration needs it on; auto-calibration = re-learns the centre while the stick
+rests; rebound = filters the overshoot past centre when a stick springs back. Gyro debounce has no text (presumably the
+gyro version of debounce). Space Station also warns that turning on gyro mapping (and "special" key mapping) lowers
+the pad's polling rate. Space Station marks rebound, auto-calibration, debounces, quick switch and the Xbox home button as available
 on the Direwolf 4 (`fp4`).
 
 
