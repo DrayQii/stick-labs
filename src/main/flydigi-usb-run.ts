@@ -8,7 +8,7 @@ import { fxUsbReadRate, fxUsbSendRate, fxUsbSetRate, fxUsbSwitchToDInput, runChi
 
 const arg = (n: string): string | null => (process.argv.includes(n) ? (process.argv[process.argv.indexOf(n) + 1] ?? '') : null)
 const out = arg('--out')
-const result: { ok: boolean; error: string | null; reportRate: number | null } = { ok: false, error: null, reportRate: null }
+const result: { ok: boolean; error: string | null; reportRate: number | null; status: number[] | null } = { ok: false, error: null, reportRate: null, status: null }
 
 async function main(): Promise<void> {
   const set = arg('--set-rate')
@@ -18,7 +18,11 @@ async function main(): Promise<void> {
   else if (set !== null) result.reportRate = await fxUsbSetRate(Number(set), toDInput)
   else {
     const read = process.argv.includes('--read-rate')
-    if (read) result.reportRate = await fxUsbReadRate()
+    if (read) {
+      const r = await fxUsbReadRate()
+      result.reportRate = r.rate
+      result.status = r.status
+    }
     // one open per process: UsbDk keeps the pad claimed until the process that opened it ends
     if (toDInput && read) {
       const sw = await runChild(['--to-dinput'])

@@ -7,7 +7,7 @@
  * the main process and rolled back on mismatch.
  */
 import { useCallback, useEffect, useState } from 'react'
-import { FX_CURVE_CUSTOM, fxDeadzonePoints, fxHzFromReportRate, type FxCurve, type FxMotion, type FxSnapshot, type FxTriggerRaw, type FxTurbo, type FxVibration } from '@shared/flydigi-xinput'
+import { FX_CURVE_CUSTOM, fxDeadzonePoints, fxHzFromReportRate, type FxCurve, type FxMotion, type FxSnapshot, type FxTriggerRaw, type FxTurbo, type FxSettingKind, type FxVibration } from '@shared/flydigi-xinput'
 import { api } from './api'
 import { fxFmt } from './i18n-fx'
 import { tr, type Lang } from './i18n'
@@ -15,6 +15,14 @@ import { tr, type Lang } from './i18n'
 export type FxMsg = { kind: 'ok' | 'err'; text: string }
 export type FxBackup = { name: string; cfgId: number; time: string }
 export type FxMode = 'dinput' | 'xinput' | 'none'
+export interface PadSettings {
+  sleepMinutes?: number
+  quickSwitchOn?: boolean
+  stickDebounceOn?: boolean
+  autoCalibrationOn?: boolean
+  reboundOn?: boolean
+  gyroDebounceOn?: boolean
+}
 
 const sc = (b: number): number => (b > 127 ? b - 256 : b)
 const sig = (vib: FxVibration | null, l: number, r: number, c: { left: FxCurve; right: FxCurve } | null, t: { left: FxTriggerRaw; right: FxTriggerRaw } | null): string =>
@@ -45,6 +53,9 @@ export function useFlydigi(onLost: () => void, lang: Lang) {
   const [msg, setMsg] = useState<FxMsg | null>(null)
   const [backups, setBackups] = useState<FxBackup[]>([])
   const [leaveXInput, setLeaveXInputState] = useState(true)
+  // Pad settings. undefined = not read yet. `sentOnly` = toggles changed here that the pad cannot report in DInput mode.
+  const [settings, setSettings] = useState<PadSettings>({})
+  const [sentOnly, setSentOnly] = useState<FxSettingKind[]>([])
 
   useEffect(() => {
     api()
@@ -125,6 +136,10 @@ export function useFlydigi(onLost: () => void, lang: Lang) {
     try {
       adopt(await api().flydigiXRead(cfgId))
       setActive(true)
+      api()
+        .flydigiXStatus()
+        .then((st) => st && setSettings((s) => ({ ...s, sleepMinutes: st.sleepMinutes, quickSwitchOn: st.quickSwitchOn })))
+        .catch(() => undefined)
       setMsg({ kind: 'ok', text: cfgId === undefined ? t('fx.msg.readActive') : t('fx.msg.readConfig', { n: cfgId + 1 }) })
       return true
     } catch (e) {
@@ -145,6 +160,8 @@ export function useFlydigi(onLost: () => void, lang: Lang) {
     setKeyEdits({})
     setTurboEdits({})
     setMsg(null)
+    setSettings({})
+    setSentOnly([])
   }
 
   async function toXInput(): Promise<void> {
@@ -178,12 +195,40 @@ export function useFlydigi(onLost: () => void, lang: Lang) {
     try {
       const r = await api().flydigiXRate(code)
       setRate(r.reportRate)
+      if (r.settings) {
+        const x = r.settings
+        setSettings((s) => ({ ...s, sleepMinutes: x.sleepMinutes, quickSwitchOn: x.quickSwitchOn, stickDebounceOn: x.stickDebounceOn, autoCalibrationOn: x.autoCalibrationOn, reboundOn: x.reboundOn }))
+        setSentOnly((k) => k.filter((x) => x === 'gyroDebounce'))
+      }
       const hz = fxHzFromReportRate(r.reportRate)
       setMsg(
         r.verified
           ? { kind: 'ok', text: code === null ? t('fx.msg.rateIs', { hz: hz ?? t('fx.msg.rateUnknown') }) : t('fx.msg.rateSet', { hz: hz ?? '?' }) }
           : { kind: 'err', text: t('fx.msg.rateNotConfirmed') }
       )
+    } catch (e) {
+      setMsg({ kind: 'err', text: errText(e) })
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  /** Change one pad setting (plain HID). Sleep and quick switch are read back; the toggles are marked "sent". */
+  async function setting(kind: FxSettingKind, value: number | boolean): Promise<void> {
+    setBusy(true)
+    setMsg(null)
+    try {
+      const st = await api().flydigiXSetting(kind, value)
+      if (kind === 'sleep' || kind === 'quickSwitch') {
+        if (st) setSettings((s) => ({ ...s, sleepMinutes: st.sleepMinutes, quickSwitchOn: st.quickSwitchOn }))
+        const ok = st && (kind === 'sleep' ? st.sleepMinutes === value : st.quickSwitchOn === value)
+        setMsg(ok ? { kind: 'ok', text: t('fx.settings.saved') } : { kind: 'err', text: t('fx.settings.notConfirmed') })
+      } else {
+        const key = ({ stickDebounce: 'stickDebounceOn', autoCalibration: 'autoCalibrationOn', rebound: 'reboundOn', gyroDebounce: 'gyroDebounceOn' } as const)[kind]
+        setSettings((s) => ({ ...s, [key]: Boolean(value) }))
+        setSentOnly((k) => (k.includes(kind) ? k : [...k, kind]))
+        setMsg({ kind: 'ok', text: t('fx.settings.sent') })
+      }
     } catch (e) {
       setMsg({ kind: 'err', text: errText(e) })
     } finally {
@@ -304,7 +349,7 @@ export function useFlydigi(onLost: () => void, lang: Lang) {
   return {
     sc, active, snap, vib, setVib, motion, setMotion, left, right, keyEdits, setKeyEdits, turboEdits, setTurboEdits, triggers, setTriggers, curves, setCurves,
     save, setSave, busy, rate, mode, msg, setMsg, backups, dirty,
-    load, disconnect, leave, leaveXInput, setLeaveXInput, toXInput, pollingRate, activate, selectSlot, backupNow, restore, apply, setDeadzone, setEdge, setMotor
+    load, disconnect, leave, leaveXInput, setLeaveXInput, settings, sentOnly, setting, toXInput, pollingRate, activate, selectSlot, backupNow, restore, apply, setDeadzone, setEdge, setMotor
   }
 }
 

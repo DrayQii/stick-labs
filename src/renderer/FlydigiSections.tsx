@@ -216,7 +216,7 @@ export function FxButtons({ fx }: { fx: Flydigi }): JSX.Element | null {
 
 export function FxDevice({ fx, info }: { fx: Flydigi; info?: FdV1Info | null }): JSX.Element | null {
   const t = useT()
-  const { snap, vib, setVib, setMotor, triggers, setTriggers, motion, setMotion, busy, rate, mode, pollingRate, toXInput, leaveXInput, setLeaveXInput } = fx
+  const { snap, vib, setVib, setMotor, triggers, setTriggers, motion, setMotion, busy, rate, mode, pollingRate, toXInput, leaveXInput, setLeaveXInput, settings, sentOnly, setting } = fx
   if (!snap || !vib || !triggers || !motion) return null
   const setGyro = (p: Partial<FxMotion>): void => setMotion({ ...motion, ...p })
   return (
@@ -322,6 +322,59 @@ export function FxDevice({ fx, info }: { fx: Flydigi; info?: FdV1Info | null }):
             </button>
             <span className="mono" style={{ alignSelf: 'center' }}>{rate === null ? t('fx.poll.notChecked') : `${fxHzFromReportRate(rate) ?? '?'} Hz`}</span>
           </div>
+          </div>
+
+          <div className="card" style={{ marginTop: 16 }}>
+            <h3>{t('fx.settings.title')}</h3>
+            <div className="hint" style={{ margin: '4px 0 8px' }}>
+              {t('fx.settings.hint')}
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(230px, 1fr))', gap: 10 }}>
+              <label style={{ display: 'block' }}>
+                <span className="label">{t('fx.settings.sleep')}</span>
+                <select
+                  className="input"
+                  style={{ width: '100%' }}
+                  disabled={busy}
+                  value={settings.sleepMinutes ?? ''}
+                  onChange={(e) => void setting('sleep', Number(e.target.value))}
+                >
+                  {settings.sleepMinutes === undefined && <option value="">{t('fx.settings.notRead')}</option>}
+                  {[0, 1, 5, 15, 30, 60].map((m) => (
+                    <option key={m} value={m}>
+                      {m === 0 ? t('fx.settings.never') : fxFmt(t('fx.settings.minutes'), { n: m })}
+                    </option>
+                  ))}
+                  {settings.sleepMinutes !== undefined && ![0, 1, 5, 15, 30, 60].includes(settings.sleepMinutes) && (
+                    <option value={settings.sleepMinutes}>{fxFmt(t('fx.settings.minutes'), { n: settings.sleepMinutes })}</option>
+                  )}
+                </select>
+              </label>
+              {(
+                [
+                  ['quickSwitch', 'quickSwitchOn', 'fx.settings.quickSwitch'],
+                  ['stickDebounce', 'stickDebounceOn', 'fx.settings.stickDebounce'],
+                  ['autoCalibration', 'autoCalibrationOn', 'fx.settings.autoCalibration'],
+                  ['rebound', 'reboundOn', 'fx.settings.rebound'],
+                  ['gyroDebounce', 'gyroDebounceOn', 'fx.settings.gyroDebounce']
+                ] as const
+              ).map(([kind, key, label]) => {
+                const v = settings[key]
+                return (
+                  <label key={kind} style={{ display: 'block' }}>
+                    <span className="row spread">
+                      <span className="label">{t(label)}</span>
+                      {sentOnly.includes(kind) && <span className="mono" title={t('fx.settings.sentTip')}>{t('fx.settings.sentTag')}</span>}
+                    </span>
+                    <select className="input" style={{ width: '100%' }} disabled={busy} value={v === undefined ? '' : v ? 'on' : 'off'} onChange={(e) => void setting(kind, e.target.value === 'on')}>
+                      {v === undefined && <option value="">{t('fx.settings.notRead')}</option>}
+                      <option value="on">{t('fx.settings.on')}</option>
+                      <option value="off">{t('fx.settings.off')}</option>
+                    </select>
+                  </label>
+                )
+              })}
+            </div>
           </div>
 
           <div className="card" style={{ marginTop: 16 }}>

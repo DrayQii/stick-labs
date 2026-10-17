@@ -17,6 +17,8 @@ import {
   fxCurveRawToPercent,
   fxDeadzonePoints,
   fxFromDInput,
+  fxDInputSetting,
+  fxDecodeXStatus,
   fxParseDInputLive,
   fxDecodeStatus,
   fxDInputReadStatus,
@@ -278,6 +280,15 @@ check(
 )
 check('live report: pressed key ids (M1 = 18, Home = 27)', !!busy && busy.ids.includes(18) && busy.ids.includes(27) && busy.ids.includes(4) && busy.ids.length === 8)
 check('config reply is not a live report', fxParseDInputLive(h2('04 ff f0 50 00 01 02 03 04 05 06 07 08 09 0a eb 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00')) === null)
+
+// Pad settings: DInput setting frames (Space Station's commands) and the XInput settings block (bytes 17..27).
+check('sleep frame 05 F2 02 0F', hex(fxDInputSetting('sleep', 15).subarray(0, 4)) === '05 f2 02 0f')
+check('quick switch on 05 FA A2 01', hex(fxDInputSetting('quickSwitch', true).subarray(0, 4)) === '05 fa a2 01')
+check('auto-calibration off 05 50 09 01', hex(fxDInputSetting('autoCalibration', false).subarray(0, 4)) === '05 50 09 01')
+check('rebound on 05 50 0E 00', hex(fxDInputSetting('rebound', true).subarray(0, 4)) === '05 50 0e 00')
+check('gyro debounce on 05 F5 06 00', hex(fxDInputSetting('gyroDebounce', true).subarray(0, 4)) === '05 f5 06 00')
+const xs = fxDecodeXStatus([0, 1, 0, 15, 1, 1, 0, 17, 0, 0, 0])
+check('XInput settings block decodes', xs.mappingSwitchOn && !xs.stickDebounceOn && xs.autoCalibrationOn && xs.sleepMinutes === 15 && xs.quickSwitchOn && xs.reportRate === 1 && xs.reboundOn)
 
 if (failures > 0) {
   console.error(`\n${failures} failure(s)`)

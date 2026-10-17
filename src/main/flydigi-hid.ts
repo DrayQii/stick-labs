@@ -38,8 +38,10 @@ import {
   fxDecodeTriggers,
   fxDecodeVibration,
   fxDInputReadStatus,
+  fxDInputSetting,
   fxDInputSwitchToXInput,
   fxDecodeStatus,
+  fxDecodeXStatus,
   FXD_CMD_STATUS,
   fxDiffPacks,
   fxEncodeVibration,
@@ -60,6 +62,8 @@ import {
   type FxAck,
   type FxLive,
   type FxPadStatus,
+  type FxPadSettings,
+  type FxSettingKind,
   type FxPatch,
   type FxSnapshot
 } from '../shared/flydigi-xinput'
@@ -138,7 +142,7 @@ function usbdkInstalled(): boolean {
  * Run `file args…` elevated (UAC prompt) with extra environment variables and return the result file it writes
  * ({ok, error, reportRate}); an elevated process cannot share stdout with its launcher.
  */
-async function runElevated(file: string, args: string[], env: Record<string, string>, declined: string): Promise<{ reportRate: number | null }> {
+async function runElevated(file: string, args: string[], env: Record<string, string>, declined: string): Promise<{ reportRate: number | null; status: number[] | null }> {
   const out = join(tmpdir(), `flydigi-helper-${Date.now()}.json`)
   const list = [...args, '--out', out].map((a) => psq(`"${a}"`)).join(', ')
   const setEnv = Object.entries(env).map(([k, v]) => `$env:${k}=${psq(v)};`).join(' ')
@@ -148,7 +152,7 @@ async function runElevated(file: string, args: string[], env: Record<string, str
     c.on('error', () => resolve(-1))
     c.on('exit', (n) => resolve(n ?? -1))
   })
-  let parsed: { ok: boolean; error?: string; reportRate?: number | null } | null = null
+  let parsed: { ok: boolean; error?: string; reportRate?: number | null; status?: number[] | null } | null = null
   try {
     if (existsSync(out)) {
       parsed = JSON.parse(readFileSync(out, 'utf8'))
@@ -159,7 +163,7 @@ async function runElevated(file: string, args: string[], env: Record<string, str
   }
   if (parsed && !parsed.ok) throw new Error(`flydigi: ${parsed.error ?? 'the helper reported a failure'}`)
   if (code !== 0 || !parsed) throw new Error(declined)
-  return { reportRate: parsed.reportRate ?? null }
+  return { reportRate: parsed.reportRate ?? null, status: parsed.status ?? null }
 }
 
 /**
@@ -167,7 +171,7 @@ async function runElevated(file: string, args: string[], env: Record<string, str
  * UsbDk only opens the pad for an administrator, and keeps it claimed until the opening process ends, so the work
  * always runs in a separate elevated process: the app's own executable as node (no prompt if the app is elevated).
  */
-async function runHelper(args: string[]): Promise<{ reportRate: number | null }> {
+async function runHelper(args: string[]): Promise<{ reportRate: number | null; status: number[] | null }> {
   if (spaceStationRunning()) {
     throw new Error('flydigi: Flydigi Space Station (or its background service) is running. Close it fully, then try again.')
   }
@@ -467,6 +471,31 @@ export function fxHidStatus(): Promise<FxPadStatus | null> {
   })
 }
 
+/**
+ * Change one pad setting over plain HID (DInput form). The pad does not ack these, so sleep time and quick switch
+ * are read back with the status read; the stick / gyro toggles only show up in the XInput settings read.
+ */
+export function fxHidSetting(kind: FxSettingKind, value: number | boolean): Promise<FxPadStatus | null> {
+  return exclusive(async () => {
+    ensureOpen()
+    try {
+      hid!.write(Array.from(fxDInputSetting(kind, value)))
+    } catch (e) {
+      close()
+      throw new Error(`flydigi: write failed (${(e as Error).message})`)
+    }
+    await sleep(200)
+    acks = acks.filter((a) => a.cmd !== FXD_CMD_STATUS)
+    try {
+      hid!.write(Array.from(fxDInputReadStatus()))
+    } catch {
+      return null
+    }
+    const a = await waitAck(FXD_CMD_STATUS)
+    return a ? fxDecodeStatus(a.data) : null
+  })
+}
+
 export function fxHidSwitchToXInput(): Promise<{ switched: boolean }> {
   return exclusive(async () => ({ switched: await hidSwitchToXInput() }))
 }
@@ -477,7 +506,7 @@ export function fxHidSwitchToXInput(): Promise<{ switched: boolean }> {
  * the filter driver and switches the pad back (A5 17), and this waits for 04B4:2412 to return.
  * Codes: 1 = 1000 Hz, 2 = 500, 4 = 250, 8 = 125.
  */
-export function fxHidPollingRate(code: number | null): Promise<{ reportRate: number | null; verified: boolean }> {
+export function fxHidPollingRate(code: number | null): Promise<{ reportRate: number | null; verified: boolean; settings: FxPadSettings | null }> {
   return exclusive(async () => {
     const wasDInput = dinputPath() !== null
     if (!wasDInput && !xinputDirewolfPresent()) throw new Error('flydigi: Direwolf 4 not found (plug it in via USB).')
@@ -491,7 +520,11 @@ export function fxHidPollingRate(code: number | null): Promise<{ reportRate: num
     if (wasDInput && !(await waitFor(() => dinputPath() !== null, 12000))) {
       throw new Error('flydigi: the rate was applied but the pad did not return to DInput mode. Press Read pad to switch it again.')
     }
-    return { reportRate: r.reportRate, verified: code === null ? r.reportRate !== null : r.reportRate === code }
+    return {
+      reportRate: r.reportRate,
+      verified: code === null ? r.reportRate !== null : r.reportRate === code,
+      settings: r.status && r.status.length >= 11 ? fxDecodeXStatus(r.status) : null
+    }
   })
 }
 

@@ -232,6 +232,70 @@ export function fxDecodeStatus(d: Uint8Array): FxPadStatus {
 }
 
 /**
+ * Pad settings from the XInput settings reply (`A5 50 07`, bytes 17..27 of the 32-byte report; Space Station's
+ * ReadHardwareFunctionStatus). The polling rate is byte 22 of the same reply.
+ */
+export interface FxPadSettings {
+  mappingSwitchOn: boolean
+  stickDebounceOn: boolean
+  autoCalibrationOn: boolean
+  sleepMinutes: number
+  quickSwitchOn: boolean
+  reportRate: number
+  precision: number
+  sensitivity: number
+  reboundOn: boolean
+}
+
+/** Decode bytes 17..27 of the XInput settings reply (pass those 11 bytes). */
+export function fxDecodeXStatus(d: ArrayLike<number>): FxPadSettings {
+  return {
+    mappingSwitchOn: d[0] === 0,
+    stickDebounceOn: d[1] === 0,
+    autoCalibrationOn: d[2] === 0,
+    sleepMinutes: d[3],
+    quickSwitchOn: d[4] === 1,
+    reportRate: d[5],
+    precision: d[6],
+    sensitivity: d[7],
+    reboundOn: d[8] === 0
+  }
+}
+
+/**
+ * Settings the pad takes over plain HID (DInput form, Space Station's setting commands; docs/flydigi.md).
+ * Toggles are sent as 0 = on, 1 = off, except the quick config switch (1 = on).
+ */
+export type FxSettingKind = 'sleep' | 'quickSwitch' | 'stickDebounce' | 'autoCalibration' | 'rebound' | 'gyroDebounce'
+
+export function fxDInputSetting(kind: FxSettingKind, value: number | boolean): Uint8Array {
+  const f = new Uint8Array(FX_FRAME_LEN)
+  f[0] = FXD_REPORT_ID
+  const off = (on: boolean | number): number => (on ? 0 : 1)
+  switch (kind) {
+    case 'sleep':
+      f.set([0xf2, 0x02, Math.max(0, Math.min(255, Math.round(Number(value))))], 1)
+      break
+    case 'quickSwitch':
+      f.set([0xfa, 0xa2, value ? 1 : 0], 1)
+      break
+    case 'stickDebounce':
+      f.set([0x50, 0x08, off(value)], 1)
+      break
+    case 'autoCalibration':
+      f.set([0x50, 0x09, off(value)], 1)
+      break
+    case 'rebound':
+      f.set([0x50, 0x0e, off(value)], 1)
+      break
+    case 'gyroDebounce':
+      f.set([0xf5, 0x06, off(value)], 1)
+      break
+  }
+  return f
+}
+
+/**
  * Live input from the DInput stream (`04 FE …` on the vendor interface, docs/flydigi.md): sticks 0..255 (centre 128),
  * triggers 0..255 and every button, including the back buttons M1..M6 and C / Z that the Gamepad API does not show.
  * Layout from Space Station's OperatorDataParser, verified on the pad (all buttons, sticks, triggers, gyro).

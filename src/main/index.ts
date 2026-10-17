@@ -12,7 +12,7 @@ import { ljReadButtonTable, ljReadMainSnapshot, ljReadSnapshot, ljWriteButtonVer
 import type { LjButtonTarget, LjStickPatch } from '../shared/leadjoy'
 import { fdIdentify } from './flydigi'
 import { fxLeaveEnabled, fxLeaveInit, fxLeaveNoteMode, fxLeaveNow, fxLeaveOnQuit, fxLeaveSetEnabled } from './flydigi-leave'
-import { fxHidOnLive, fxHidStatus, fxHidActivate, fxHidBackup, fxHidBackups, fxHidRestore, fxHidMode, fxHidPollingRate, fxHidRead, fxHidSwitchToXInput, fxHidWrite, fxHidStop } from './flydigi-hid'
+import { fxHidOnLive, fxHidSetting, fxHidStatus, fxHidActivate, fxHidBackup, fxHidBackups, fxHidRestore, fxHidMode, fxHidPollingRate, fxHidRead, fxHidSwitchToXInput, fxHidWrite, fxHidStop } from './flydigi-hid'
 import type { FxLive, FxPatch } from '../shared/flydigi-xinput'
 import { ljButtonWriteRecord } from '../shared/leadjoy'
 import { steamInfo, exportApexDeadzones, listInstalledGames, exportDeadzonesToGames } from './steam'
@@ -154,6 +154,12 @@ handle('flydigix:leaveXInput', () => fxLeaveEnabled())
 handle('flydigix:setLeaveXInput', (on: boolean) => fxLeaveSetEnabled(on === true))
 handle('flydigix:toXInput', () => fxHidSwitchToXInput())
 handle('flydigix:status', () => fxHidStatus())
+const FX_SETTING_KINDS = ['sleep', 'quickSwitch', 'stickDebounce', 'autoCalibration', 'rebound', 'gyroDebounce'] as const
+handle('flydigix:setting', (req: { kind: (typeof FX_SETTING_KINDS)[number]; value: number | boolean }) => {
+  if (!req || !FX_SETTING_KINDS.includes(req.kind)) throw new Error('flydigi: unknown pad setting')
+  if (req.kind === 'sleep' && (!Number.isInteger(req.value) || (req.value as number) < 0 || (req.value as number) > 255)) throw new Error('flydigi: sleep time must be 0..255 minutes')
+  return fxHidSetting(req.kind, req.value)
+})
 // Direwolf live input (all buttons incl. the back buttons), forwarded at most ~30 times a second.
 // The last report of a burst is always sent (trailing timer), so a release is never lost.
 let fxLiveAt = 0
