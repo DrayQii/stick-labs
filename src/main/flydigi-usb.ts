@@ -14,6 +14,18 @@ import { createRequire } from 'module'
 export const FX_USB_VID = 0x045e
 export const FX_USB_PID = 0x028e
 
+/** Run one USB step; a failure says which step it was (libusb's own text is only an error name). */
+function step<T>(what: string, fn: () => T): T {
+  try {
+    return fn()
+  } catch (e) {
+    const err = e as Error & { errno?: number }
+    const wrapped = new Error(`${what}: ${err.message}${err.errno !== undefined ? ` (errno ${err.errno})` : ''}`)
+    wrapped.name = err.name
+    throw wrapped
+  }
+}
+
 const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms))
 
 /** The access errors a non-elevated process gets from UsbDk; the caller retries elevated. */
@@ -49,13 +61,13 @@ async function openPad(waitMs: number): Promise<Pad> {
   const usb = load()
   const end = Date.now() + waitMs
   for (;;) {
-    const dev = usb.findByIds(FX_USB_VID, FX_USB_PID)
+    const dev = step('listing USB devices', () => usb.findByIds(FX_USB_VID, FX_USB_PID))
     if (dev) {
       try {
-        dev.open()
+        step('opening the pad', () => dev.open())
         const iface = dev.interfaces.find((i: any) => i.endpoints.some((e: any) => e.transferType === 3)) // eslint-disable-line @typescript-eslint/no-explicit-any
         if (!iface) throw new Error('flydigi: the pad has no interrupt endpoints; this is not the expected XInput layout.')
-        iface.claim()
+        step('claiming the interface', () => iface.claim())
         const eps = iface.endpoints.filter((e: any) => e.transferType === 3) // eslint-disable-line @typescript-eslint/no-explicit-any
         const inEp = eps.find((e: any) => e.direction === 'in') // eslint-disable-line @typescript-eslint/no-explicit-any
         const outEp = eps.find((e: any) => e.direction === 'out') // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -66,7 +78,7 @@ async function openPad(waitMs: number): Promise<Pad> {
       } catch (e) {
         try { dev.close() } catch { /* not open */ }
         const msg = (e as Error).message ?? ''
-        if (/ACCESS|NOT_SUPPORTED|BUSY/i.test(msg)) {
+        if (/ACCESS|NOT_SUPPORTED|BUSY/i.test(msg) && !/OTHER/i.test(msg)) {
           throw new FxUsbAccessError(`flydigi: UsbDk could not open the pad (${msg}). Close Space Station, the Xbox app and games that use it.`)
         }
         throw e
@@ -85,6 +97,7 @@ function closePad(p: Pad): void {
 const readOnce = (p: Pad): Promise<Buffer | null> =>
   new Promise((resolve, reject) => {
     p.inEp.transfer(64, (err: Error & { errno?: number }, data?: Buffer) => {
+      if (err) err.message = `reading from the pad: ${err.message} (errno ${err.errno})`
       if (!err) return resolve(data ?? null)
       if (/TIMED_OUT|TIMEOUT/i.test(err.message) || err.errno === 2 || err.errno === -7) return resolve(null)
       reject(err)
@@ -97,7 +110,7 @@ const write = (p: Pad, cmd: number, ...args: number[]): Promise<void> =>
     frame[0] = 0xa5
     frame[1] = cmd
     args.forEach((a, i) => (frame[2 + i] = a))
-    p.outEp.transfer(frame, (err?: Error) => (err ? reject(new Error(`flydigi: writing to the pad failed (${err.message})`)) : resolve()))
+    p.outEp.transfer(frame, (err?: Error) => (err ? reject(new Error(`flydigi: writing to the pad failed (${err.message}, errno ${(err as Error & { errno?: number }).errno})`)) : resolve()))
   })
 
 async function readRate(p: Pad): Promise<number> {
