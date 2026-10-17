@@ -1,4 +1,4 @@
-import type { JSX } from 'react'
+import { useState, type JSX } from 'react'
 import direwolf4 from './assets/direwolf4.png'
 import { useT } from './i18n'
 
@@ -17,7 +17,26 @@ export function FlydigiCard(props: {
 }): JSX.Element {
   const { mode, busy, batteryPercent = null, charging = false, probeHex = null, firmware, connection = 'unknown', onConnect } = props
   const t = useT()
+  const [hot, setHot] = useState<'fn' | 'dpad' | null>(null)
   const xinput = mode === 'XInput'
+  // "{fn}" / "{dpad}" in the hint are hover targets: they light that button up on the pad picture.
+  const term = (k: 'fn' | 'dpad'): JSX.Element => (
+    <span
+      key={k}
+      className="fx-term"
+      tabIndex={0}
+      title={t('fx.card.showOnPad')}
+      onMouseEnter={() => setHot(k)}
+      onMouseLeave={() => setHot(null)}
+      onFocus={() => setHot(k)}
+      onBlur={() => setHot(null)}
+    >
+      {t(k === 'fn' ? 'fx.card.fnKey' : 'fx.card.dpadLeft')}
+    </span>
+  )
+  const hint = t('fx.card.xinputHint')
+    .split(/(\{fn\}|\{dpad\})/)
+    .map((part, i) => (part === '{fn}' ? term('fn') : part === '{dpad}' ? term('dpad') : <span key={i}>{part}</span>))
   const pct = batteryPercent === null ? null : Math.max(0, Math.min(100, batteryPercent))
   const Root = xinput ? 'div' : 'button'
   return (
@@ -53,7 +72,7 @@ export function FlydigiCard(props: {
         {pct === null && probeHex && <span className="fx-probe">{t('fx.card.reply')} {probeHex}</span>}
         {xinput ? (
           <span className="fx-card-cta" style={{ display: 'block' }}>
-            <span style={{ display: 'block' }}>{t('fx.card.xinputHint')}</span>
+            <span style={{ display: 'block' }}>{hint}</span>
           </span>
         ) : (
           <span className="fx-card-cta">
@@ -68,7 +87,12 @@ export function FlydigiCard(props: {
         <span className="fx-corner bl" aria-hidden />
         <span className="fx-corner br" aria-hidden />
         <span className="fx-scan" aria-hidden />
-        <img src={direwolf4} alt={t('fx.card.alt')} draggable={false} />
+        <span className="fx-pad">
+          <img src={direwolf4} alt={t('fx.card.alt')} draggable={false} />
+          {/* button spots on the 800x700 photo, in percent: FN is the right one of the two small buttons below the sticks */}
+          <span className="fx-hot fx-hot-fn" data-on={hot === 'fn' || undefined} aria-hidden />
+          <span className="fx-hot fx-hot-dpad" data-on={hot === 'dpad' || undefined} aria-hidden />
+        </span>
       </span>
     </Root>
   )

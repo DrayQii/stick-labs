@@ -18,7 +18,11 @@ export const FX_STR: Record<string, Row> = {
   'fx.card.reply': { en: 'Reply', zh: '回复', ja: '応答', ru: 'Ответ' },
   'fx.card.working': { en: 'Working', zh: '处理中', ja: '処理中', ru: 'Работаю' },
   'fx.card.connect': { en: 'Connect', zh: '连接', ja: '接続', ru: 'Подключить' },
-  'fx.card.xinputHint': { en: 'Hold FN + D-pad Left on the pad to switch to DInput. It connects automatically once it switches.', zh: '在手柄上按住 FN + 十字键左键切换到 DInput。切换完成后会自动连接。', ja: 'パッドの FN + 十字キー左を押し続けて DInput に切り替えます。切り替わると自動で接続します。', ru: 'Удерживайте на геймпаде FN + D-pad влево, чтобы переключить в DInput. После переключения подключение произойдёт автоматически.' },
+  // {fn} and {dpad} become hover targets that light the button up on the pad picture (FlydigiCard).
+  'fx.card.xinputHint': { en: 'Hold {fn} + {dpad} on the pad to switch to DInput. It connects automatically once it switches.', zh: '在手柄上按住 {fn} + {dpad}切换到 DInput。切换完成后会自动连接。', ja: 'パッドの {fn} + {dpad}を押し続けて DInput に切り替えます。切り替わると自動で接続します。', ru: 'Удерживайте на геймпаде {fn} + {dpad}, чтобы переключить в DInput. После переключения подключение произойдёт автоматически.' },
+  'fx.card.fnKey': { en: 'FN', zh: 'FN', ja: 'FN', ru: 'FN' },
+  'fx.card.dpadLeft': { en: 'D-pad Left', zh: '十字键左键', ja: '十字キー左', ru: 'D-pad влево' },
+  'fx.card.showOnPad': { en: 'Hover to see it on the pad', zh: '悬停可在手柄图上查看位置', ja: 'ホバーするとパッド上の位置を表示します', ru: 'Наведите, чтобы увидеть на геймпаде' },
   'fx.card.firmware': { en: 'Firmware', zh: '固件', ja: 'ファームウェア', ru: 'Прошивка' },
   'fx.info.wired': { en: 'wired', zh: '有线', ja: '有線', ru: 'проводное' },
   'fx.info.wireless': { en: 'wireless', zh: '无线', ja: '無線', ru: 'беспроводное' },
