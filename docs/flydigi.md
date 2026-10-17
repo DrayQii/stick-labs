@@ -399,6 +399,28 @@ but the Direwolf 4 answers the short form (its ReadAutoSleepPeriod reader), veri
 on the Direwolf 4 (`fp4`).
 
 
+### Live input stream in DInput mode (`04 FE …`)
+
+The vendor interface already streams the pad's state as reports `04 FE …` (Space Station's DInputProtocol parses
+`data[0] == 0xFE`; its `data[n]` is our report byte n + 1). Layout from its OperatorDataParser, checked against a
+report captured from the pad (centred sticks `81 80 / 80 7e`, triggers 0):
+
+| Report byte | Content |
+|---|---|
+| 5, 6, 7 | gyro X / Y / Z (8-bit; 7 is shared with the button byte below in Space Station's own code, so unconfirmed) |
+| 7 | C (bit 0), Z, M1, M2, M3, M4, M5, M6 (bits 1..7) |
+| 8 | Menu (bit 0), Home (bit 3), Back (bit 4) |
+| 9 | Up, Right, Down, Left, A, B, Select, X (bits 0..7) |
+| 10 | Y, Start, LB, RB, LT, RT, L3, R3 (bits 0..7) |
+| 17, 19 | left stick X, Y (centre 128) |
+| 21, 22 | right stick X, Y |
+| 23, 24 | LT, RT (0..255) |
+
+This is the only place the back buttons (M1..M6) and C / Z show up; the Gamepad API does not report them. Raw
+reporting can also be toggled with `05 F5` (Space Station's EnableRawDataTransportIn, DInput form), but the stream
+already runs without it. Rates: Space Station's `ReportRate` enum is None 0, 1000 = 1, 500 = 2, 250 = 4, 125 = 8,
+nothing faster.
+
 ### Next steps
 1. **Gyro, remaining fields.** Mouse mapping (and its X/Y sensitivities), the other enable types, the second activation
    key and the smoothing curve (`smoothness` point1/point2/end in the log). Capture with the service log while
