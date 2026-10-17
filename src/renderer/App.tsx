@@ -3556,7 +3556,7 @@ export default function App(): JSX.Element {
           {showFxCard && (
             <div className="msg fx-panel">
               {fxDInputCandidates.map((c) => (
-                <FlydigiCard key={c.path} mode="DInput" busy={fx.busy} batteryPercent={fxProbe[c.path]?.batteryPercent ?? null} charging={fxProbe[c.path]?.power === 'charging'} probeHex={fxProbe[c.path]?.rawHex ?? null} onConnect={() => void connect(c.path)} />
+                <FlydigiCard key={c.path} mode="DInput" busy={fx.busy} batteryPercent={fxProbe[c.path]?.batteryPercent ?? null} charging={fxProbe[c.path]?.power === 'charging'} probeHex={fxProbe[c.path]?.rawHex ?? null} firmware={fxProbe[c.path]?.firmwareText ?? null} connection={fxProbe[c.path]?.connection ?? 'unknown'} onConnect={() => void connect(c.path)} />
               ))}
               {fxDInputDetected && <FlydigiCard mode="DInput" busy={fx.busy} onConnect={() => void connectFlydigi(null)} />}
               {fxXInputDetected && <FlydigiCard mode="XInput" busy={fx.busy} onConnect={() => void connectFlydigi(null)} onDriverSwitch={() => void connectFlydigi(null, true)} />}
@@ -4125,7 +4125,7 @@ export default function App(): JSX.Element {
             </>
           )}
           {fx.active && tab === 'sticks' && <FxSticks fx={fx} />}
-          {fx.active && tab === 'device' && <FxDevice fx={fx} />}
+          {fx.active && tab === 'device' && <FxDevice fx={fx} info={connPath ? fxProbe[connPath] ?? null : null} />}
           {fx.active && tab === 'buttons' && <FxButtons fx={fx} />}
           {tab === 'buttons' && connected && profile && (
             <>

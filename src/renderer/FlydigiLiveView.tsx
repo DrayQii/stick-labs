@@ -1,9 +1,9 @@
 /**
  * Live stick / trigger / button view for the Direwolf, read from the system Gamepad API (the same
  * route the LeadJoy view uses): no HID handle is opened, so it can run beside the config session
- * and works in XInput and DInput mode alike. Axes default to the standard mapping (LX LY RX RY, LT/RT
- * as buttons 6/7); a pad in DInput mode reports a different layout, so each control can be pointed at
- * any axis (remembered in localStorage) while the raw axes are shown.
+ * and works in XInput and DInput mode alike. Axes follow the standard mapping (LX LY RX RY, LT/RT as
+ * buttons 6/7) when the pad reports one, else the Direwolf's DInput layout (LX 0, LY 1, RX 2, RY 5, LT/RT
+ * axes 3/4); each control can be pointed at any axis (remembered in localStorage) while the raw axes are shown.
  */
 import { useEffect, useRef, useState } from 'react'
 import { useT } from './i18n'

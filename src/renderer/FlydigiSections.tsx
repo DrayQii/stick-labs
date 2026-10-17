@@ -8,6 +8,7 @@ import { useT } from './i18n'
 import { fxFmt } from './i18n-fx'
 import FlydigiLiveView from './FlydigiLiveView'
 import FlydigiSteam from './FlydigiSteam'
+import type { FdV1Info } from '@shared/flydigi'
 import type { Flydigi } from './useFlydigi'
 
 function Num(props: { label: string; value: number; min: number; max: number; onChange: (v: number) => void }): JSX.Element {
@@ -190,7 +191,7 @@ export function FxButtons({ fx }: { fx: Flydigi }): JSX.Element | null {
   )
 }
 
-export function FxDevice({ fx }: { fx: Flydigi }): JSX.Element | null {
+export function FxDevice({ fx, info }: { fx: Flydigi; info?: FdV1Info | null }): JSX.Element | null {
   const t = useT()
   const { snap, vib, setVib, setMotor, triggers, setTriggers, motion, setMotion, busy, rate, mode, pollingRate, toXInput } = fx
   if (!snap || !vib || !triggers || !motion) return null
@@ -305,6 +306,12 @@ export function FxDevice({ fx }: { fx: Flydigi }): JSX.Element | null {
             <div className="hint" style={{ margin: '4px 0 8px' }}>
               {t('fx.mode.hint')}
             </div>
+            {info && (
+              <div className="mono" style={{ margin: '0 0 8px' }} title={t('fx.info.note')}>
+                {t('fx.card.firmware')} {info.firmwareText}
+                {info.connection !== 'unknown' ? ` · ${t(info.connection === 'wired' ? 'fx.info.wired' : 'fx.info.wireless')}` : ''}
+              </div>
+            )}
             <div className="row" style={{ gap: 8 }}>
               {mode === 'dinput' && (
                 <button className="btn ghost" disabled={busy} onClick={() => void toXInput()}>

@@ -245,6 +245,10 @@ hardware: how the pad responds to a non-linear custom curve (the points are assu
 ## Direwolf 4: status and next steps
 
 ### How it is wired into the app
+- Firmware: the connect card (DInput) and the Device tab's Pad mode card show the raw 16-bit firmware value from the V1
+  get-info reply (`05 EC`, bytes 9..10 little-endian, e.g. `0x7141`) and, for firmware >= 0x6400, wired or wireless
+  (byte 13). It is read once when the pad is found (a second HID handle can't be opened while the config session
+  runs). The value is not mapped to Space Station's own version text, which the logs do not show.
 - Steam export (Profiles tab, `FlydigiSteam.tsx`): writes the stick window into Steam Input's per-game controller configs
   through the existing backend (`src/main/steam.ts`, IPC `steam:exportSelected`, the games you tick, Steam closed, old
   files kept as `.sticklabs.bak`). Mapping (`fxSteamWindow`): Center > 0 -> Steam inner deadzone, Edge > 0 -> outer
@@ -289,23 +293,16 @@ values still used are the ones in the code: turbo frequency 1..30, gyro sensitiv
    key and the smoothing curve (`smoothness` point1/point2/end in the log). Capture with the service log while
    changing one thing at a time in Space Station, plus a backup before and after (`flydigi-blobdiff.mjs`). Whether
    mapping 0 is "off" is also unconfirmed.
-2. **LED / RGB.** Nothing in the logs yet. Change colour, brightness and effect in Space Station one at a time. The
-   undecoded config region is blob 154..770; LED is probably there. If the blob does not change it is a live command
-   and needs a wire capture.
-3. **Macros.** Key entry target 32 marks a macro; the macro data is elsewhere in the 154..770 region. Capture one
+2. **Macros.** Key entry target 32 marks a macro; the macro data is elsewhere in the 154..770 region. Capture one
    simple macro and the one after adding a step.
-4. **Trigger vibration**, if Space Station has it for this pad, and the live `CallGripVibration {leftValue, rightValue}`
+3. **Trigger vibration**, if Space Station has it for this pad, and the live `CallGripVibration {leftValue, rightValue}`
    motor test (a button that buzzes the grips).
-5. **Edge cases in the key table.** What a turbo key with a remap target does, and `enableKey2` for gyro.
-6. **Firmware readout.** The card already shows mode and battery (get-info byte 11, top of the level scale not fully
-   verified). The service log has `GetDeviceDetailInfo` for firmware; the old identify code in `src/main/flydigi.ts`
-   already parses a handshake for other Flydigi pads.
-7. **Clean-ups.** The header comment of `FlydigiLiveView.tsx` still describes the old standard-only axis default.
-
-8. **Polling rate without Space Station.** The mode switch no longer needs it (FN + D-pad combo), but the polling rate is only
+4. **Edge cases in the key table.** What a turbo key with a remap target does, and `enableKey2` for gyro.
+5. **Polling rate without Space Station.** The mode switch no longer needs it (FN + D-pad combo), but the polling rate is only
    exposed in XInput mode through its filter driver. A raw USB route (UsbDk, PR #9, did not start under libusb 1.0.30 on
    the maintainer's machine; WinUSB via Zadig is untested) would remove the last dependency, and needs to confirm that
    the pad accepts the frames as raw USB writes at all.
 
 ### Not available on this pad
+- LED / RGB: Space Station's app has no LED or RGB settings for the Direwolf 4 (maintainer, 2026-10-17), so there is nothing to decode.
 - Calibration: Space Station has no calibration screen for the Direwolf 4, so there is nothing to copy.

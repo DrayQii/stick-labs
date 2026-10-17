@@ -21,6 +21,10 @@ export const FX_STR: Record<string, Row> = {
   'fx.card.xinputHint': { en: 'Hold FN + D-pad Left on the pad to switch to DInput. It connects automatically once it switches.', zh: '在手柄上按住 FN + 十字键左键切换到 DInput。切换完成后会自动连接。', ja: 'パッドの FN + 十字キー左を押し続けて DInput に切り替えます。切り替わると自動で接続します。', ru: 'Удерживайте на геймпаде FN + D-pad влево, чтобы переключить в DInput. После переключения подключение произойдёт автоматически.' },
   'fx.card.driverSwitch': { en: 'Or switch with Space Station’s driver', zh: '或通过 Space Station 的驱动切换', ja: 'または Space Station のドライバーで切り替える', ru: 'Или переключить через драйвер Space Station' },
   'fx.card.driverTip': { en: "Uses Flydigi Space Station's driver (it must be installed but not running); Windows asks for permission once", zh: '使用 Flydigi Space Station 的驱动（需已安装但未运行）；Windows 会请求一次权限', ja: 'Flydigi Space Station のドライバーを使います（インストール済みで、起動していない状態が必要）。Windows が一度許可を求めます', ru: 'Использует драйвер Flydigi Space Station (он должен быть установлен, но не запущен); Windows один раз запросит разрешение' },
+  'fx.card.firmware': { en: 'Firmware', zh: '固件', ja: 'ファームウェア', ru: 'Прошивка' },
+  'fx.info.wired': { en: 'wired', zh: '有线', ja: '有線', ru: 'проводное' },
+  'fx.info.wireless': { en: 'wireless', zh: '无线', ja: '無線', ru: 'беспроводное' },
+  'fx.info.note': { en: "Raw 16-bit firmware value from the pad's get-info reply, read when the pad was found. It is not the version text Space Station shows.", zh: '来自手柄 get-info 回复的原始 16 位固件值，在发现手柄时读取。它不是 Space Station 显示的版本文字。', ja: 'パッドが見つかったときに get-info の応答から読み取った、生の 16 ビットのファームウェア値です。Space Station が表示するバージョン表記ではありません。', ru: 'Необработанное 16-битное значение прошивки из ответа get-info, считанное при обнаружении геймпада. Это не текст версии, который показывает Space Station.' },
   'fx.card.alt': { en: 'Flydigi Direwolf 4 controller', zh: 'Flydigi Direwolf 4 手柄', ja: 'Flydigi Direwolf 4 コントローラー', ru: 'Контроллер Flydigi Direwolf 4' },
 
   // --- top bar ---
