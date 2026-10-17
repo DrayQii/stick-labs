@@ -96,11 +96,11 @@ export function useFlydigi(onLost: () => void, lang: Lang) {
   const dirty = !!snap && (sig(vib, left, right, curves, triggers) !== base || motionDiff() !== null || Object.keys(keyEdits).length > 0 || Object.keys(turboEdits).length > 0)
 
   /** Read a slot (the active one when omitted). Returns whether it worked; marks the pad connected on success. */
-  async function load(cfgId?: number, viaDriver = false): Promise<boolean> {
+  async function load(cfgId?: number): Promise<boolean> {
     setBusy(true)
-    setMsg({ kind: 'ok', text: viaDriver ? t('fx.msg.driverSwitching') : t('fx.msg.reading') })
+    setMsg({ kind: 'ok', text: t('fx.msg.reading') })
     try {
-      adopt(await api().flydigiXRead(cfgId, viaDriver))
+      adopt(await api().flydigiXRead(cfgId))
       setActive(true)
       setMsg({ kind: 'ok', text: cfgId === undefined ? t('fx.msg.readActive') : t('fx.msg.readConfig', { n: cfgId + 1 }) })
       return true

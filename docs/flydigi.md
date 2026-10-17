@@ -53,12 +53,12 @@ Right for XInput** (found by the maintainer, 2026-10-17). Stick Labs uses that: 
 itself when `04B4:2412` appears. Nothing from Flydigi is needed for this. The mode survives replugs until Space
 Station runs again. "Switch to XInput" in the app (`05 ED`, plain HID) puts the pad back for games.
 
-The only piece that still needs Space Station is the optional driver route: the legacy `A5 17` frame sent
-through its Xbox 360 filter driver (`XboxComm64.dll`) via `scripts/flydigi-xinput-helper.py`, run elevated (one
-UAC prompt). The card offers it as "Or switch with Space Station's driver", and the polling rate (only exposed in
-XInput mode) always uses it. It needs python on PATH (or `FLYDIGI_PYTHON`) and Space Station installed but not
-running. The sections below that mention the driver describe how the protocol was first captured; the config
-traffic itself is plain HID.
+Nothing in the app needs Space Station any more. The polling rate (only exposed in XInput mode) goes over raw USB with
+UsbDk (see "Polling rate and mode switch without Space Station" below), one UAC prompt per change. Only when UsbDk is not
+installed does it fall back to the legacy route through Space Station's Xbox 360 filter driver (`XboxComm64.dll`) via
+`scripts/flydigi-xinput-helper.py` (python, Space Station installed but not running). The old "Or switch with Space
+Station's driver" button is gone: FN + D-pad Left does the same. The sections below that mention the driver describe
+how the protocol was first captured; the config traffic itself is plain HID.
 
 Where the work stands and what is left is in **Direwolf 4: status and next steps** at the end of this file.
 
@@ -322,21 +322,33 @@ values still used are the ones in the code: turbo frequency 1..30, gyro sensitiv
 3. **Trigger vibration**, if Space Station has it for this pad, and the live `CallGripVibration {leftValue, rightValue}`
    motor test (a button that buzzes the grips).
 4. **Edge cases in the key table.** What a turbo key with a remap target does, and `enableKey2` for gyro.
-5. **Polling rate without Space Station.** Proven possible over raw USB (see above), but only with WinUSB bound to the pad,
-   which removes its Xbox driver until rolled back. Shipping it needs a safe way to bind and roll back WinUSB (a
-   signed driver package or a guided Zadig step); until then the app keeps Space Station's driver route, and the manual
-   Zadig + script recipe works without it. Check the manual for a polling-rate combo on the pad as well.
+5. ~~**Polling rate without Space Station.**~~ Done: native over UsbDk, verified on the pad (section below).
 
 ### Not available on this pad
 - LED / RGB: Space Station's app has no LED or RGB settings for the Direwolf 4 (maintainer, 2026-10-17), so there is nothing to decode.
 - Calibration: Space Station has no calibration screen for the Direwolf 4, so there is nothing to copy.
 
-## Polling rate and mode switch without Space Station (UsbDk)
+## Polling rate and mode switch without Space Station (UsbDk, native) — verified
 
-`scripts/flydigi-usb-helper.py` does what `flydigi-xinput-helper.py` does (same arguments and result file) over raw USB
-with libusb and the signed UsbDk driver. UsbDk lends the pad to the helper only while it runs, so no driver is replaced
-and Space Station is not involved. Verified on the pad with the probe script: read, set 500 Hz and set 1000 Hz, each
-read back correctly (the pad re-enumerates after a set, so the helper re-reads in a fresh libusb session).
-libusb 1.0.30 needs `libusb_set_option(USE_USBDK)` **after** `libusb_init`; before it always fails.
-The app picks this helper when the `UsbDk` service exists and falls back to Space Station's driver otherwise.
-Needs: UsbDk installed, python, `pip install libusb-package` (or `FLYDIGI_LIBUSB`).
+Verified on the pad from the app: DInput pad, set 500 Hz, then 1000 Hz, each read back correctly, pad back in DInput.
+No Python, no Space Station.
+
+`src/main/flydigi-usb.ts` reads/sets the polling rate and does the XInput -> DInput switch (A5 17) over raw USB with
+node-usb 2.17.0 (bundles libusb 1.0.29) and the signed UsbDk driver. UsbDk lends the pad to the opening process and
+hands it back to the Xbox driver afterwards, so no driver is replaced. libusb is initialised when `usb` loads and
+`useUsbDkBackend()` then sets the option on that context (set before init it always fails).
+
+What the pad and UsbDk need, all found on the pad:
+- **Administrator.** UsbDk's StartRedirect refuses a normal user (libusb reports `LIBUSB_ERROR_OTHER` on open). The app
+  runs `out/main/flydigi-usb-run.js` with its own executable as node (`ELECTRON_RUN_AS_NODE`) through a UAC prompt.
+- **One process per USB step.** UsbDk keeps the pad claimed until the process that opened it ends, and the pad
+  re-enumerates to apply a rate, so a second open in the same process fails. Send, read-back and the DInput switch each
+  run as their own short-lived process; the app never opens the pad itself.
+- **The rate write "fails".** The pad drops off USB to apply the rate, so the write usually ends in
+  `LIBUSB_TRANSFER_ERROR` although it took effect. The read-back (fresh process, 4 s later) decides.
+- **node-usb must be 2.17.x.** From 2.18 its libusb is built with Windows hotplug: the device list comes from a WinUSB
+  scan at start and a later switch to UsbDk never rescans, so the pad is "not visible through UsbDk".
+
+Without UsbDk the app falls back to `scripts/flydigi-xinput-helper.py` (Space Station's driver, needs python). The Python
+probe (`scripts/flydigi-winusb-probe.py --usbdk`) stays as a reference for the frames. Set `FLYDIGI_USB_DEBUG=1` for
+libusb's own log. Manual test (admin shell): `node out/main/flydigi-usb-run.js --set-rate 1 --out r.json`.

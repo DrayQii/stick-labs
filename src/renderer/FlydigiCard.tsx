@@ -14,10 +14,8 @@ export function FlydigiCard(props: {
   firmware?: string | null
   connection?: 'wired' | 'wireless' | 'unknown'
   onConnect: () => void
-  /** XInput mode only: switch through Space Station's driver instead of the pad's FN + D-pad Left combo. */
-  onDriverSwitch?: () => void
 }): JSX.Element {
-  const { mode, busy, batteryPercent = null, charging = false, probeHex = null, firmware, connection = 'unknown', onConnect, onDriverSwitch } = props
+  const { mode, busy, batteryPercent = null, charging = false, probeHex = null, firmware, connection = 'unknown', onConnect } = props
   const t = useT()
   const xinput = mode === 'XInput'
   const pct = batteryPercent === null ? null : Math.max(0, Math.min(100, batteryPercent))
@@ -56,11 +54,6 @@ export function FlydigiCard(props: {
         {xinput ? (
           <span className="fx-card-cta" style={{ display: 'block' }}>
             <span style={{ display: 'block' }}>{t('fx.card.xinputHint')}</span>
-            {onDriverSwitch && (
-              <button type="button" className="btn ghost sm" style={{ marginTop: 8 }} disabled={busy} onClick={onDriverSwitch} title={t('fx.card.driverTip')}>
-                {busy ? t('fx.card.working') : t('fx.card.driverSwitch')}
-              </button>
-            )}
           </span>
         ) : (
           <span className="fx-card-cta">
