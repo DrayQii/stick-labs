@@ -242,6 +242,13 @@ the filter driver route works; the helper waits up to 12 s for the driver to see
 with "the filter driver cannot write to the pad" when started right after the DInput -> XInput switch), and the app
 waits 2.5 s after the pad appears as an Xbox controller.
 
+Raw USB experiments (2026-10-17). UsbDk (PR #9, closed): its own tool lists the pad (a 49-byte configuration
+descriptor), but libusb 1.0.30 (the pip build and the official one) always answered "UsbDk backend not available",
+with the helper DLL on PATH, next to libusb and python.exe, preloaded, in the Windows system folder, and from an
+administrator shell; not resolved. WinUSB: `scripts/flydigi-winusb-probe.py` sends `A5 50 07` / `A5 50 0A <code>` as
+interrupt writes through libusb's WinUSB backend (`--dump` lists the endpoints and sends nothing); it needs WinUSB
+bound to the pad with Zadig, which takes the Xbox driver away until it is rolled back in Device Manager.
+
 Curve designer. The nine curve bytes are output heights at evenly spaced input steps (0, 12.5 … 100%):
 `raw = 50 + percent`, so 50 is 0% and 150 is 100%, and a deadzone writes the low points below 50, which the
 pad clamps to 0% (Space Station's deadzone writes are exactly linear in the point index, which is what pins the
