@@ -156,7 +156,9 @@ export async function fxUsbSetRate(code: number, toDInput: boolean): Promise<num
   if (![1, 2, 4, 8].includes(code)) throw new Error('flydigi: polling-rate code must be 1, 2, 4 or 8')
   const p = await openPad(12000)
   try {
-    await write(p, 0x50, 0x0a, code)
+    // The pad applies the rate by dropping off USB, so this write often ends in a transfer error although it took
+    // effect. The read-back below decides whether it worked.
+    await write(p, 0x50, 0x0a, code).catch(() => undefined)
   } finally {
     closePad(p)
   }
