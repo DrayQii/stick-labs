@@ -330,8 +330,10 @@ export function FxDevice({ fx, info }: { fx: Flydigi; info?: FdV1Info | null }):
               {t('fx.settings.hint')}
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(230px, 1fr))', gap: 10 }}>
-              <label style={{ display: 'block' }}>
-                <span className="label">{t('fx.settings.sleep')}</span>
+              <label style={{ display: 'block' }} title={t('fx.settings.sleepTip')}>
+                <span className="label">
+                  {t('fx.settings.sleep')} <span aria-hidden style={{ opacity: 0.6 }}>ⓘ</span>
+                </span>
                 <select
                   className="input"
                   style={{ width: '100%' }}
@@ -340,30 +342,32 @@ export function FxDevice({ fx, info }: { fx: Flydigi; info?: FdV1Info | null }):
                   onChange={(e) => void setting('sleep', Number(e.target.value))}
                 >
                   {settings.sleepMinutes === undefined && <option value="">{t('fx.settings.notRead')}</option>}
-                  {[0, 1, 5, 15, 30, 60].map((m) => (
+                  {[0, 1, 5, 15, 60, 180].map((m) => (
                     <option key={m} value={m}>
-                      {m === 0 ? t('fx.settings.never') : fxFmt(t('fx.settings.minutes'), { n: m })}
+                      {m === 0 ? t('fx.settings.never') : m >= 60 && m % 60 === 0 ? fxFmt(t('fx.settings.hours'), { n: m / 60 }) : fxFmt(t('fx.settings.minutes'), { n: m })}
                     </option>
                   ))}
-                  {settings.sleepMinutes !== undefined && ![0, 1, 5, 15, 30, 60].includes(settings.sleepMinutes) && (
+                  {settings.sleepMinutes !== undefined && ![0, 1, 5, 15, 60, 180].includes(settings.sleepMinutes) && (
                     <option value={settings.sleepMinutes}>{fxFmt(t('fx.settings.minutes'), { n: settings.sleepMinutes })}</option>
                   )}
                 </select>
               </label>
               {(
                 [
-                  ['quickSwitch', 'quickSwitchOn', 'fx.settings.quickSwitch'],
-                  ['stickDebounce', 'stickDebounceOn', 'fx.settings.stickDebounce'],
-                  ['autoCalibration', 'autoCalibrationOn', 'fx.settings.autoCalibration'],
-                  ['rebound', 'reboundOn', 'fx.settings.rebound'],
-                  ['gyroDebounce', 'gyroDebounceOn', 'fx.settings.gyroDebounce']
+                  ['quickSwitch', 'quickSwitchOn', 'fx.settings.quickSwitch', 'fx.settings.quickSwitchTip'],
+                  ['stickDebounce', 'stickDebounceOn', 'fx.settings.stickDebounce', 'fx.settings.stickDebounceTip'],
+                  ['autoCalibration', 'autoCalibrationOn', 'fx.settings.autoCalibration', 'fx.settings.autoCalibrationTip'],
+                  ['rebound', 'reboundOn', 'fx.settings.rebound', 'fx.settings.reboundTip'],
+                  ['gyroDebounce', 'gyroDebounceOn', 'fx.settings.gyroDebounce', 'fx.settings.gyroDebounceTip']
                 ] as const
-              ).map(([kind, key, label]) => {
+              ).map(([kind, key, label, tip]) => {
                 const v = settings[key]
                 return (
-                  <label key={kind} style={{ display: 'block' }}>
+                  <label key={kind} style={{ display: 'block' }} title={t(tip)}>
                     <span className="row spread">
-                      <span className="label">{t(label)}</span>
+                      <span className="label">
+                        {t(label)} <span aria-hidden style={{ opacity: 0.6 }}>ⓘ</span>
+                      </span>
                       {sentOnly.includes(kind) && <span className="mono" title={t('fx.settings.sentTip')}>{t('fx.settings.sentTag')}</span>}
                     </span>
                     <select className="input" style={{ width: '100%' }} disabled={busy} value={v === undefined ? '' : v ? 'on' : 'off'} onChange={(e) => void setting(kind, e.target.value === 'on')}>

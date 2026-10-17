@@ -400,7 +400,15 @@ but the Direwolf 4 answers the short form (its ReadAutoSleepPeriod reader), veri
 The Device tab's **Pad settings** card uses these: sleep time and quick switch are read on connect and set with the
 DInput commands, then read back with `05 F2 03`. The stick debounce / auto-calibration / rebound and gyro debounce
 toggles are sent with their DInput commands (marked "sent", since DInput cannot report them); "Check current" under
-Polling rate reads them back through the XInput settings reply (bytes 17..27, `fxDecodeXStatus`). Space Station marks rebound, auto-calibration, debounces, quick switch and the Xbox home button as available
+Polling rate reads them back through the XInput settings reply (bytes 17..27, `fxDecodeXStatus`).
+
+What they do, from Space Station's own help texts (`locales/en/translation.json`, paraphrased in the card's
+tooltips): sleep = sleep after that long unused, Home wakes (UI offers never / 1 / 5 / 15 min / 1 h / 3 h); quick
+switch = FN + A/B/X/Y selects config 1..4; stick debounce = anti-jitter filter, off makes tiny movements register but
+the output wobbles at rest, and auto-calibration needs it on; auto-calibration = re-learns the centre while the stick
+rests; rebound = filters the overshoot past centre when a stick springs back. Gyro debounce has no text (presumably the
+gyro version of debounce). Space Station also warns that turning on gyro mapping (and "special" key mapping) lowers
+the pad's polling rate. Space Station marks rebound, auto-calibration, debounces, quick switch and the Xbox home button as available
 on the Direwolf 4 (`fp4`).
 
 
