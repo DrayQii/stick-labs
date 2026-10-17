@@ -17,6 +17,7 @@ import { spawn, spawnSync } from 'node:child_process'
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { fxDinputPath, fxXInputPresent } from './flydigi-switch'
 import {
   FX_BLOB_LEN,
   FX_KEY_DEFAULT,
@@ -57,9 +58,6 @@ import {
   type FxSnapshot
 } from '../shared/flydigi-xinput'
 
-const FD_V1_VID = 0x04b4
-const FD_V1_PID = 0x2412
-const FD_V1_INTERFACE = 2
 const ACK_TIMEOUT_MS = 2000
 const READ_SETTLE_MS = 2500
 
@@ -69,15 +67,7 @@ let busy = Promise.resolve()
 
 const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms))
 
-/** Path of the DInput vendor interface, or null when the pad is not in DInput mode. */
-function dinputPath(): string | null {
-  try {
-    const d = HIDModule.devices().find((x) => x.vendorId === FD_V1_VID && x.productId === FD_V1_PID && x.interface === FD_V1_INTERFACE)
-    return d?.path ?? null
-  } catch {
-    return null
-  }
-}
+const dinputPath = fxDinputPath
 
 /** Open (or reuse) the vendor interface; re-opens after a replug or mode change. */
 function open(): void {
@@ -101,14 +91,7 @@ function open(): void {
   }
 }
 
-/** A Direwolf 4 in XInput mode (Xbox 360 identity, serial FLYDIGI_DIREWOLF_4). */
-function xinputDirewolfPresent(): boolean {
-  try {
-    return HIDModule.devices().some((d) => d.vendorId === 0x045e && d.productId === 0x028e && /DIREWOLF_4/i.test(d.serialNumber ?? ''))
-  } catch {
-    return false
-  }
-}
+const xinputDirewolfPresent = fxXInputPresent
 
 /** Which mode the Direwolf is in right now: 'dinput' (04B4:2412 vendor interface), 'xinput', or 'none'. */
 export function fxHidMode(): 'dinput' | 'xinput' | 'none' {

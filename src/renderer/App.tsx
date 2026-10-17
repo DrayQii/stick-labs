@@ -2840,7 +2840,7 @@ export default function App(): JSX.Element {
         await connectFlydigi(path)
         return
       }
-      if (fx.active) fx.disconnect()
+      if (fx.active) void fx.leave()
       if (pre && pre.support === 'unsupported') {
         // Known-unsupportable (e.g. DLL-driven pads with no HID listener):
         // don't waste 10 s timing out a handshake that cannot answer.
@@ -3400,7 +3400,8 @@ export default function App(): JSX.Element {
             <button
               className="btn ghost sm"
               onClick={() => {
-                fx.disconnect()
+                if (fx.active) void fx.leave()
+                else fx.disconnect()
                 void api().disconnect()
                 setConnPath(null)
                 setConnected(false)

@@ -11,6 +11,7 @@ import { discover, discoverLive } from './hid'
 import { ljReadButtonTable, ljReadMainSnapshot, ljReadSnapshot, ljWriteButtonVerified, ljWriteStickVerified } from './leadjoy'
 import type { LjButtonTarget, LjStickPatch } from '../shared/leadjoy'
 import { fdIdentify } from './flydigi'
+import { fxLeaveEnabled, fxLeaveInit, fxLeaveNoteMode, fxLeaveNow, fxLeaveOnQuit, fxLeaveSetEnabled } from './flydigi-leave'
 import { fxHidActivate, fxHidBackup, fxHidBackups, fxHidRestore, fxHidMode, fxHidPollingRate, fxHidRead, fxHidSwitchToXInput, fxHidWrite, fxHidStop } from './flydigi-hid'
 import type { FxPatch } from '../shared/flydigi-xinput'
 import { ljButtonWriteRecord } from '../shared/leadjoy'
@@ -144,7 +145,13 @@ handle('flydigix:rate', (code: number | null) => {
   if (code !== null && ![1, 2, 4, 8].includes(code)) throw new Error('flydigi: polling-rate code must be 1, 2, 4 or 8')
   return fxHidPollingRate(code)
 })
-handle('flydigix:mode', () => fxHidMode())
+handle('flydigix:mode', () => {
+  const m = fxHidMode()
+  fxLeaveNoteMode(m)
+  return m
+})
+handle('flydigix:leaveXInput', () => fxLeaveEnabled())
+handle('flydigix:setLeaveXInput', (on: boolean) => fxLeaveSetEnabled(on === true))
 handle('flydigix:toXInput', () => fxHidSwitchToXInput())
 handle('flydigix:activate', (cfgId: number) => {
   if (!Number.isInteger(cfgId) || cfgId < 0 || cfgId > 7) throw new Error('flydigi: config id must be 0..7')
@@ -333,6 +340,8 @@ function createWindow(): void {
   window_.on('closed', () => {
     window_ = null
   })
+  // Windows logging off or shutting down: no time to wait, so send the Direwolf back to XInput right away.
+  window_.on('session-end', () => fxLeaveNow())
 }
 
 function showMainWindow(): void {
@@ -342,7 +351,7 @@ function showMainWindow(): void {
   window_?.focus()
 }
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   if (!hasSingleInstanceLock) return
   session.defaultSession.setPermissionRequestHandler((_wc, permission, callback) => {
     // WebHID for Flydigi pads (kept for a future WebHID transport; the
@@ -360,6 +369,8 @@ app.whenReady().then(() => {
     // requestDevice filters + user pick remain the real gate.
     return device?.vendorId === undefined || device.vendorId === 0x37d7
   })
+  // Put back a Direwolf an earlier run left in DInput mode, then start tracking it (before the window auto-connects).
+  await fxLeaveInit().catch(() => undefined)
   createWindow()
 
   // Self-update from GitHub Releases (packaged builds only — never in dev).
@@ -483,6 +494,7 @@ app.on('before-quit', (event) => {
     }
     controller.disconnect()
     fxHidStop()
+    await fxLeaveOnQuit().catch(() => undefined)
     app.quit()
   })()
 })

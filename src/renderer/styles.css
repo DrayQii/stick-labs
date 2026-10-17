@@ -1406,13 +1406,56 @@ table.tbl tbody tr:hover {
   overflow: hidden;
   padding: 20px;
 }
-.fx-card-pic img {
+.fx-pad {
   position: relative;
+  display: block;
   width: 100%;
   max-width: 420px;
+  line-height: 0;
+}
+.fx-card-pic img {
+  position: relative;
+  display: block;
+  width: 100%;
   object-fit: contain;
   /* the photo has a black backdrop: screen keeps only the pad on the dark panel */
   mix-blend-mode: screen;
+}
+/* Hover "FN" / "D-pad Left" in the hint: a ring lights up that button on the photo (FlydigiCard). Spots are percent
+   of the 800x700 photo; the ring floats with the image (same animations, started together). */
+.fx-hot {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  border: 2px solid var(--accent, #f43f52);
+  border-radius: 999px;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent, #f43f52) 35%, transparent), 0 0 18px var(--accent, #f43f52);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s;
+}
+.fx-hot[data-on] {
+  opacity: 1;
+}
+.fx-hot-fn { left: 42.9%; top: 52.4%; width: 8%; height: 5.5%; }
+.fx-hot-dpad { left: 24%; top: 39.3%; width: 8.5%; height: 8.5%; }
+.fx-term {
+  /* the hint sits on the accent-coloured CTA, so keep its text colour and mark the words by weight and a tint */
+  color: inherit;
+  font-weight: 700;
+  padding: 0 3px;
+  border-radius: 2px;
+  background: rgba(0, 0, 0, 0.12);
+  border-bottom: 2px dashed currentColor;
+  cursor: help;
+  outline: none;
+}
+.fx-term:hover,
+.fx-term:focus-visible {
+  background: rgba(0, 0, 0, 0.25);
+}
+.fx-term:focus-visible {
+  outline: 1px solid currentColor;
+  outline-offset: 2px;
 }
 .fx-corner {
   position: absolute;
@@ -1447,6 +1490,15 @@ table.tbl tbody tr:hover {
       fx-slide 0.9s cubic-bezier(0.16, 1, 0.3, 1) backwards,
       fx-float 7s ease-in-out 0.9s infinite;
   }
+  /* same float as the image (the ring keeps its centering translate), plus a pulse while lit */
+  .fx-hot {
+    animation: fx-hot-float 7s ease-in-out 0.9s infinite;
+  }
+  .fx-hot[data-on] {
+    animation:
+      fx-hot-float 7s ease-in-out 0.9s infinite,
+      fx-hot-pulse 0.8s ease-in-out infinite;
+  }
   .fx-scan {
     animation: fx-sweep 5s linear 1s infinite;
   }
@@ -1462,6 +1514,13 @@ table.tbl tbody tr:hover {
 }
 @keyframes fx-float {
   50% { transform: translateY(-6px); }
+}
+@keyframes fx-hot-float {
+  0%, 100% { transform: translate(-50%, -50%); }
+  50% { transform: translate(-50%, calc(-50% - 6px)); }
+}
+@keyframes fx-hot-pulse {
+  50% { border-color: #fff; box-shadow: 0 0 0 6px color-mix(in srgb, var(--accent, #f43f52) 25%, transparent), 0 0 26px var(--accent, #f43f52); }
 }
 @keyframes fx-sweep {
   0% { top: 0; opacity: 0; }

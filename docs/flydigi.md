@@ -327,6 +327,27 @@ values still used are the ones in the code: turbo frequency 1..30, gyro sensitiv
 - LED / RGB: Space Station's app has no LED or RGB settings for the Direwolf 4 (maintainer, 2026-10-17), so there is nothing to decode.
 - Calibration: Space Station has no calibration screen for the Direwolf 4, so there is nothing to copy.
 
+## Leaving the pad in XInput
+
+The pad remembers DInput mode across replugs, so a user who closes Stick Labs would otherwise keep a pad that games do
+not see as an Xbox controller. Setting "Return the pad to XInput when I leave Stick Labs" (Device tab, Pad mode; on
+by default) sends `05 ED` on every way out:
+
+- **Quit** (tray Quit, updater): before exiting, waits up to 6 s for the pad to leave DInput.
+- **Disconnect / connecting another controller** in the app: same switch from the renderer.
+- **Windows logoff/shutdown** (`session-end`) and **sleep** (`powerMonitor` `suspend`): sent at once, no waiting. After
+  sleep the pad is in XInput; hold FN + D-pad Left to configure it again.
+- **Crash or killed process**: `out/main/flydigi-guard.js` (app executable as plain node, detached, no window, no admin)
+  starts the first time the pad is seen in DInput. It checks every second that the app is alive; once it is gone it
+  switches the pad and exits.
+- **Pad unplugged when the app goes away**: the helper waits up to 30 min for the pad to come back and switches it;
+  failing that, the next app start switches it before anything else.
+
+State lives in `flydigi-leave-xinput.json` in the app data folder (`enabled`, `armed` = last seen in DInput, `pid` of
+the owning app run; a helper from an older run stands down when the pid changes). Code: `src/main/flydigi-leave.ts`,
+`flydigi-guard.ts`, `flydigi-switch.ts`. The helper is started through a launcher that exits at once, so it has no
+living parent: Task Manager does not list it in the Stick Labs group and "End task" on the app does not kill it.
+
 ## Polling rate and mode switch without Space Station (UsbDk, native) — verified
 
 Verified on the pad from the app: DInput pad, set 500 Hz, then 1000 Hz, each read back correctly, pad back in DInput.
