@@ -152,40 +152,52 @@ export async function fxUsbReadRate(): Promise<number> {
   throw last
 }
 
-/**
- * Set the polling-rate code and read it back. The pad re-enumerates to apply it, which leaves this libusb session
- * holding the old device, so the read-back (and the optional switch to DInput, A5 17) runs in a fresh process once
- * the pad is back: this executable again, as node, on flydigi-usb-run.js.
- */
-export async function fxUsbSetRate(code: number, toDInput: boolean): Promise<number> {
+/** Send the rate frame only (no read-back). A transfer error is expected: the pad drops off USB to apply it. */
+export async function fxUsbSendRate(code: number): Promise<void> {
   if (![1, 2, 4, 8].includes(code)) throw new Error('flydigi: polling-rate code must be 1, 2, 4 or 8')
   const p = await openPad(12000)
   try {
-    // The pad applies the rate by dropping off USB, so this write often ends in a transfer error although it took
-    // effect. The read-back below decides whether it worked.
     await write(p, 0x50, 0x0a, code).catch(() => undefined)
   } finally {
     closePad(p)
   }
-  await sleep(4000)
-  const out = join(tmpdir(), `flydigi-usb-readback-${Date.now()}.json`)
+}
+
+/** Run flydigi-usb-run.js in its own process (this executable as node) and return what it wrote. */
+export async function runChild(args: string[]): Promise<{ ok: boolean; error?: string; reportRate?: number | null }> {
+  const out = join(tmpdir(), `flydigi-usb-child-${Date.now()}.json`)
   const script = join(__dirname, '..', 'flydigi-usb-run.js')
-  const args = [script, '--read-rate', ...(toDInput ? ['--to-dinput'] : []), '--out', out]
   const done = await new Promise<number>((resolve) => {
-    const c = spawn(process.execPath, args, { env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' }, windowsHide: true, stdio: 'ignore' })
+    const c = spawn(process.execPath, [script, ...args, '--out', out], { env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' }, windowsHide: true, stdio: 'ignore' })
     c.on('error', () => resolve(-1))
     c.on('exit', (n) => resolve(n ?? -1))
   })
-  let back: { ok: boolean; error?: string; reportRate?: number | null } | null = null
   try {
-    back = JSON.parse(readFileSync(out, 'utf8'))
+    const r = JSON.parse(readFileSync(out, 'utf8'))
     rmSync(out, { force: true })
+    return r
   } catch {
-    /* handled below */
+    return { ok: false, error: `flydigi: a USB step did not run (exit ${done}).` }
   }
-  if (!back) throw new Error(`flydigi: the read-back after the rate change did not run (exit ${done}).`)
+}
+
+/**
+ * Set the polling-rate code and read it back. UsbDk keeps the pad claimed for as long as the process that opened it
+ * lives, and the pad re-enumerates to apply a rate, so each step runs in its own short-lived process and this one
+ * never opens the pad: send the frame, wait for the pad to come back, then read (and optionally switch to DInput).
+ */
+export async function fxUsbSetRate(code: number, toDInput: boolean): Promise<number> {
+  if (![1, 2, 4, 8].includes(code)) throw new Error('flydigi: polling-rate code must be 1, 2, 4 or 8')
+  const sent = await runChild(['--send-rate', String(code)])
+  if (!sent.ok) throw new Error(sent.error ?? 'flydigi: sending the rate failed.')
+  await sleep(4000)
+  const back = await runChild(['--read-rate'])
   if (!back.ok) throw new Error(back.error ?? 'flydigi: the read-back after the rate change failed.')
   if (back.reportRate !== code) throw new Error(`flydigi: the pad reports polling-rate code ${back.reportRate} after setting ${code}`)
+  if (toDInput) {
+    const sw = await runChild(['--to-dinput'])
+    if (!sw.ok) throw new Error(sw.error ?? 'flydigi: the switch to DInput failed after the rate was applied.')
+  }
   return code
 }
 

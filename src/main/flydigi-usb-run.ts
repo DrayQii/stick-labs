@@ -4,7 +4,7 @@
  * Usage: flydigi-usb-run.js --out result.json [--set-rate CODE | --read-rate] [--to-dinput]
  */
 import { writeFileSync } from 'node:fs'
-import { fxUsbReadRate, fxUsbSetRate, fxUsbSwitchToDInput } from './flydigi-usb'
+import { fxUsbReadRate, fxUsbSendRate, fxUsbSetRate, fxUsbSwitchToDInput, runChild } from './flydigi-usb'
 
 const arg = (n: string): string | null => (process.argv.includes(n) ? (process.argv[process.argv.indexOf(n) + 1] ?? '') : null)
 const out = arg('--out')
@@ -13,10 +13,17 @@ const result: { ok: boolean; error: string | null; reportRate: number | null } =
 async function main(): Promise<void> {
   const set = arg('--set-rate')
   const toDInput = process.argv.includes('--to-dinput')
-  if (set !== null) result.reportRate = await fxUsbSetRate(Number(set), toDInput)
+  const send = arg('--send-rate')
+  if (send !== null) await fxUsbSendRate(Number(send))
+  else if (set !== null) result.reportRate = await fxUsbSetRate(Number(set), toDInput)
   else {
-    if (process.argv.includes('--read-rate')) result.reportRate = await fxUsbReadRate()
-    if (toDInput) await fxUsbSwitchToDInput()
+    const read = process.argv.includes('--read-rate')
+    if (read) result.reportRate = await fxUsbReadRate()
+    // one open per process: UsbDk keeps the pad claimed until the process that opened it ends
+    if (toDInput && read) {
+      const sw = await runChild(['--to-dinput'])
+      if (!sw.ok) throw new Error(sw.error ?? 'flydigi: the switch to DInput failed.')
+    } else if (toDInput) await fxUsbSwitchToDInput()
   }
   result.ok = true
 }
