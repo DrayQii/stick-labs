@@ -117,7 +117,7 @@ const write = (p: Pad, cmd: number, ...args: number[]): Promise<void> =>
 
 async function readRate(p: Pad): Promise<number> {
   // The pad streams input non-stop; skip what is queued, but never wait for it to run dry.
-  for (const end = Date.now() + 400; Date.now() < end; ) if (!(await readOnce(p))) break
+  for (const end = Date.now() + 400; Date.now() < end; ) if (!(await readOnce(p).catch(() => null))) break
   await write(p, 0x50, 0x07)
   for (const end = Date.now() + 3000; Date.now() < end; ) {
     const d = await readOnce(p)
@@ -126,14 +126,26 @@ async function readRate(p: Pad): Promise<number> {
   throw new Error('flydigi: the pad did not answer the settings read.')
 }
 
-/** Read the stored polling-rate code. */
+/**
+ * Read the stored polling-rate code. Right after a mode switch or a rate change the pad is still re-enumerating and
+ * its endpoints answer with transfer errors, so a failed attempt is retried with a fresh open for up to ~15 s.
+ */
 export async function fxUsbReadRate(): Promise<number> {
-  const p = await openPad(12000)
-  try {
-    return await readRate(p)
-  } finally {
-    closePad(p)
+  let last: Error = new Error('flydigi: the pad did not answer the settings read.')
+  for (const end = Date.now() + 15000; Date.now() < end; ) {
+    let p: Pad | null = null
+    try {
+      p = await openPad(Math.max(1000, end - Date.now()))
+      return await readRate(p)
+    } catch (e) {
+      if (e instanceof FxUsbAccessError) throw e
+      last = e as Error
+    } finally {
+      if (p) closePad(p)
+    }
+    await sleep(1500)
   }
+  throw last
 }
 
 /**
