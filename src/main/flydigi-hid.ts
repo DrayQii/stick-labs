@@ -18,6 +18,7 @@ import { spawn, spawnSync } from 'node:child_process'
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { FxUsbAccessError, fxUsbReadRate, fxUsbSetRate, fxUsbSwitchToDInput } from './flydigi-usb'
 import {
   FX_BLOB_LEN,
   FX_KEY_DEFAULT,
@@ -138,19 +139,14 @@ function usbdkInstalled(): boolean {
 }
 
 /**
- * Run an elevated helper script and return its result. With UsbDk installed that is
- * scripts/flydigi-usb-helper.py (raw USB, no Space Station); otherwise scripts/flydigi-xinput-helper.py
- * (Space Station's filter driver). The pad must be in XInput mode and Space Station closed either way.
+ * Run `file args…` elevated (UAC prompt) with extra environment variables and return the result file it writes
+ * ({ok, error, reportRate}); an elevated process cannot share stdout with its launcher.
  */
-async function runHelper(args: string[]): Promise<{ reportRate: number | null }> {
-  if (spaceStationRunning()) {
-    throw new Error('flydigi: Flydigi Space Station (or its background service) is running. Close it fully, then try again.')
-  }
-  const script = join(__dirname, `../../scripts/${usbdkInstalled() ? 'flydigi-usb-helper.py' : 'flydigi-xinput-helper.py'}`)
+async function runElevated(file: string, args: string[], env: Record<string, string>, declined: string): Promise<{ reportRate: number | null }> {
   const out = join(tmpdir(), `flydigi-helper-${Date.now()}.json`)
-  const py = process.env.FLYDIGI_PYTHON ?? 'python'
-  const list = [`"${script}"`, '--out', `"${out}"`, ...args].map(psq).join(', ')
-  const ps = `$p = Start-Process -FilePath ${psq(py)} -ArgumentList @(${list}) -Verb RunAs -WindowStyle Hidden -PassThru -Wait; exit $p.ExitCode`
+  const list = [...args, '--out', out].map((a) => psq(`"${a}"`)).join(', ')
+  const setEnv = Object.entries(env).map(([k, v]) => `$env:${k}=${psq(v)};`).join(' ')
+  const ps = `${setEnv} $p = Start-Process -FilePath ${psq(file)} -ArgumentList @(${list}) -Verb RunAs -WindowStyle Hidden -PassThru -Wait; exit $p.ExitCode`
   const code = await new Promise<number>((resolve) => {
     const c = spawn('powershell', ['-NoProfile', '-NonInteractive', '-Command', ps], { windowsHide: true })
     c.on('error', () => resolve(-1))
@@ -166,10 +162,36 @@ async function runHelper(args: string[]): Promise<{ reportRate: number | null }>
     /* fall through to the generic messages */
   }
   if (parsed && !parsed.ok) throw new Error(`flydigi: ${parsed.error ?? 'the helper reported a failure'}`)
-  if (code !== 0 || !parsed) {
-    throw new Error('flydigi: the helper did not run — the Windows permission prompt was declined, or python could not be started (set FLYDIGI_PYTHON).')
-  }
+  if (code !== 0 || !parsed) throw new Error(declined)
   return { reportRate: parsed.reportRate ?? null }
+}
+
+/**
+ * Rate read/set and the XInput -> DInput switch for a pad in XInput mode. With UsbDk installed this is native
+ * (flydigi-usb.ts, in this process; if UsbDk refuses a normal user, the same code runs elevated through the app's own
+ * executable). Without UsbDk it falls back to scripts/flydigi-xinput-helper.py (Space Station's filter driver, needs
+ * python and Space Station installed).
+ */
+async function runHelper(args: string[]): Promise<{ reportRate: number | null }> {
+  if (spaceStationRunning()) {
+    throw new Error('flydigi: Flydigi Space Station (or its background service) is running. Close it fully, then try again.')
+  }
+  if (usbdkInstalled()) {
+    const at = args.indexOf('--set-rate')
+    const toDInput = args.includes('--to-dinput')
+    try {
+      if (at >= 0) return { reportRate: await fxUsbSetRate(Number(args[at + 1]), toDInput) }
+      let reportRate: number | null = null
+      if (args.includes('--read-rate')) reportRate = await fxUsbReadRate()
+      if (toDInput) await fxUsbSwitchToDInput()
+      return { reportRate }
+    } catch (e) {
+      if (!(e instanceof FxUsbAccessError)) throw e
+      return runElevated(process.execPath, [join(__dirname, 'flydigi-usb-run.js'), ...args], { ELECTRON_RUN_AS_NODE: '1' }, 'flydigi: the Windows permission prompt was declined.')
+    }
+  }
+  const py = process.env.FLYDIGI_PYTHON ?? 'python'
+  return runElevated(py, [join(__dirname, '../../scripts/flydigi-xinput-helper.py'), ...args], {}, 'flydigi: UsbDk is not installed, so the Space Station driver route was tried, and it did not run — the Windows permission prompt was declined, or python could not be started (set FLYDIGI_PYTHON). Installing UsbDk (github.com/daynix/UsbDk/releases) avoids both python and Space Station.')
 }
 
 async function waitFor(cond: () => boolean, ms: number): Promise<boolean> {

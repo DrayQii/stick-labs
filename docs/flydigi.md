@@ -331,12 +331,14 @@ values still used are the ones in the code: turbo frequency 1..30, gyro sensitiv
 - LED / RGB: Space Station's app has no LED or RGB settings for the Direwolf 4 (maintainer, 2026-10-17), so there is nothing to decode.
 - Calibration: Space Station has no calibration screen for the Direwolf 4, so there is nothing to copy.
 
-## Polling rate and mode switch without Space Station (UsbDk)
+## Polling rate and mode switch without Space Station (UsbDk, native)
 
-`scripts/flydigi-usb-helper.py` does what `flydigi-xinput-helper.py` does (same arguments and result file) over raw USB
-with libusb and the signed UsbDk driver. UsbDk lends the pad to the helper only while it runs, so no driver is replaced
-and Space Station is not involved. Verified on the pad with the probe script: read, set 500 Hz and set 1000 Hz, each
-read back correctly (the pad re-enumerates after a set, so the helper re-reads in a fresh libusb session).
-libusb 1.0.30 needs `libusb_set_option(USE_USBDK)` **after** `libusb_init`; before it always fails.
-The app picks this helper when the `UsbDk` service exists and falls back to Space Station's driver otherwise.
-Needs: UsbDk installed, python, `pip install libusb-package` (or `FLYDIGI_LIBUSB`).
+`src/main/flydigi-usb.ts` reads/sets the polling rate and does the XInput -> DInput switch (A5 17) over raw USB with
+node-usb 2.19.1 (bundles libusb 1.0.30) and the signed UsbDk driver. No Python, no Space Station. UsbDk lends the pad to the
+app only while it is open and hands it back to the Xbox driver afterwards, so no driver is replaced. libusb is initialised
+when `usb` loads and `useUsbDkBackend()` then sets the option on that context, which is the order libusb 1.0.30 needs
+(set before init it always fails). The pad re-enumerates after a rate change, so it is read back with a fresh open.
+If UsbDk refuses a normal user, the same code runs elevated: the app starts its own executable with
+`ELECTRON_RUN_AS_NODE` and `out/main/flydigi-usb-run.js` (UAC prompt). Without UsbDk the app falls back to
+`scripts/flydigi-xinput-helper.py` (Space Station's driver, needs python). The Python probe
+(`scripts/flydigi-winusb-probe.py --usbdk`) stays as a reference for the verified frames.

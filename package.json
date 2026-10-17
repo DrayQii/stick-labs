@@ -18,7 +18,8 @@
   },
   "dependencies": {
     "electron-updater": "^6.8.9",
-    "node-hid": "^3.4.0"
+    "node-hid": "^3.4.0",
+    "usb": "2.19.1"
   },
   "devDependencies": {
     "@types/react": "^18.3.12",
@@ -49,7 +50,9 @@
       "package.json",
       "scripts/flybridge.py",
       "node_modules/node-hid/**/*",
-      "node_modules/pkg-prebuilds/**/*"
+      "node_modules/pkg-prebuilds/**/*",
+      "node_modules/usb/**/*",
+      "node_modules/node-gyp-build/**/*"
     ],
     "nsis": {
       "oneClick": false,
