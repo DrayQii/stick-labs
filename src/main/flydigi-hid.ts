@@ -129,6 +129,15 @@ function spaceStationRunning(): boolean {
 
 const psq = (v: string): string => `'${v.replace(/'/g, "''")}'`
 
+/** Is this process running as administrator? (`net session` only succeeds elevated.) */
+function isElevated(): boolean {
+  try {
+    return spawnSync('net', ['session'], { windowsHide: true }).status === 0
+  } catch {
+    return false
+  }
+}
+
 /** UsbDk (signed USB filter driver) installed? It lets the raw-USB helper reach the pad without Space Station. */
 function usbdkInstalled(): boolean {
   try {
@@ -177,6 +186,11 @@ async function runHelper(args: string[]): Promise<{ reportRate: number | null }>
     throw new Error('flydigi: Flydigi Space Station (or its background service) is running. Close it fully, then try again.')
   }
   if (usbdkInstalled()) {
+    // UsbDk only opens the pad for an administrator. A refused normal-user attempt can leave the pad half-claimed
+    // for the elevated retry, so unless the app itself is elevated it goes straight to the elevated copy.
+    if (!isElevated()) {
+      return runElevated(process.execPath, [join(__dirname, 'flydigi-usb-run.js'), ...args], { ELECTRON_RUN_AS_NODE: '1' }, 'flydigi: the Windows permission prompt was declined.')
+    }
     const at = args.indexOf('--set-rate')
     const toDInput = args.includes('--to-dinput')
     try {
