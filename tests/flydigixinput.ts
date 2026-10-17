@@ -27,6 +27,7 @@ import {
   fxDecodeSticks,
   fxSetKeyTarget,
   fxSetKeyTurbo,
+  fxSteamWindow,
   fxSetMotion,
   fxDecodeMotion,
   FX_TURBO_CLICK,
@@ -158,6 +159,12 @@ for (const [c, e, want] of ceObs) {
   check('gyro right/LT/17/30 matches the final log state 02 0c 00 11 1e 1e 00 ff', Array.from(r.subarray(137, 145)).map((v) => v.toString(16).padStart(2, '0')).join(' ') === '02 0c 00 11 1e 1e 00 ff')
   check('gyro edit leaves every other byte alone', r.every((v, i) => (i >= 137 && i < 145) || v === base[i]))
 }
+// Steam export window: deadzone -> inner, positive edge -> outer, negative values only partly transfer
+check('steam window: centre 13 / edge 0 -> inner 13, outer 100', JSON.stringify(fxSteamWindow(13, 0)) === JSON.stringify({ begin: 13, end: 100, anti: 0, edgeLost: false }))
+check('steam window: edge 30 -> outer 70', fxSteamWindow(0, 30).end === 70)
+check('steam window: centre -40 -> no deadzone, anti-deadzone on', fxSteamWindow(-40, 0).begin === 0 && fxSteamWindow(-40, 0).anti === 40)
+check('steam window: negative edge is flagged as not transferred', fxSteamWindow(0, -30).edgeLost === true && fxSteamWindow(0, -30).end === 100)
+check('steam window: clamps out-of-range input', fxSteamWindow(500, 500).begin === 100 && fxSteamWindow(500, 500).end === 0)
 check('edge byte is signed: -30 -> 0xe2', ((-30) & 0xff) === 0xe2)
 check('deadzone 0, 10, 20, 50, 100 are exact', [0, 10, 20, 50, 100].every((d) => fxDeadzonePoints(d).join() === dzObs[d].join()))
 

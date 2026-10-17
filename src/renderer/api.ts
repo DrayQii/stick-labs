@@ -68,6 +68,13 @@ interface LabApi {
     curveExp?: number | null
   ): Promise<{ game: string; appId: number; files: string[]; backedUp: string[]; mapped: string[]; notTransferred: string[] }>
   steamGames(): Promise<Array<{ appId: number; name: string }>>
+  /** Export stick windows to the chosen games' Steam Input configs only (Steam must be closed). */
+  steamExportSelected(
+    left: { begin: number; end: number; anti?: number },
+    right: { begin: number; end: number; anti?: number },
+    appIds: number[],
+    curveExp?: number | null
+  ): Promise<{ result: { games: Array<{ appId: number; name: string; ok: boolean; detail: string }> } }>
   steamExportAll(
     left: { begin: number; end: number },
     right: { begin: number; end: number },

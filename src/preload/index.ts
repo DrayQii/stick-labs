@@ -37,6 +37,8 @@ const api = {
     call<{ steamPath: string | null; userId: string | null; apexInstalled: boolean; apexAppId: number; steamRunning: boolean }>('steam:info'),
   steamExport: (left: { begin: number; end: number }, right: { begin: number; end: number }, mouseRate?: number | null, curveExp?: number | null) =>
     call<{ game: string; appId: number; files: string[]; backedUp: string[]; mapped: string[]; notTransferred: string[] }>('steam:export', left, right, mouseRate, curveExp),
+  steamExportSelected: (left: { begin: number; end: number; anti?: number }, right: { begin: number; end: number; anti?: number }, appIds: number[], curveExp?: number | null) =>
+    call<{ result: { games: Array<{ appId: number; name: string; ok: boolean; detail: string }> } }>('steam:exportSelected', left, right, appIds, curveExp),
   steamGames: () => call<Array<{ appId: number; name: string }>>('steam:games'),
   steamExportAll: (left: { begin: number; end: number }, right: { begin: number; end: number }, mouseRate?: number | null, curveExp?: number | null) =>
     call<{ games: Array<{ appId: number; name: string }>; result: { games: Array<{ appId: number; name: string; ok: boolean; detail: string }> } }>('steam:exportAll', left, right, mouseRate, curveExp),

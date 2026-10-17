@@ -151,6 +151,7 @@ const basis = {
   steamInfo: () => Promise.reject(new Error(NOT_IN_BROWSER)),
   steamExport: () => Promise.reject(new Error(NOT_IN_BROWSER)),
   steamGames: () => Promise.reject(new Error(NOT_IN_BROWSER)),
+  steamExportSelected: () => Promise.reject(new Error(NOT_IN_BROWSER)),
   steamExportAll: () => Promise.reject(new Error(NOT_IN_BROWSER)),
   ping: () => Promise.reject(new Error(NOT_IN_BROWSER)),
   deeppoll: () => Promise.reject(new Error(NOT_IN_BROWSER)) as Promise<DeepPollResult>,

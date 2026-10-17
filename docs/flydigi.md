@@ -245,6 +245,12 @@ hardware: how the pad responds to a non-linear custom curve (the points are assu
 ## Direwolf 4: status and next steps
 
 ### How it is wired into the app
+- Steam export (Profiles tab, `FlydigiSteam.tsx`): writes the stick window into Steam Input's per-game controller configs
+  through the existing backend (`src/main/steam.ts`, IPC `steam:exportSelected`, the games you tick, Steam closed, old
+  files kept as `.sticklabs.bak`). Mapping (`fxSteamWindow`): Center > 0 -> Steam inner deadzone, Edge > 0 -> outer
+  deadzone (100 - Edge), Center < 0 -> anti-deadzone on. A negative Edge and the size of a negative Center have no
+  Steam equivalent, and the curve is only sent as Steam's exponent (a rough fit, experimental) when ticked. Steam
+  applies this on top of what the pad already does. Not yet tried on hardware or in a game.
 - Texts: the Direwolf screens are translated (English, Chinese, Japanese, Russian). The strings live in
   `src/renderer/i18n-fx.ts` (keys `fx.*`, merged into the app dictionary); key and button names, units and tool
   names stay English. Add new text there, not inline.
@@ -291,13 +297,12 @@ values still used are the ones in the code: turbo frequency 1..30, gyro sensitiv
 4. **Trigger vibration**, if Space Station has it for this pad, and the live `CallGripVibration {leftValue, rightValue}`
    motor test (a button that buzzes the grips).
 5. **Edge cases in the key table.** What a turbo key with a remap target does, and `enableKey2` for gyro.
-6. **Steam export** for the Direwolf curves, as the GameSir side has.
-7. **Firmware readout.** The card already shows mode and battery (get-info byte 11, top of the level scale not fully
+6. **Firmware readout.** The card already shows mode and battery (get-info byte 11, top of the level scale not fully
    verified). The service log has `GetDeviceDetailInfo` for firmware; the old identify code in `src/main/flydigi.ts`
    already parses a handshake for other Flydigi pads.
-8. **Clean-ups.** The header comment of `FlydigiLiveView.tsx` still describes the old standard-only axis default.
+7. **Clean-ups.** The header comment of `FlydigiLiveView.tsx` still describes the old standard-only axis default.
 
-9. **Polling rate without Space Station.** The mode switch no longer needs it (FN + D-pad combo), but the polling rate is only
+8. **Polling rate without Space Station.** The mode switch no longer needs it (FN + D-pad combo), but the polling rate is only
    exposed in XInput mode through its filter driver. A raw USB route (UsbDk, PR #9, did not start under libusb 1.0.30 on
    the maintainer's machine; WinUSB via Zadig is untested) would remove the last dependency, and needs to confirm that
    the pad accepts the frames as raw USB writes at all.
