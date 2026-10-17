@@ -74,11 +74,12 @@ Every edit is staged in the app and applied with **Write to controller**.
 - **Verified writes.** Each write is read back and compared. On a mismatch the
   previous blob is restored. Every write and restore first saves the slot to
   `flydigi-backups/` in the app data folder.
-- **XInput mode.** If the pad is in XInput mode, connecting switches it to
-  DInput through a small elevated helper (`scripts/flydigi-xinput-helper.py`,
-  one UAC prompt, Space Station must be installed but not running). The
-  **Switch to XInput** button puts it back for games. The polling rate is only
-  exposed in XInput mode, so changing it runs the same helper (about 20 s).
+- **XInput mode.** If the pad is in XInput mode, hold FN + D-pad Left on the pad
+  to switch it to DInput; the app connects by itself. The **Switch to XInput**
+  button puts it back for games. Nothing from Flydigi is needed.
+- **Polling rate.** The pad only exposes it in XInput mode, so changing it goes
+  over raw USB with [UsbDk](https://github.com/daynix/UsbDk/releases) (install
+  it once): one UAC prompt per change, about 20 s, then the pad returns to DInput.
 
 ### Connect a controller card
 

@@ -8,9 +8,8 @@
  * just before the write. Framing: src/shared/flydigi-xinput.ts, docs/flydigi.md.
  *
  * The one exception is the polling rate, which the pad only exposes in XInput mode: it goes over raw
- * USB with UsbDk in an elevated helper process (flydigi-usb.ts), or, without UsbDk, through Space
- * Station's filter driver (scripts/flydigi-xinput-helper.py). A pad in XInput mode is switched to
- * DInput with its own combo (FN + D-pad Left), not by the app.
+ * USB with UsbDk in an elevated helper process (flydigi-usb.ts). Nothing from Flydigi is used. A
+ * pad in XInput mode is switched to DInput with its own combo (FN + D-pad Left), not by the app.
  */
 import { app } from 'electron'
 import HIDModule, { type HID as HIDInstance } from 'node-hid'
@@ -128,7 +127,7 @@ function spaceStationRunning(): boolean {
 
 const psq = (v: string): string => `'${v.replace(/'/g, "''")}'`
 
-/** UsbDk (signed USB filter driver) installed? It lets the raw-USB helper reach the pad without Space Station. */
+/** UsbDk (signed USB filter driver) installed? The raw-USB helper needs it to reach the pad. */
 function usbdkInstalled(): boolean {
   try {
     return spawnSync('sc', ['query', 'UsbDk'], { encoding: 'utf8', windowsHide: true }).status === 0
@@ -166,22 +165,18 @@ async function runElevated(file: string, args: string[], env: Record<string, str
 }
 
 /**
- * Rate read/set and the XInput -> DInput switch for a pad in XInput mode. With UsbDk installed this is native
- * (flydigi-usb.ts, in this process; if UsbDk refuses a normal user, the same code runs elevated through the app's own
- * executable). Without UsbDk it falls back to scripts/flydigi-xinput-helper.py (Space Station's filter driver, needs
- * python and Space Station installed).
+ * Rate read/set and the XInput -> DInput switch for a pad in XInput mode, over raw USB with UsbDk (flydigi-usb.ts).
+ * UsbDk only opens the pad for an administrator, and keeps it claimed until the opening process ends, so the work
+ * always runs in a separate elevated process: the app's own executable as node (no prompt if the app is elevated).
  */
 async function runHelper(args: string[]): Promise<{ reportRate: number | null }> {
   if (spaceStationRunning()) {
     throw new Error('flydigi: Flydigi Space Station (or its background service) is running. Close it fully, then try again.')
   }
-  if (usbdkInstalled()) {
-    // UsbDk only opens the pad for an administrator, and keeps it claimed until the opening process ends, so the
-    // work always runs in a separate elevated process (no prompt if the app is already elevated).
-    return runElevated(process.execPath, [join(__dirname, 'flydigi-usb-run.js'), ...args], { ELECTRON_RUN_AS_NODE: '1' }, 'flydigi: the Windows permission prompt was declined.')
+  if (!usbdkInstalled()) {
+    throw new Error('flydigi: the polling rate needs UsbDk (a small signed USB driver). Install it from github.com/daynix/UsbDk/releases, then try again.')
   }
-  const py = process.env.FLYDIGI_PYTHON ?? 'python'
-  return runElevated(py, [join(__dirname, '../../scripts/flydigi-xinput-helper.py'), ...args], {}, 'flydigi: UsbDk is not installed, so the Space Station driver route was tried, and it did not run — the Windows permission prompt was declined, or python could not be started (set FLYDIGI_PYTHON). Installing UsbDk (github.com/daynix/UsbDk/releases) avoids both python and Space Station.')
+  return runElevated(process.execPath, [join(__dirname, 'flydigi-usb-run.js'), ...args], { ELECTRON_RUN_AS_NODE: '1' }, 'flydigi: the Windows permission prompt was declined.')
 }
 
 async function waitFor(cond: () => boolean, ms: number): Promise<boolean> {

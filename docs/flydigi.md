@@ -54,10 +54,9 @@ itself when `04B4:2412` appears. Nothing from Flydigi is needed for this. The mo
 Station runs again. "Switch to XInput" in the app (`05 ED`, plain HID) puts the pad back for games.
 
 Nothing in the app needs Space Station any more. The polling rate (only exposed in XInput mode) goes over raw USB with
-UsbDk (see "Polling rate and mode switch without Space Station" below), one UAC prompt per change. Only when UsbDk is not
-installed does it fall back to the legacy route through Space Station's Xbox 360 filter driver (`XboxComm64.dll`) via
-`scripts/flydigi-xinput-helper.py` (python, Space Station installed but not running). The old "Or switch with Space
-Station's driver" button is gone: FN + D-pad Left does the same. The sections below that mention the driver describe
+UsbDk (see "Polling rate and mode switch without Space Station" below), one UAC prompt per change; without UsbDk the app
+says to install it. The earlier route through Space Station's Xbox 360 filter driver (`XboxComm64.dll`, a python
+helper) and the "Or switch with Space Station's driver" button are removed: FN + D-pad Left does the switch. The sections below that mention the driver describe
 how the protocol was first captured; the config traffic itself is plain HID.
 
 Where the work stands and what is left is in **Direwolf 4: status and next steps** at the end of this file.
@@ -288,7 +287,7 @@ hardware: how the pad responds to a non-linear custom curve (the points are assu
   gyro, vibration, polling rate, pad mode) and Profiles (config slots, save-to-pad, backups). P1..P4 in the top bar
   switch config slots and Write to controller applies every edit. Calibrate and Lab are hidden while it is connected.
 - Main process: `src/main/flydigi-hid.ts` (read, verified write with rollback, save, backups and restore, mode
-  switch, polling rate through `scripts/flydigi-xinput-helper.py`). IPC is `flydigix:*` in `src/main/index.ts` and
+  switch; polling rate over UsbDk in `src/main/flydigi-usb.ts`). IPC is `flydigix:*` in `src/main/index.ts` and
   `window.sticklab.flydigiX*` in the preload. Frames, blob codec and every decoded field live in
   `src/shared/flydigi-xinput.ts` with tests in `tests/flydigixinput.ts`
   (`node scripts/test.mjs tests/flydigixinput.ts`) and the real read `fixtures/flydigi/fp4-cfg1.bin`.
@@ -349,6 +348,6 @@ What the pad and UsbDk need, all found on the pad:
 - **node-usb must be 2.17.x.** From 2.18 its libusb is built with Windows hotplug: the device list comes from a WinUSB
   scan at start and a later switch to UsbDk never rescans, so the pad is "not visible through UsbDk".
 
-Without UsbDk the app falls back to `scripts/flydigi-xinput-helper.py` (Space Station's driver, needs python). The Python
+Without UsbDk the app shows an error asking to install it (no Space Station fallback). The Python
 probe (`scripts/flydigi-winusb-probe.py --usbdk`) stays as a reference for the frames. Set `FLYDIGI_USB_DEBUG=1` for
 libusb's own log. Manual test (admin shell): `node out/main/flydigi-usb-run.js --set-rate 1 --out r.json`.
