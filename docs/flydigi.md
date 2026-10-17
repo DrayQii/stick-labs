@@ -234,6 +234,14 @@ survived a DInput/XInput round trip, and 1000 Hz was restored. Stick Labs theref
 elevated helper run (`--set-rate CODE` / `--read-rate`, optionally `--to-dinput`): from DInput it
 sends `05 ED`, runs the helper, and waits for `04B4:2412` to return (about 20 seconds).
 
+Measured on the pad (2026-10-17, `scripts/flydigi-rate-probe.mjs`): in DInput mode the Direwolf 4 sends about 500
+input reports per second whatever the stored rate is, and sending `05 50 0A <code>` over plain HID changes neither the
+live rate (500/s after 125, 250, 500 and 1000 Hz codes alike) nor the stored one (the stored rate, read back through
+the XInput route, stayed at 500 Hz after a "125 Hz" command). So the rate cannot be set over plain HID. In XInput mode
+the filter driver route works; the helper waits up to 12 s for the driver to see the pad after the switch (it failed
+with "the filter driver cannot write to the pad" when started right after the DInput -> XInput switch), and the app
+waits 2.5 s after the pad appears as an Xbox controller.
+
 Curve designer. The nine curve bytes are output heights at evenly spaced input steps (0, 12.5 … 100%):
 `raw = 50 + percent`, so 50 is 0% and 150 is 100%, and a deadzone writes the low points below 50, which the
 pad clamps to 0% (Space Station's deadzone writes are exactly linear in the point index, which is what pins the
@@ -298,10 +306,12 @@ values still used are the ones in the code: turbo frequency 1..30, gyro sensitiv
 3. **Trigger vibration**, if Space Station has it for this pad, and the live `CallGripVibration {leftValue, rightValue}`
    motor test (a button that buzzes the grips).
 4. **Edge cases in the key table.** What a turbo key with a remap target does, and `enableKey2` for gyro.
-5. **Polling rate without Space Station.** The mode switch no longer needs it (FN + D-pad combo), but the polling rate is only
-   exposed in XInput mode through its filter driver. A raw USB route (UsbDk, PR #9, did not start under libusb 1.0.30 on
-   the maintainer's machine; WinUSB via Zadig is untested) would remove the last dependency, and needs to confirm that
-   the pad accepts the frames as raw USB writes at all.
+6. **Polling rate without Space Station.** The mode switch no longer needs it (FN + D-pad combo), and plain HID cannot set
+   the rate (measured, see above), so only the XInput route remains. Removing the dependency needs raw USB writes to the
+   XInput interface: UsbDk (PR #9, closed) did not start under libusb 1.0.30 on the maintainer's machine, and WinUSB via
+   Zadig is untested (it swaps the pad's Xbox driver, so games lose XInput until it is rolled back). It would also have to
+   confirm that the pad accepts `A5 50 07` / `A5 50 0A` as raw USB writes at all. Check the manual for a polling-rate combo
+   on the pad first.
 
 ### Not available on this pad
 - LED / RGB: Space Station's app has no LED or RGB settings for the Direwolf 4 (maintainer, 2026-10-17), so there is nothing to decode.
