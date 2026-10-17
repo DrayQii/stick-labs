@@ -97,7 +97,7 @@ export const FX_STR: Record<string, Row> = {
   'fx.gyro.none': { en: 'None', zh: '无', ja: 'なし', ru: 'Нет' },
   'fx.gyro.activation': { en: 'Activation', zh: '激活方式', ja: '有効化の方法', ru: 'Активация' },
   'fx.gyro.press': { en: 'Only while the key is held (Press)', zh: '仅在按住按键时（Press）', ja: 'キーを押している間のみ（Press）', ru: 'Только пока клавиша удерживается (Press)' },
-  'fx.gyro.notSet': { en: "Not set (Space Station's default)", zh: '未设置（Space Station 的默认值）', ja: '未設定（Space Station の既定）', ru: 'Не задано (по умолчанию в Space Station)' },
+  'fx.gyro.click': { en: 'Toggle: press once to turn on, again to turn off (Click)', zh: '切换：按一次开启，再按一次关闭（Click）', ja: '切り替え：1 回押すとオン、もう一度押すとオフ（Click）', ru: 'Переключение: нажмите раз — вкл., ещё раз — выкл. (Click)' },
   'fx.gyro.otherActivation': { en: 'Other ({n}), not decoded', zh: '其他（{n}），未解析', ja: 'その他（{n}）、未解読', ru: 'Другое ({n}), не расшифровано' },
   'fx.gyro.sensitivity': { en: 'Sensitivity', zh: '灵敏度', ja: '感度', ru: 'Чувствительность' },
   'fx.gyro.deadZone': { en: 'Dead zone', zh: '死区', ja: 'デッドゾーン', ru: 'Мёртвая зона' },

@@ -2,7 +2,7 @@
  * Flydigi Direwolf 4 tab content for the main app: one section per tab (Sticks, Buttons, Device,
  * Profiles). State and actions come from useFlydigi; the topbar owns slots and Write.
  */
-import { FX_REPORT_RATES, fxHzFromReportRate, FX_KEY_DEFAULT, FX_KEY_NAMES, FX_KEY_ORDER, FX_MOTION_LEFT, FX_MOTION_OFF, FX_MOTION_PRESS, FX_MOTION_RIGHT, FX_TURBO_CLICK, FX_TURBO_MAX, FX_TURBO_MIN, FX_TURBO_PRESS, fxTriggerRange, type FxMotion, type FxTurbo } from '@shared/flydigi-xinput'
+import { FX_REPORT_RATES, fxHzFromReportRate, FX_KEY_DEFAULT, FX_KEY_NAMES, FX_KEY_ORDER, FX_MOTION_CLICK, FX_MOTION_LEFT, FX_MOTION_OFF, FX_MOTION_PRESS, FX_MOTION_RIGHT, FX_TURBO_CLICK, FX_TURBO_MAX, FX_TURBO_MIN, FX_TURBO_PRESS, fxTriggerRange, type FxMotion, type FxTurbo } from '@shared/flydigi-xinput'
 import FlydigiCurveDesigner from './FlydigiCurveDesigner'
 import { useT } from './i18n'
 import { fxFmt } from './i18n-fx'
@@ -251,8 +251,8 @@ export function FxDevice({ fx, info }: { fx: Flydigi; info?: FdV1Info | null }):
                   <span className="label">{t('fx.gyro.activation')}</span>
                   <select className="input" style={{ width: '100%' }} value={motion.enableType} onChange={(e) => setGyro({ enableType: Number(e.target.value) })}>
                     <option value={FX_MOTION_PRESS}>{t('fx.gyro.press')}</option>
-                    <option value={0}>{t('fx.gyro.notSet')}</option>
-                    {![0, FX_MOTION_PRESS].includes(motion.enableType) && <option value={motion.enableType}>{fxFmt(t('fx.gyro.otherActivation'), { n: motion.enableType })}</option>}
+                    <option value={FX_MOTION_CLICK}>{t('fx.gyro.click')}</option>
+                    {![FX_MOTION_CLICK, FX_MOTION_PRESS].includes(motion.enableType) && <option value={motion.enableType}>{fxFmt(t('fx.gyro.otherActivation'), { n: motion.enableType })}</option>}
                   </select>
                 </label>
                 <Num label={t('fx.gyro.sensitivity')} value={motion.sensitivity} min={0} max={100} onChange={(v) => setGyro({ sensitivity: v, sensitivityY: v })} />

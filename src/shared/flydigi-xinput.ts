@@ -564,8 +564,9 @@ export function fxSetKeyTurbo(blob: Uint8Array, id: number, turbo: FxTurbo): Uin
 export const FX_MOTION_OFF = 0
 export const FX_MOTION_LEFT = 1
 export const FX_MOTION_RIGHT = 2
-/** Enable type byte: 1 = Press (gyro only while the key is held); 0 is what Space Station leaves when it is unset. */
+/** Enable type byte (Space Station's MotionEnableType): 1 = Press (gyro only while the key is held), 0 = Click (toggle). */
 export const FX_MOTION_PRESS = 1
+export const FX_MOTION_CLICK = 0
 
 export interface FxMotion {
   mapping: number
